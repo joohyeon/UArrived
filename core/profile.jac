@@ -35,6 +35,34 @@ node Profile {
         email_notifications: bool = True;
 }
 
+"""Where to email a student, kept on the commons so the system user's notification sweep can
+read it without reaching into private roots. Never granted: only its student and the system
+user can read it."""
+node Mailbox {
+    has owner_root: str,
+        email: str,
+        enabled: bool;
+}
+
+"""Create or update the caller's Mailbox from their profile. Only verified addresses get one."""
+def sync_mailbox(profile: Profile, commons: any = None) -> None {
+    shared: Root = commons if commons is not None else root.shared;
+    if not profile.verified {
+        return;
+    }
+    me = jid(root);
+    for m in [shared-->][?:Mailbox] {
+        if m.owner_root == me {
+            m.email = profile.umich_email;
+            m.enabled = profile.email_notifications;
+            return;
+        }
+    }
+    shared ++> Mailbox(
+        owner_root=me, email=profile.umich_email, enabled=profile.email_notifications
+    );
+}
+
 """What the client sees of a profile; `is_moderator` is computed, never stored or editable."""
 obj ProfileView {
     has display_name: str,
@@ -250,6 +278,9 @@ def:protect update_my_profile(changes: dict[str, any]) -> ProfileUpdateResult {
     }
     if "email_notifications" in changes {
         p.email_notifications = changes["email_notifications"];
+    }
+    if "email_notifications" in changes {
+        sync_mailbox(p);
     }
     return ProfileUpdateResult(ok=True, profile=view_of(p));
 }

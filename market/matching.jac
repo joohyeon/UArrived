@@ -226,7 +226,11 @@ def run_matching(post: Post, today: str) -> list[Suggestion] {
             root_b=b.owner_root,
             score=score,
             reasons=m.reasons,
-            created_on=today
+            created_on=today,
+            emailed_a=a.owner_root == post.owner_root,
+            emailed_b=b.owner_root == post.owner_root,
+            seen_a=a.owner_root == post.owner_root,
+            seen_b=b.owner_root == post.owner_root
         );
         s.open_token = token_create(
             CHAT_OPEN_PURPOSE, subject=jid(s), ttl_seconds=CHAT_OPEN_TTL_SECONDS

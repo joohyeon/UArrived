@@ -38,6 +38,9 @@ jac guide                            # current, version-matched Jac reference gu
   login; `:priv` = not served at all. Only modules imported by `main.jac` are served.
 - **Endpoint gotcha: an omitted `str | None = None` parameter arrives as the string `"None"`** (bools are
   fine). For partial updates take one `changes: dict[str, any]` and whitelist keys (see `core/profile.jac`).
+- **Plain graph tests and `root.shared`:** after a served test closes, `root.shared` in the same process can
+  point at the dead server's root (serial runs only). Commons helpers take an optional `commons` arg;
+  plain tests pass `root`.
 - Served-app tests: `JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp())`, call
   `/function/<name>`; never name a file `test_*.jac`.
 - `# jac:ignore[CODE]` is ignored inside `.impl.jac` annexes; keep browser-global code (`new(URLSearchParams, ...)`,
