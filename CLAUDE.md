@@ -18,7 +18,7 @@ everything in `.jac` by default; use Python only when Jac cannot do the job, and
 jac run main.jac                     # run the entry point
 jac fmt --check .                    # formatting; fix one file with: jac fmt --lintfix <file>
 jac check .                          # type check (also runs in-file tests)
-jac test $(git ls-files '*.jac')     # tests — pass files explicitly; bare `jac test` collects nothing
+jac test -d .                        # all tests; bare `jac test` collects nothing, and a file list must start with main.jac
 bash scripts/check_rules.sh          # repo rules: Jac share, boundaries, design tokens
 jac run --dev main.jac               # serve the web app with hot reload (once the web-app shell exists)
 jac browse open localhost:8000       # QA the running app in a headless browser (snapshot / click / screenshot)
@@ -31,6 +31,15 @@ jac guide                            # current, version-matched Jac reference gu
 - Tests are `test "readable name" { assert ...; }` — the name is a **string**, and the block lives
   in a `.jac` file passed to `jac test` explicitly.
 - Entry code goes in `with entry { ... }`.
+- **macOS: `jac install` fails with `_posixsubprocess ... symbol not found '_PyExc_MemoryError'`.** The
+  bundled Python exports no C-API symbols, so it can't build a venv. Create it first with
+  `python3.14 -m venv .jac/venv` (Homebrew), then `jac install` works. Linux/CI is unaffected.
+- Endpoints: `def:protect` / `walker:protect` = login required, runs on the caller's root; `:pub` = no
+  login; `:priv` = not served at all. Only modules imported by `main.jac` are served.
+- Served-app tests: `JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp())`, call
+  `/function/<name>`; never name a file `test_*.jac`.
+- `# jac:ignore[CODE]` is ignored inside `.impl.jac` annexes; keep browser-global code (`new(URLSearchParams, ...)`,
+  `window.*`) in the main file with the ignore comment.
 - Module constants are `glob NAME: type = ...;`; booleans are `True`/`False`.
 - Under `jac test`, `int(s, 16)` raises "invalid literal for int()" — parse hex by hand (see
   `ui/tokens.jac`). `jac guide jac-core-cheatsheet --section pitfalls` lists more.

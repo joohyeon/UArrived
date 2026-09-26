@@ -5,6 +5,12 @@ Hackathon project, built mostly in [Jac](https://jaclang.org/) (with Python wher
 ## Setup
 
 ```bash
+# macOS only, once per clone: jac 0.37.23's bundled Python can't create venvs
+# (`_posixsubprocess ... symbol not found`), so create it with Homebrew Python 3.14 first:
+python3.14 -m venv .jac/venv
+jac install                # npm + Python deps for the web app
+UARRIVED_DEV_MODE=1 jac run main.jac   # app on :8000, API on :8001; dev mode skips email
+
 curl -fsSL https://jaclang.org/install.sh | bash -s -- --version 0.37.23   # NOT pip: PyPI stops at 0.16
 jac run main.jac           # runs the entry point
 ```
@@ -19,7 +25,7 @@ Web app (mobile-first), all Jac: `core/` shared model · `journey/` Feature A ·
 bash scripts/check_rules.sh             # Jac share ≥ 40%, boundaries, design tokens
 jac fmt --check .                       # formatting (fix with: jac fmt --lintfix <file>)
 jac check .                             # type check
-jac test $(git ls-files '*.jac')        # tests (Jac `test "name" { ... }` blocks)
+jac test -d .                           # every test "name" { ... } block in the repo
 ```
 
 CI runs the same three commands on every PR.
