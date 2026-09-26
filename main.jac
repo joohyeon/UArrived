@@ -21,7 +21,13 @@ import from market.lifecycle {
 
 # Client-side UI
 import from core.screens.welcome { Welcome }
+import from ui.components.gallery { Gallery }
+
+def current_path -> str {
+    return window.location.pathname;  # jac:ignore[E1032,E1002,W2001]
+}
 
 def:pub app -> JsxElement {
-    <Welcome/>
+    path = current_path();
+    return <Gallery/> if path == "/ui" else <Welcome/>;
 }
