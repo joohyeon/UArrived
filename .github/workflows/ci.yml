@@ -34,7 +34,7 @@ jobs:
         run: jac fmt --check .
       - name: Type check
         run: jac check .
+      - name: Install project dependencies
+        run: jac install
       - name: Tests
-        run: |
-          files=$(git ls-files '*.jac')
-          [ -z "$files" ] || jac test $files
+        run: jac test -d .

@@ -1,14 +1,14 @@
-"""Uarrived entry point."""
+"""UArrived - entry point.
 
-def greet(name: str) -> str {
-    return f"Hello, {name}!";
-}
+Serves every endpoint module imported here, plus the client app. A server module that is not
+imported here is not served.
+"""
 
-with entry {
-    print(greet("Uarrived"));
-}
+import from core.auth { start_verification, confirm_verification, my_verification }
 
+# Client-side UI
+import from core.screens.welcome { Welcome }
 
-test "greet names the user" {
-    assert greet("Ada") == "Hello, Ada!";
+def:pub app -> JsxElement {
+    <Welcome/>
 }
