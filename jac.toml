@@ -30,3 +30,7 @@ watchdog = ">=3.0.0"
 [byllm.model]
 # ai/draft.jac pins its own model; this is the project default. Needs ANTHROPIC_API_KEY.
 default_model = "claude-haiku-4-5-20251001"
+
+[scale.scheduler]
+# market/notify.jac email_sweep; fires only under `jac run --serve`
+enabled = true

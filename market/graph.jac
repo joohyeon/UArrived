@@ -56,9 +56,18 @@ def is_live(post: Post, today: str) -> bool {
     return post_status(post, today) == "live";
 }
 
+"""The public commons (`root.shared`), or `commons` when a caller passes one explicitly.
+
+Plain (non-served) tests pass their own root: after a served test has shut down in the same
+process, `root.shared` can point at that server's gone root.
+"""
+def commons_or_shared(commons: any = None) -> any {
+    return commons if commons is not None else root.shared;
+}
+
 """Every post on the commons that the caller is allowed to see."""
-def all_posts -> list[Post] {
-    return [root.shared-->][?:Post];
+def all_posts(commons: any = None) -> list[Post] {
+    return [commons_or_shared(commons)-->][?:Post];
 }
 
 """One suggested pairing of two posts, shared WRITE with exactly its two students.
@@ -80,6 +89,8 @@ node Suggestion {
         withdrawn: bool = False,
         seen_a: bool = False,
         seen_b: bool = False,
+        emailed_a: bool = False,
+        emailed_b: bool = False,
         open_token: str = "";
 }
 
@@ -104,6 +115,6 @@ def all_chats -> list[Chat] {
 }
 
 """Every suggestion the caller is allowed to see (the commons filters by grant)."""
-def all_suggestions -> list[Suggestion] {
-    return [root.shared-->][?:Suggestion];
+def all_suggestions(commons: any = None) -> list[Suggestion] {
+    return [commons_or_shared(commons)-->][?:Suggestion];
 }
