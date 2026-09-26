@@ -1,0 +1,11 @@
+[project]
+name = "Uarrived"
+version = "0.1.0"
+entry-point = "main.jac"
+
+[jacpack]
+name = 'Uarrived'
+description = 'Jac IDE snapshot for Uarrived'
+
+[jachammer]
+project_id = "prj_70b4e811d379468cb84b2a052c13b204"
