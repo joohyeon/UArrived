@@ -11,9 +11,12 @@ survives an edit.
 
 import from uuid { UUID }
 import from jaclang { JacRuntime as Jac }
+import from jaclang.server.identity.app_tokens { token_create }
 import from market.graph { Post, Suggestion, post_status, all_posts, all_suggestions }
 
 glob MAX_SUGGESTIONS_PER_POST: int = 10,
+     CHAT_OPEN_PURPOSE: str = "chat-open",
+     CHAT_OPEN_TTL_SECONDS: int = 90 * 86400,
      RIDE_GAP_MINUTES: int = 120;
 
 obj Match {
@@ -224,6 +227,9 @@ def run_matching(post: Post, today: str) -> list[Suggestion] {
             score=score,
             reasons=m.reasons,
             created_on=today
+        );
+        s.open_token = token_create(
+            CHAT_OPEN_PURPOSE, subject=jid(s), ttl_seconds=CHAT_OPEN_TTL_SECONDS
         );
         Jac.allow_root(s, UUID(other.owner_root), AccessLevel.WRITE);  # jac:ignore[E1053]
         made.append(s);

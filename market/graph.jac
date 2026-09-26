@@ -79,7 +79,28 @@ node Suggestion {
         declined: bool = False,
         withdrawn: bool = False,
         seen_a: bool = False,
-        seen_b: bool = False;
+        seen_b: bool = False,
+        open_token: str = "";
+}
+
+"""The private chat for one connected suggestion. Shared WRITE with exactly its two students;
+open or closed is derived from the suggestion's posts, never stored."""
+node Chat {
+    has suggestion_id: str,
+        root_a: str,
+        root_b: str,
+        created_on: str;
+}
+
+"""One chat message, attached to its Chat and readable by both students."""
+node Message {
+    has author_root: str,
+        text: str,
+        sent_at: str;
+}
+
+def all_chats -> list[Chat] {
+    return [root.shared-->][?:Chat];
 }
 
 """Every suggestion the caller is allowed to see (the commons filters by grant)."""
