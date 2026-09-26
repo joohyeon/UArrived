@@ -1,17 +1,20 @@
 ## What
 
-<!-- The change, in one or two sentences. Link the issue if there is one. -->
+<!-- The change, in one or two sentences. Link the issue. -->
 
-## Why
+## Area
 
-<!-- The problem this solves or the behaviour it changes. -->
+- [ ] Feature A (`journey/`)  - [ ] Feature B (`market/`)  - [ ] Shared (`core/` `ui/` `ai/`)  - [ ] Docs/CI
 
 ## How to verify
 
-<!-- Commands to run / steps to click through so a reviewer can see it work. -->
+<!-- Commands or clicks so a reviewer can see it work (screenshots for UI). -->
 
 ## Checks
 
-- [ ] `jac fmt --check .`, `jac check .` and `jac test` pass locally
-- [ ] New behaviour has a test (or the PR says why not)
+- [ ] `bash scripts/check_rules.sh` passes (Jac share ≥ 40%, no cross-feature imports, no raw colors)
+- [ ] `jac fmt --check .`, `jac check .` and `jac test` pass
+- [ ] UI uses `ui/components` + `ui/tokens` only (screenshot attached for UI changes)
+- [ ] New behaviour has a test named for what it proves
+- [ ] Rules/eligibility logic is deterministic — no LLM decides requirements
 - [ ] No secrets, credentials or `.env` contents in the diff

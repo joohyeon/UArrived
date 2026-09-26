@@ -21,6 +21,7 @@ success without evidence from commands you ran in this session.
    now be true. That list is what you verify — not "the diff looks fine".
 2. **Static checks**
    ```bash
+   bash scripts/check_rules.sh
    jac fmt --check .
    jac check .
    jac test $(git ls-files '*.jac')
@@ -31,7 +32,9 @@ success without evidence from commands you ran in this session.
    - Script / CLI: `jac run <file>.jac` with representative input and read the actual output.
    - Server app: start it (`jac run` / `jac serve <file>.jac` as the project does), hit the endpoint
      or walker with `curl`, and read the response; stop the server afterwards.
-   - Web UI: drive it in the browser with the `claude-in-chrome` skill, screenshot each step.
+   - Web UI (the primary surface): `jac run --dev main.jac`, then drive it with `jac browse open localhost:8000`
+     → `snapshot` / `click @eN` / `fill` / `screenshot` (or the `claude-in-chrome` skill). Check a ~360 px
+     phone-width viewport first, then desktop.
    - Also try one **bad input / failure path** for each claim.
 4. **Report** as a table: claim → command run → observed result → ✅/❌. Include exact failing
    output for any ❌. If something could not be run (missing key, no display), say so — that is
