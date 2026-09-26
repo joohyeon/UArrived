@@ -5,7 +5,7 @@ Hackathon project, built mostly in [Jac](https://jaclang.org/) (with Python wher
 ## Setup
 
 ```bash
-pip install jaclang        # or: uv tool install jaclang
+curl -fsSL https://jaclang.org/install.sh | bash -s -- --version 0.37.23   # NOT pip: PyPI stops at 0.16
 jac run main.jac           # runs the entry point
 ```
 

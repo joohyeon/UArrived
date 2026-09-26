@@ -31,6 +31,9 @@ jac guide                            # current, version-matched Jac reference gu
 - Tests are `test "readable name" { assert ...; }` — the name is a **string**, and the block lives
   in a `.jac` file passed to `jac test` explicitly.
 - Entry code goes in `with entry { ... }`.
+- Module constants are `glob NAME: type = ...;`; booleans are `True`/`False`.
+- Under `jac test`, `int(s, 16)` raises "invalid literal for int()" — parse hex by hand (see
+  `ui/tokens.jac`). `jac guide jac-core-cheatsheet --section pitfalls` lists more.
 - `jac mcp` starts an MCP server for AI-assisted Jac development — worth wiring up if the syntax
   keeps tripping you.
 
