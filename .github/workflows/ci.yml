@@ -19,6 +19,8 @@ jobs:
           python-version: "3.12"
       - name: Install Jac
         run: pip install jaclang
+      - name: Repo rules (Jac share, boundaries, design tokens)
+        run: bash scripts/check_rules.sh
       - name: Format
         run: jac fmt --check .
       - name: Type check

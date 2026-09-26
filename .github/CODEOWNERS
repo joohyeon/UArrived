@@ -1,0 +1,15 @@
+# Replace @joohyeon with the real GitHub handles / teams as people join.
+# Suggested teams: @joohyeon/feature-a  @joohyeon/feature-b  @joohyeon/ui  @joohyeon/trust
+# (Teams need a GitHub organization; on a personal repo list individual handles.)
+
+*                       @joohyeon
+/journey/               @joohyeon
+/market/                @joohyeon
+/core/                  @joohyeon
+/ui/                    @joohyeon
+/ai/                    @joohyeon
+/data/tasks/            @joohyeon
+/data/resources/        @joohyeon
+/scripts/               @joohyeon
+/.github/               @joohyeon
+/docs/ENGINEERING_RULES.md @joohyeon

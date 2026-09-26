@@ -21,7 +21,9 @@ Argument: PR number or URL (default: the PR for the current branch, `gh pr view`
       paths covered.
    4. **Scope and clarity** — unrelated changes, dead code, names that obscure intent, PR too large
       to review (suggest splitting).
-   5. **Jac-specific** — `jac fmt --check .` / `jac check .` clean, no leftover debug `print`s.
+   5. **Repo rules** — `docs/ENGINEERING_RULES.md`: Jac share, no cross-feature imports, UI built from
+      `ui/components` + tokens, no AI in rules code, `core/`/`ui/` changes approved by both owners.
+   6. **Jac-specific** — `jac fmt --check .` / `jac check .` clean, no leftover debug `print`s.
 3. **Verify claims that matter.** For anything you'd flag as a bug, confirm it against the code (or
    run it — see `/verify`) before reporting; drop findings you cannot substantiate.
 4. **Report** findings ranked Blocking / Should fix / Nit, each with `file:line`, what is wrong,

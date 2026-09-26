@@ -14,6 +14,7 @@ Simple GitHub flow: one task branch, one PR, squash-merged after review (`CONTRI
 2. **Sync.** `git fetch origin && git rebase origin/main`. Resolve conflicts here, then continue.
 3. **Check** — all three must pass; fix failures rather than skipping them:
    ```bash
+   bash scripts/check_rules.sh  # Jac share, feature boundaries, design tokens
    jac fmt --check .            # fix with: jac fmt --lintfix <file>
    jac check .
    jac test $(git ls-files '*.jac')
