@@ -8,6 +8,7 @@ import from core.auth { start_verification, confirm_verification, my_verificatio
 import from core.profile { get_my_profile, update_my_profile }
 import from market.drafting { draft_from_message }
 import from market.suggestions { list_my_suggestions, stop_suggestions }
+import from market.connect { connect, decline, list_my_chats, read_chat, send_message }
 import from market.lifecycle {
     publish_post,
     edit_post,
