@@ -60,3 +60,29 @@ def is_live(post: Post, today: str) -> bool {
 def all_posts -> list[Post] {
     return [root.shared-->][?:Post];
 }
+
+"""One suggested pairing of two posts, shared WRITE with exactly its two students.
+
+`post_a` is the offer (or, for two ride requests, the one with the smaller id); `post_b` the
+other. Acceptance is per side (U6). `withdrawn` means matching replaced or stopped it.
+"""
+node Suggestion {
+    has post_a: str,
+        post_b: str,
+        root_a: str,
+        root_b: str,
+        score: int,
+        reasons: list[str],
+        created_on: str,
+        accepted_a: bool = False,
+        accepted_b: bool = False,
+        declined: bool = False,
+        withdrawn: bool = False,
+        seen_a: bool = False,
+        seen_b: bool = False;
+}
+
+"""Every suggestion the caller is allowed to see (the commons filters by grant)."""
+def all_suggestions -> list[Suggestion] {
+    return [root.shared-->][?:Suggestion];
+}
