@@ -26,3 +26,7 @@ typescript = "^5.3.3"
 watchdog = ">=3.0.0"
 
 [client]
+
+[byllm.model]
+# ai/draft.jac pins its own model; this is the project default. Needs ANTHROPIC_API_KEY.
+default_model = "claude-haiku-4-5-20251001"

@@ -6,6 +6,7 @@ imported here is not served.
 
 import from core.auth { start_verification, confirm_verification, my_verification }
 import from core.profile { get_my_profile, update_my_profile }
+import from market.drafting { draft_from_message }
 
 # Client-side UI
 import from core.screens.welcome { Welcome }
