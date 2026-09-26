@@ -1,0 +1,23 @@
+# Jac / Python
+__pycache__/
+*.py[cod]
+.jac/
+*.jir
+.venv/
+venv/
+.pytest_cache/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Claude Code (personal state; skills and settings.json are shared)
+.claude/settings.local.json
+.claude/worktrees/
+.claude/scheduled_tasks.lock
