@@ -11,7 +11,8 @@ Simple GitHub flow. `main` is always runnable; all changes arrive through a PR.
    enough to review in ~10 minutes.
 5. **Get one review** (`/review-pr <number>`) and **verify** the change actually works
    (`/verify`). Fix or explicitly reject every finding.
-6. **Squash-merge** once CI is green and someone other than the author has approved. Delete the
+6. **Squash-merge** once CI is green (`/ship` does this for you). Get a teammate's review first for
+   changes to `core/`, `ui/` or `data/`. Delete the
    branch.
 
 Rules of thumb for a hackathon team: don't rewrite someone else's open branch, rebase on `main`
@@ -24,7 +25,7 @@ Shared skills live in `.claude/skills/`:
 
 | Skill | Use it to |
 |---|---|
-| `/ship` | Check, push the branch, open the PR with a filled-in description |
+| `/ship` | Check, push, open the PR, wait for green CI, squash-merge, return to `main` |
 | `/verify` | Run the app / tests and observe the change actually working |
 | `/review-pr <n>` | Review a PR (yours or a teammate's) and post one summary comment |
 
