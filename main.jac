@@ -7,6 +7,14 @@ imported here is not served.
 import from core.auth { start_verification, confirm_verification, my_verification }
 import from core.profile { get_my_profile, update_my_profile }
 import from market.drafting { draft_from_message }
+import from market.lifecycle {
+    publish_post,
+    edit_post,
+    mark_post_done,
+    renew_post,
+    list_live_posts,
+    list_my_posts
+}
 
 # Client-side UI
 import from core.screens.welcome { Welcome }
