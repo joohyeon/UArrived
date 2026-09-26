@@ -47,7 +47,7 @@ if grep -rEn --include='*.jac' -e '"#[0-9a-fA-F]{3,8}"' -e '(rgb|hsl)a?\(' journ
 fi; rm -f /tmp/col.$$
 
 # --- Rule 5: no LLM/AI import in the rules or matching-eligibility code ---------------------------
-if grep -rEn --include='*.jac' '^[[:space:]]*import.*\bai\b' journey/walkers.jac core 2>/dev/null >/tmp/ai.$$; then
+if grep -rEn --include='*.jac' '^[[:space:]]*import.*\bai\b' journey/walkers.jac market/matching.jac core 2>/dev/null >/tmp/ai.$$; then
   while IFS= read -r l; do bad "rules code must not import ai/: $l"; done </tmp/ai.$$
 fi; rm -f /tmp/ai.$$
 

@@ -9,6 +9,7 @@ import from core.auth { verified_profile }
 import from core.profile { ANN_ARBOR_AREAS, valid_date, valid_time }
 import from market.drafting { ARRANGEMENTS }
 import from market.graph { Post, KINDS, CATEGORIES, post_status, all_posts }
+import from market.matching { run_matching }
 
 glob ITEM_DAYS: int = 14,
      HOUSING_DAYS: int = 30,
@@ -277,6 +278,7 @@ def publish(
     );
     apply_fields(post, clean);
     grant(post, level=AccessLevel.READ);
+    run_matching(post, today);
     return PostResult(ok=True, post=view_of(post, today));
 }
 
@@ -301,6 +303,7 @@ def edit(post_id: str, changes: dict[str, any], today: str) -> PostResult {
     if not post.done {
         post.expires_on = expiry_for(merged, post.published_on or today);
     }
+    run_matching(post, today);
     return PostResult(ok=True, post=view_of(post, today));
 }
 
@@ -326,6 +329,7 @@ def renew(post_id: str, today: str) -> PostResult {
     }
     post.published_on = today;
     post.expires_on = max(expiry_for(fields_of(post), today), plus_days(today, 1));
+    run_matching(post, today);
     return PostResult(ok=True, post=view_of(post, today));
 }
 
