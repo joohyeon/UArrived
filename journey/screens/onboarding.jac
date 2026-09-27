@@ -1,6 +1,7 @@
-"""Arrival onboarding: a 4-step wizard collecting arrival date, housing, language and which
-first-week tasks a student already finished before arriving. Each step's "Skip" advances without
-writing that step's field(s). Welcome and Today redirect here until `onboarding_done` is set."""
+"""Arrival onboarding: a 5-step wizard collecting arrival date, academic info (major, class year),
+housing, language and which first-week tasks a student already finished before arriving. Each
+step's "Skip" advances without writing that step's field(s). Welcome and Today redirect here until
+`onboarding_done` is set."""
 
 import from ui.tokens { color, space, FONTS }
 import from ui.components.base { BaseStyles, Button, Field }
@@ -12,7 +13,13 @@ import from ui.components.blocks {
     OptionTile,
     ChecklistRow
 }
-import from core.constants { ANN_ARBOR_AREAS, PILOT_LANGUAGES, LANGUAGE_NAMES }
+import from core.constants {
+    ANN_ARBOR_AREAS,
+    PILOT_LANGUAGES,
+    LANGUAGE_NAMES,
+    CLASS_YEARS,
+    CLASS_YEAR_NAMES
+}
 import from core.profile { update_my_profile, ProfileUpdateResult }
 import from journey.walkers {
     my_journey,
@@ -36,6 +43,8 @@ def:pub Onboarding -> JsxElement {
         error: str = "",
         arrival_date: str = "",
         arrival_time: str = "",
+        major: str = "",
+        class_year: str = "",
         area: str = "",
         housing_status: str = "",
         preferred_language: str = "",
@@ -43,6 +52,7 @@ def:pub Onboarding -> JsxElement {
 
     async def load -> None;
     async def saveArrival -> None;
+    async def saveAcademic -> None;
     async def saveHousing -> None;
     async def saveLanguage -> None;
     async def toggleTask(tid: str, done: bool) -> None;
@@ -90,10 +100,10 @@ def:pub Onboarding -> JsxElement {
                     <span style={{"color": color("coral-ink")}}>It</span>
                 </span>
                 <span style={{"fontSize": "14px", "color": color("sub")}}>
-                    {f"Setup · {step + 1} of 4"}
+                    {f"Setup · {step + 1} of 5"}
                 </span>
             </div>
-            <ProgressDots steps={4} current={step}/>
+            <ProgressDots steps={5} current={step}/>
             {<p role="alert" style={{"color": color("danger"), "margin": "0"}}>
                 {error}
             </p>
@@ -108,7 +118,7 @@ def:pub Onboarding -> JsxElement {
                     }}
                 >
                     <QuestionBlock
-                        eyebrow="Step 1 of 4"
+                        eyebrow="Step 1 of 5"
                         title="When do you arrive in Ann Arbor?"
                     />
                     <Field
@@ -148,7 +158,58 @@ def:pub Onboarding -> JsxElement {
                         "gap": space("4")
                     }}
                 >
-                    <QuestionBlock eyebrow="Step 2 of 4" title="Where will you live?"/>
+                    <QuestionBlock
+                        eyebrow="Step 2 of 5"
+                        title="Tell us about your studies"
+                    />
+                    <Field
+                        label="Major (optional)"
+                        value={major}
+                        onChange={lambda (v: str) { major = v; }}
+                        placeholder="e.g. Computer Science"
+                    />
+                    <SectionLabel label="What year are you?"/>
+                    <div
+                        style={{
+                            "display": "flex",
+                            "flexDirection": "column",
+                            "gap": space("2")
+                        }}
+                    >
+                        {[
+                            <SelectableCard
+                                key={code}
+                                title={CLASS_YEAR_NAMES[code]}
+                                selected={class_year == code}
+                                onSelect={lambda { class_year = code; }}
+                            /> for code in CLASS_YEARS
+                        ]}
+                    </div>
+                    <Button
+                        label="Continue"
+                        onClick={lambda (e: MouseEvent) { saveAcademic(); }}
+                        disabled={saving or class_year == ""}
+                        full={True}
+                    />
+                    <Button
+                        label="Skip"
+                        onClick={skipStep}
+                        variant="text"
+                        disabled={saving}
+                    />
+                </div>
+            )
+                if step == 1
+                else None}
+            {(
+                <div
+                    style={{
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "gap": space("4")
+                    }}
+                >
+                    <QuestionBlock eyebrow="Step 3 of 5" title="Where will you live?"/>
                     <div
                         style={{
                             "display": "flex",
@@ -196,7 +257,7 @@ def:pub Onboarding -> JsxElement {
                     />
                 </div>
             )
-                if step == 1
+                if step == 2
                 else None}
             {(
                 <div
@@ -207,7 +268,7 @@ def:pub Onboarding -> JsxElement {
                     }}
                 >
                     <QuestionBlock
-                        eyebrow="Step 3 of 4"
+                        eyebrow="Step 4 of 5"
                         title="Which language do you want first?"
                         subtitle="You can switch anytime from any screen."
                     />
@@ -236,7 +297,7 @@ def:pub Onboarding -> JsxElement {
                     />
                 </div>
             )
-                if step == 2
+                if step == 3
                 else None}
             {(
                 <div
@@ -272,7 +333,7 @@ def:pub Onboarding -> JsxElement {
                     />
                 </div>
             )
-                if step == 3
+                if step == 4
                 else None}
         </main>
     </div>
@@ -291,6 +352,19 @@ impl Onboarding.saveArrival -> None {
     result = await update_my_profile(
         {"arrival_date": arrival_date, "arrival_time": arrival_time}
     );
+    saving = False;
+    if result.ok {
+        error = "";
+        step = step + 1;
+    } else {
+        error = result.error;
+    }
+}
+
+impl Onboarding.saveAcademic -> None {
+    result: ProfileUpdateResult | None = None;
+    saving = True;
+    result = await update_my_profile({"major": major, "class_year": class_year});
     saving = False;
     if result.ok {
         error = "";

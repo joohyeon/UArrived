@@ -570,7 +570,6 @@ glob component_specs: list[ComponentSpec] = [
          "Badge": "base.Badge",
          "OfficialBadge": "base.Badge",
          "AIGeneratedLabel": "base.Badge",
-         "UrgentHelpPill": "base.HelpButton",
          "TextInput": "base.Field",
          "BottomTabBar": "base.AppShell",
          "NavItem": "base.AppShell",
