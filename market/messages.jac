@@ -197,7 +197,8 @@ def fields_from(card: DraftCard, known: dict[str, str], text: str) -> dict[str, 
         "route_from": card.route_from,
         "route_to": card.route_to,
         "arrangement": known.get("arrangement", card.arrangement),
-        "constraints": card.constraints
+        "constraints": card.constraints,
+        "item": card.item
     };
 }
 

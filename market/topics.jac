@@ -43,6 +43,7 @@ import from market.drafting { make_draft }
 import from market.lifecycle { publish, view_of, own_post, finish, PostView }
 import from market.messages { blocking_question, fields_from, parse_answers, FollowUp }
 import from market.matching { place, money }
+import from market.items { standard_item }
 
 glob MAX_GROUP_MESSAGE_CHARS: int = 1000,
      SKIP_WORDS: list[str] = [
@@ -216,7 +217,16 @@ def topic_key(p: Post) -> str {
     if p.category == "housing" {
         return f"housing:{p.arrangement or 'room'}";
     }
-    return f"{p.category}:{item_word(p.title) or p.category}";
+    return f"{p.category}:{item_of(p)}";
+}
+
+"""The post's standard item; posts stored before items existed map their title at read time.
+Categories without a standard list (non-ride services) keep the title's last word."""
+def item_of(p: Post) -> str {
+    return p.item
+        or standard_item(p.category, p.title)
+        or item_word(p.title)
+        or p.category;
 }
 
 def topic_name(p: Post) -> str {
@@ -235,7 +245,11 @@ def topic_name(p: Post) -> str {
             p.arrangement, "Rooms and housing"
         );
     }
-    return f"{plural(item_word(p.title) or p.category).capitalize()} near campus";
+    item = item_of(p);
+    if item == "other" {
+        return f"Other {p.category}";
+    }
+    return f"{plural(item).capitalize()} near campus";
 }
 
 """A one-line summary of a post's facts, for the topic group announcement."""
@@ -310,7 +324,8 @@ def invite_matches(post: Post, topic: ChatGroup, today: str) -> int {
         # Only invite on facts: the same item, or (housing and rides, whose groups are narrower
         # than a match) a match with stated reasons. "Dates overlap" alone never links a desk to
         # a mattress.
-        same_item = topic_key(other) == topic_key(post);
+        # "Other furniture" posts share a group but aren't the same item.
+        same_item = topic_key(other) == topic_key(post) and item_of(post) != "other";
         loose = post.category in ["housing", "service"] and len(s.reasons) > 0;
         if not same_item and not loose {
             continue;
@@ -319,9 +334,7 @@ def invite_matches(post: Post, topic: ChatGroup, today: str) -> int {
             + (
                 "; ".join(s.reasons)
                     if s.reasons
-                    else f"it's about {plural(
-                        item_word(post.title) or post.category
-                    )} too"
+                    else f"it's about {plural(item_of(post))} too"
             );
         inv = root.shared ++> Invite(
             group_id=jid(topic),
@@ -657,6 +670,12 @@ test "item words and topic keys group similar posts together" {
     b = Post(owner_root="y", kind="request", category="furniture", title="Need a desk");
     assert topic_key(a) == topic_key(b) == "furniture:desk";
     assert topic_name(a) == "Desks near campus";
+    study = Post(
+        owner_root="z", kind="request", category="furniture", title="Study table"
+    );
+    assert topic_key(study) == "furniture:desk";
+    odd = Post(owner_root="z", kind="offer", category="furniture", title="Kayak");
+    assert topic_key(odd) == "furniture:other" and topic_name(odd) == "Other furniture";
     assert plural("mattress") == "mattresses" and plural("lamp") == "lamps";
     assert plural("battery") == "batteries" and plural("key") == "keys";
     ride = Post(

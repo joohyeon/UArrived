@@ -644,3 +644,130 @@ test "a seller of other furniture isn't invited just because dates overlap" {
         client.close();
     }
 }
+
+test "different words for the same item meet in one topic group" {
+    client = served();
+    try {
+        cohort = student(client, "mina@umich.edu");
+        ai_says(
+            [
+                PostDraft(
+                    kind=PostKind.REQUEST,
+                    category=Category.FURNITURE,
+                    title="Study table",
+                    description="I need a study table.",
+                    price=40.0,
+                    item="desk"
+                )
+            ]
+        );
+        first = call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Need a study table, up to $40"}
+        );
+        student(client, "jae@umich.edu");
+        ai_says(
+            [
+                PostDraft(
+                    kind=PostKind.OFFER,
+                    category=Category.FURNITURE,
+                    title="Wooden desk",
+                    description="Selling.",
+                    price=30.0,
+                    item="desk"
+                )
+            ]
+        );
+        second = call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Selling a wooden desk $30"}
+        );
+        assert first["topic_group_id"] == second["topic_group_id"];
+        assert call(client, "group_view", {"group_id": first["topic_group_id"]})["name"]
+            == "Desks near campus";
+    } finally {
+        client.close();
+    }
+}
+
+test "an unlisted item files under Other, and the compose form gets items from the title" {
+    client = served();
+    try {
+        cohort = student(client, "mina@umich.edu");
+        ai_says(
+            [
+                PostDraft(
+                    kind=PostKind.OFFER,
+                    category=Category.FURNITURE,
+                    title="Kayak rack",
+                    description="Selling.",
+                    price=15.0,
+                    item="gizmo"
+                )
+            ]
+        );
+        odd = call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Selling a kayak rack $15"}
+        );
+        assert call(client, "group_view", {"group_id": odd["topic_group_id"]})["name"]
+            == "Other furniture";
+        made = call(
+            client,
+            "publish_post",
+            {
+                "fields": {
+                    "kind": "offer",
+                    "category": "furniture",
+                    "title": "Desk chair",
+                    "price": 20
+                }
+            }
+        );
+        assert made["ok"] and made["post"]["item"] == "chair";
+        edited = call(
+            client,
+            "edit_post",
+            {
+                "post_id": made["post"]["id"],
+                "changes": {"title": "Floor lamp", "category": "essentials"}
+            }
+        );
+        assert edited["ok"] and edited["post"]["item"] == "lamp";
+        kept = call(
+            client,
+            "edit_post",
+            {"post_id": made["post"]["id"], "changes": {"price": 25}}
+        );
+        assert kept["post"]["item"] == "lamp";
+    } finally {
+        client.close();
+    }
+}
+
+test "without AI, a study table still files with desks" {
+    client = served();
+    try {
+        cohort = student(client, "mina@umich.edu");
+        ai_says([MockError(error=AuthenticationError("no key"))]);
+        q = call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Selling my study table"}
+        );
+        ai_says([MockError(error=AuthenticationError("no key"))]);
+        done = call(
+            client,
+            "answer_group_followup",
+            {"message_id": q["message_id"], "answers": "kind:offer|category:furniture"}
+        );
+        assert done["filed"];
+        assert call(client, "group_view", {"group_id": done["topic_group_id"]})["name"]
+            == "Desks near campus";
+    } finally {
+        client.close();
+    }
+}

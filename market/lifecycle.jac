@@ -4,6 +4,7 @@ Every write re-validates what the client sent: the draft card is editable, so no
 is trusted. Only the poster's calls may change a post (owner check here, plus Jac ownership).
 """
 
+import from market.items { standard_item }
 import from core.clock { today_iso as clock_today, now_iso }
 import from datetime { date, timedelta }
 import from core.auth { verified_profile }
@@ -73,7 +74,8 @@ obj PostView {
         confirmed_on: str = "",
         constraints: list[str] = [],
         limitations: list[str] = [],
-        closed_reason: str = "";
+        closed_reason: str = "",
+        item: str = "";
 }
 
 obj PostResult {
@@ -229,7 +231,8 @@ def view_of(post: Post, today: str) -> PostView {
         confirmed_on=post.confirmed_on,
         constraints=post.constraints,
         limitations=limitations(post, today),
-        closed_reason=post.closed_reason
+        closed_reason=post.closed_reason,
+        item=post.item
     );
 }
 
@@ -318,6 +321,9 @@ def publish(
         expires_on=expiry_for(clean, today)
     );
     apply_fields(post, clean);
+    # Checked here, against the final category, so an answer that changes the category can't
+    # keep an item from another category's list. Not in EDITABLE: clients can't set it.
+    post.item = standard_item(post.category, post.title, str(fields.get("item", "")));
     grant(post, level=AccessLevel.READ);
     share_with_moderators(post);
     run_matching(post, today);
@@ -345,7 +351,11 @@ def edit(post_id: str, changes: dict[str, any], today: str) -> PostResult {
     if error {
         return PostResult(ok=False, error=error);
     }
+    renamed = merged["title"] != post.title or merged["category"] != post.category;
     apply_fields(post, merged);
+    if renamed {
+        post.item = standard_item(post.category, post.title);
+    }
     post.ai_generated = False;
     post.confirmed_on = today;
     if not post.done {

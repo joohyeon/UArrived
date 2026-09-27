@@ -40,10 +40,12 @@ obj PostDraft {
         guessed: list[str] = [],
         suggested_price: float | None = None,
         price_reason: str = "",
-        about_market: bool = True;
+        about_market: bool = True,
+        item: str = "";
 }
 
 sem PostDraft.about_market = "True only if the student says they want to buy, sell, give away, rent, find or offer housing, share a ride, or get moving help. False for greetings, introductions, asking who else is arriving or on a flight, and questions about campus life.";
+sem PostDraft.item = "The item as one standard name. furniture: desk, chair, bed, mattress, sofa, shelf, table, dresser. essentials: lamp, fridge, microwave, kitchenware, bedding, fan, monitor, textbook. vehicle: bike, scooter, car. Map synonyms (study table -> desk, mini fridge -> fridge, bookcase -> shelf). 'other' if none fits; empty for housing and services.";
 sem PostDraft.title = "The item or need itself in a few words, like 'Bike', 'Wooden desk' or 'Ride from DTW', in the student's own language. Never start with 'Selling', 'Looking for' or 'Need'; the post type already says that.";
 sem PostDraft.description = "One or two plain sentences in the student's own voice (first person, e.g. 'I need a desk near campus this weekend.'), restating only what they said. Never invent condition, brand or features.";
 sem PostDraft.price = "For an offer: the asking price in US dollars. For a request: the maximum budget. None if not stated.";
