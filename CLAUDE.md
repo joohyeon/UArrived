@@ -38,8 +38,13 @@ jac guide                            # current, version-matched Jac reference gu
   time forward (e.g. to expire a post) instead of publishing past dates, which are refused.
 - Endpoints: `def:protect` / `walker:protect` = login required, runs on the caller's root; `:pub` = no
   login; `:priv` = not served at all. Only modules imported by `main.jac` are served.
-- **Endpoint gotcha: an omitted `str | None = None` parameter arrives as the string `"None"`** (bools are
-  fine). For partial updates take one `changes: dict[str, any]` and whitelist keys (see `core/profile.jac`).
+- **Endpoint gotcha: an omitted parameter with a default arrives as the *string* form of that default**
+  (`str | None = None` arrives as `"None"`; a `bool = False` arrives as `"False"` — verified directly,
+  correcting an earlier note here that said bools were fine). Never trust Python truthiness on a raw
+  endpoint parameter that might be omitted (`not "False"` is `False`, since it's a non-empty string) —
+  coerce explicitly, e.g. `str(value).strip().lower() == "true"` (see `journey/walkers.jac`'s
+  `mark_task_done`). For partial updates take one `changes: dict[str, any]` and whitelist keys (see
+  `core/profile.jac`) — that sidesteps the issue entirely, since an absent dict key is unambiguous.
 - **Plain graph tests and `root.shared`:** after a served test closes, `root.shared` in the same process can
   point at the dead server's root (serial runs only). Commons helpers take an optional `commons` arg;
   plain tests pass `root`.
