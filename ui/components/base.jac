@@ -99,6 +99,23 @@ def:pub Card(children: any = None) -> JsxElement {
     </section>
 }
 
+"""A card grid that reflows itself by available width, not by viewport breakpoints: one column on
+a phone, as many `min`-wide columns as fit on tablet/desktop. Use for a screen whose content is a
+list of same-shaped cards (posts, groups, chats) instead of stacking them in a single column on
+wide screens."""
+def:pub ResponsiveGrid(children: any = None, min: str = "280px") -> JsxElement {
+    <div
+        style={{
+            "display": "grid",
+            "gridTemplateColumns": f"repeat(auto-fit, minmax({min}, 1fr))",
+            "gap": space("3"),
+            "alignItems": "start"
+        }}
+    >
+        {children}
+    </div>
+}
+
 """A status chip. Kinds: official, ai, progress, warning, action (e.g. "20 min", "NEXT ESSENTIAL"),
 neutral. Every chip carries a word; color only makes it findable (design rule)."""
 def:pub Badge(kind: str, label: str) -> JsxElement {
@@ -218,8 +235,13 @@ glob NAV_ITEMS: list[tuple[str, str]] = [
      ];
 
 """The app frame: top bar with the wordmark and urgent help, the screen, and bottom navigation.
-`active` is the NAV_ITEMS key of the current section."""
-def:pub AppShell(title: str, active: str, children: any = None) -> JsxElement {
+`active` is the NAV_ITEMS key of the current section. `wide` raises the content column from the
+default 720px (a single reading/form column) to SIZE["content-max"] (1200px) for screens whose
+content is a grid of cards or a list+detail pair, so tablet/desktop don't sit in a narrow strip
+with empty margins on either side."""
+def:pub AppShell(
+    title: str, active: str, children: any = None, wide: bool = False
+) -> JsxElement {
     <div
         style={{
             "minHeight": "100vh",
@@ -255,7 +277,7 @@ def:pub AppShell(title: str, active: str, children: any = None) -> JsxElement {
             style={{
                 "flexGrow": "1",
                 "width": "100%",
-                "maxWidth": "720px",
+                "maxWidth": px(SIZE["content-max"]) if wide else "720px",
                 "margin": "0 auto",
                 "boxSizing": "border-box",
                 "padding": space("4"),

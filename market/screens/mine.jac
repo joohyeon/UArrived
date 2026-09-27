@@ -2,7 +2,7 @@
 controls: stop suggestions, mark done, renew. Plus the "For you" feed (R13), kept secondary."""
 
 import from ui.tokens { color, space }
-import from ui.components.base { AppShell, Button, Card, Badge }
+import from ui.components.base { AppShell, Button, Card, Badge, ResponsiveGrid }
 import from market.screens.common { MarketTabs, PostSummary, go }
 import from market.lifecycle {
     list_my_posts,
@@ -36,60 +36,68 @@ def:pub MyPosts -> JsxElement {
         ];
     }
 
-    <AppShell title="My posts" active="market">
+    <AppShell title="My posts" active="market" wide={True}>
         <MarketTabs active="/market/mine"/>
         {<Card>
             <p style={{"margin": "0"}}>You haven't posted anything yet.</p>
         </Card>
             if loaded and len(posts) == 0
             else None}
-        {[
-            <Card key={p.id}>
-                <div style={{"display": "flex", "gap": space("2")}}>
-                    <Badge
-                        kind={"progress" if p.status == "live" else "warning"}
-                        label={p.status.capitalize()}
-                    />
-                    {<span style={{"color": color("sub"), "fontSize": "14px"}}>
-                        {"Until " + p.expires_on}
-                    </span>
-                        if p.status == "live"
-                        else None}
-                </div>
-                <PostSummary p={p}/>
-                <strong style={{"fontSize": "14px"}}>
-                    {f"Suggested to {len(matchedTo(p.id))} student(s)"}
-                </strong>
-                <ul style={{"margin": "0", "paddingLeft": "20px"}}>
-                    {[
-                        <li key={s.id}>
-                            {s.other_post.title + ": " + "; ".join(s.reasons)}
-                        </li> for s in matchedTo(p.id)
-                    ]}
-                </ul>
-                <div style={{"display": "flex", "gap": space("2"), "flexWrap": "wrap"}}>
-                    {<Button
-                        label="Mark done"
-                        variant="secondary"
-                        onClick={lambda (e: MouseEvent) { done(p.id); }}
-                    />
-                        if p.status == "live"
-                        else None}{<Button
-                        label="Stop suggesting"
-                        variant="text"
-                        onClick={lambda (e: MouseEvent) { stop(p.id); }}
-                    />
-                        if p.status == "live"
-                        else None}{<Button
-                        label="Renew"
-                        variant="secondary"
-                        onClick={lambda (e: MouseEvent) { renew(p.id); }}
-                    />
-                        if p.status == "expired"
-                        else None}
-                </div>
-            </Card> for p in posts
-        ]}
+        <ResponsiveGrid min="320px">
+            {[
+                <Card key={p.id}>
+                    <div style={{"display": "flex", "gap": space("2")}}>
+                        <Badge
+                            kind={"progress" if p.status == "live" else "warning"}
+                            label={p.status.capitalize()}
+                        />
+                        {<span style={{"color": color("sub"), "fontSize": "14px"}}>
+                            {"Until " + p.expires_on}
+                        </span>
+                            if p.status == "live"
+                            else None}
+                    </div>
+                    <PostSummary p={p}/>
+                    <strong style={{"fontSize": "14px"}}>
+                        {f"Suggested to {len(matchedTo(p.id))} student(s)"}
+                    </strong>
+                    <ul style={{"margin": "0", "paddingLeft": "20px"}}>
+                        {[
+                            <li key={s.id}>
+                                {s.other_post.title + ": " + "; ".join(s.reasons)}
+                            </li> for s in matchedTo(p.id)
+                        ]}
+                    </ul>
+                    <div
+                        style={{
+                            "display": "flex",
+                            "gap": space("2"),
+                            "flexWrap": "wrap"
+                        }}
+                    >
+                        {<Button
+                            label="Mark done"
+                            variant="secondary"
+                            onClick={lambda (e: MouseEvent) { done(p.id); }}
+                        />
+                            if p.status == "live"
+                            else None}{<Button
+                            label="Stop suggesting"
+                            variant="text"
+                            onClick={lambda (e: MouseEvent) { stop(p.id); }}
+                        />
+                            if p.status == "live"
+                            else None}{<Button
+                            label="Renew"
+                            variant="secondary"
+                            onClick={lambda (e: MouseEvent) { renew(p.id); }}
+                        />
+                            if p.status == "expired"
+                            else None}
+                    </div>
+                </Card> for p in posts
+            ]}
+        </ResponsiveGrid>
     </AppShell>
 }
 
@@ -139,7 +147,7 @@ def:pub ForYou -> JsxElement {
         load();
     }
 
-    <AppShell title="For you" active="market">
+    <AppShell title="For you" active="market" wide={True}>
         <MarketTabs active="/market/feed"/>
         <p style={{"margin": "0", "color": color("sub")}}>
             Ranked by how well each post fits your own posts. Your matches tab has the best ones.
@@ -151,35 +159,39 @@ def:pub ForYou -> JsxElement {
         </Card>
             if loaded and len(posts) == 0
             else None}
-        {[
-            <Card key={p.id}>
-                <PostSummary p={p}/>
-                <label
-                    style={{
-                        "display": "flex",
-                        "gap": "8px",
-                        "alignItems": "center",
-                        "minHeight": "44px"
-                    }}
-                >
-                    <input
-                        type="checkbox"
-                        checked={p.id in picked}
-                        onChange={lambda (e: ChangeEvent) { toggle(p.id); }}
-                    />
-                    Compare
-                </label>
-            </Card> for p in posts
-        ]}
+        <ResponsiveGrid min="280px">
+            {[
+                <Card key={p.id}>
+                    <PostSummary p={p}/>
+                    <label
+                        style={{
+                            "display": "flex",
+                            "gap": "8px",
+                            "alignItems": "center",
+                            "minHeight": "44px"
+                        }}
+                    >
+                        <input
+                            type="checkbox"
+                            checked={p.id in picked}
+                            onChange={lambda (e: ChangeEvent) { toggle(p.id); }}
+                        />
+                        Compare
+                    </label>
+                </Card> for p in posts
+            ]}
+        </ResponsiveGrid>
         {(
-            <Button
-                label={f"Help me decide ({len(picked)})"}
-                disabled={len(picked) < 2}
-                full={True}
-                onClick={lambda (e: MouseEvent) { go(
-                    "/market/compare?ids=" + ",".join(picked)
-                ); }}
-            />
+            <div style={{"maxWidth": "320px"}}>
+                <Button
+                    label={f"Help me decide ({len(picked)})"}
+                    disabled={len(picked) < 2}
+                    full={True}
+                    onClick={lambda (e: MouseEvent) { go(
+                        "/market/compare?ids=" + ",".join(picked)
+                    ); }}
+                />
+            </div>
         )
             if len(posts) > 0
             else None}

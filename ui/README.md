@@ -25,9 +25,10 @@ layouts, then scale up to desktop.
 
 | Component | Use |
 |---|---|
-| `AppShell(title, active, children)` | Every screen: top bar with wordmark + Urgent help, content column, bottom nav (`today`, `journey`, `housing`, `market`, `profile`) |
+| `AppShell(title, active, children, wide)` | Every screen: top bar with wordmark + Urgent help, content column, bottom nav (`today`, `journey`, `housing`, `market`, `profile`). `wide` raises the column from 720px to `SIZE["content-max"]` for card-grid or list+detail screens |
 | `Button(label, onClick, variant, disabled, button_type, full)` | `primary` = the one filled action per screen; `secondary`; `text` |
 | `Card(children)` | Content surface: card background, hairline, card radius |
+| `ResponsiveGrid(children, min)` | Card list that reflows by available width: 1 column on phone, more `min`-wide columns as space allows |
 | `Badge(kind, label)` | `official`, `ai`, `progress`, `warning`: always with a word |
 | `Field(label, value, onChange, input_type, hint, multiline, placeholder)` | Labeled input or textarea, 16px text, 44px tall |
 | `HelpButton` | Urgent help; `urgent` color means nothing else |
