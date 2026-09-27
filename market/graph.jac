@@ -10,6 +10,7 @@ Where things live (plan, Key Technical Decisions; doc-review P1s):
 
 import os;
 import hashlib;
+import from datetime { date }
 
 glob KINDS: list[str] = ["offer", "request"],
      CATEGORIES: list[str] = [
@@ -42,7 +43,12 @@ node Post {
         expires_on: str = "",
         done: bool = False,
         suggestions_stopped: bool = False,
-        hidden: bool = False;
+        hidden: bool = False,
+        confirmed_on: str = "",
+        published_at: str = "",
+        constraints: list[str] = [],
+        closed_reason: str = "",
+        nudged: bool = False;
 }
 
 """live, done, expired or hidden (by a moderator), as of `today` (YYYY-MM-DD). A post is visible while today < expires_on."""
@@ -98,6 +104,8 @@ node Suggestion {
         seen_b: bool = False,
         emailed_a: bool = False,
         emailed_b: bool = False,
+        origin: str = "match",
+        reply_id: str = "",
         open_token: str = "";
 }
 
@@ -193,4 +201,143 @@ def visible_to(posts: list[Post], me: str, commons: any = None) -> list[Post] {
                 and pair_key(me, p.owner_root) not in blocked
             )
     ];
+}
+
+glob CONFIRMED_DAYS: int = 3,
+     REPLY_KINDS: list[str] = [
+         "interested",
+         "available",
+         "question",
+         "offer",
+         "answer"
+     ];
+
+"""For offers: "confirmed" if the poster confirmed it (posted, edited, replied or tapped Still
+available) within CONFIRMED_DAYS, else "needs_checking". Requests are always "active"."""
+def availability(post: Post, today: str) -> str {
+    if post.kind != "offer" {
+        return "active";
+    }
+    if not post.confirmed_on {
+        return "needs_checking";
+    }
+    age = (date.fromisoformat(today) - date.fromisoformat(post.confirmed_on)).days;
+    return "confirmed" if age <= CONFIRMED_DAYS else "needs_checking";
+}
+
+"""Things a student should know before acting on `post`, as short plain statements."""
+def limitations(post: Post, today: str) -> list[str] {
+    out: list[str] = [];
+    if post.kind == "offer"
+        and post.price is None
+        and not post.free
+        and post.category != "service" {
+        out.append("Price not stated");
+    }
+    if availability(post, today) == "needs_checking" {
+        out.append(
+            f"Availability not confirmed since {post.confirmed_on}: ask first"
+                if post.confirmed_on
+                else "Availability not confirmed: ask first"
+        );
+    }
+    if not post.area and post.category != "service" {
+        out.append("Area not given");
+    }
+    return out + [c for c in post.constraints];
+}
+
+"""A reaction, question, offer or answer on a message. Visible only to the poster and its author
+(and, for an answer, the student it answers)."""
+node Reply {
+    has post_id: str,
+        author_root: str,
+        to_root: str,
+        kind: str,
+        created_at: str,
+        text: str = "",
+        offer_price: float | None = None,
+        accepted: bool = False,
+        seen_by_to: bool = False,
+        emailed: bool = False;
+}
+
+"""A public, content-free count of replies on a message (what everyone else sees)."""
+node ReplyTick {
+    has post_id: str,
+        kind: str;
+
+    def __jac_access__ -> AccessLevel | None {
+        return AccessLevel.READ;
+    }
+}
+
+"""The assistant's note in a poster's thread (labeled as automated in the UI). Visible only to the
+poster. `items` are real matched posts: [{"post_id", "title", "reasons", "limits", "availability"}]."""
+node AssistantNote {
+    has post_id: str,
+        kind: str,
+        text: str,
+        created_at: str,
+        items: list[dict[str, any]] = [],
+        choices: list[str] = [];
+}
+
+def all_replies(commons: any = None) -> list[Reply] {
+    return [commons_or_shared(commons)-->][?:Reply];
+}
+
+def reply_counts(post_id: str, commons: any = None) -> dict[str, int] {
+    counts: dict[str, int] = {};
+    for t in [commons_or_shared(commons)-->][?:ReplyTick] {
+        if t.post_id == post_id {
+            counts[t.kind] = counts.get(t.kind, 0) + 1;
+        }
+    }
+    return counts;
+}
+
+def notes_for(post_id: str, commons: any = None) -> list[AssistantNote] {
+    notes = [
+        n
+        for n in [commons_or_shared(commons)-->][?:AssistantNote]
+        if n.post_id == post_id
+    ];
+    notes.sort(key=lambda (n: AssistantNote) -> str { return n.created_at; });
+    return notes;
+}
+
+test "offers are confirmed for three days, then need checking; requests are always active" {
+    offer = Post(
+        owner_root="x",
+        kind="offer",
+        category="furniture",
+        title="Desk",
+        price=25.0,
+        confirmed_on="2026-09-01",
+        area="Kerrytown"
+    );
+    assert availability(offer, "2026-09-04") == "confirmed";
+    assert availability(offer, "2026-09-05") == "needs_checking";
+    assert availability(
+        Post(owner_root="x", kind="request", category="furniture", title="x"),
+        "2026-09-05"
+    )
+        == "active";
+    assert "Availability not confirmed since 2026-09-01: ask first"
+        in limitations(offer, "2026-09-05");
+    assert limitations(offer, "2026-09-02") == [];
+}
+
+test "limitations name missing price and area and the poster's own conditions" {
+    p = Post(
+        owner_root="x",
+        kind="offer",
+        category="furniture",
+        title="Sofa",
+        confirmed_on="2026-09-01",
+        constraints=["Pickup only"]
+    );
+    assert limitations(p, "2026-09-01")
+        == ["Price not stated", "Area not given", "Pickup only"];
 }

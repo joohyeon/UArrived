@@ -19,7 +19,9 @@ import from market.graph {
     Suggestion,
     all_posts,
     all_suggestions,
-    commons_or_shared
+    commons_or_shared,
+    all_replies,
+    Reply
 }
 import from market.suggestions { suggestion_status }
 
@@ -139,9 +141,73 @@ def sweep(today: str, commons: any = None) -> int {
     return sent;
 }
 
+glob NOTIFY_REPLY_KINDS: list[str] = ["question", "offer", "answer"];
+
+"""Unseen, un-emailed questions, offers and answers, grouped by the student they are for.
+Reactions never email; they only show as counts."""
+def pending_replies(commons: any = None) -> dict[str, list[Reply]] {
+    out: dict[str, list[Reply]] = {};
+    for r in all_replies(commons) {
+        if r.kind in NOTIFY_REPLY_KINDS and not r.emailed and not r.seen_by_to {
+            out.setdefault(r.to_root, []).append(r);
+        }
+    }
+    return out;
+}
+
+def reply_line(r: Reply, titles: dict[str, str]) -> str {
+    title = titles.get(r.post_id, "your message");
+    if r.kind == "offer" {
+        amount = f"${r.offer_price:,.0f}" if r.offer_price is not None else "an offer";
+        return f"- {amount} offered on \"{title}\"";
+    }
+    return f"- A question about \"{title}\""
+        if r.kind == "question"
+        else f"- An answer about \"{title}\"";
+}
+
+"""One email per student listing new replies to them (never the reply text itself)."""
+def reply_sweep(commons: any = None) -> int {
+    boxes: dict[str, Mailbox] = {
+        m.owner_root: m for m in [commons_or_shared(commons)-->][?:Mailbox]
+    };
+    titles: dict[str, str] = {jid(p): p.title for p in all_posts(commons)};
+    base = os.environ.get("UARRIVED_PUBLIC_URL", "http://localhost:8000");
+    sent = 0;
+    for (student, items) in pending_replies(commons).items() {
+        box = boxes.get(student);
+        ok = False;
+        if box is not None and box.enabled {
+            body = "\n".join(
+                ["You have new replies on UArrived:", ""]
+                    + [reply_line(r, titles) for r in items]
+                    + [
+                        "",
+                        f"Open them: {base}/market",
+                        "",
+                        "Turn these emails off in Profile."
+                    ]
+            );
+            try {
+                ok = send(box.email, "New replies on UArrived", body);
+            } except Exception {
+                ok = False;
+            }
+            sent += 1 if ok else 0;
+        }
+        if ok or box is None or not box.enabled {
+            for r in items {
+                r.emailed = True;
+            }
+        }
+    }
+    return sent;
+}
+
 @schedule(trigger=ScheduleTrigger.STATIC, interval=NOTIFY_INTERVAL_SECONDS)
 def email_sweep {
     sweep(clock_today());
+    reply_sweep();
 }
 
 """How many of the caller's suggestions are unread (the inbox badge)."""
@@ -158,6 +224,13 @@ def unread_count(today: str) -> int {
             n += 1;
         }
     }
+    n += len(
+        [
+            r
+            for r in all_replies()
+            if r.to_root == me and r.kind in NOTIFY_REPLY_KINDS and not r.seen_by_to
+        ]
+    );
     return n;
 }
 

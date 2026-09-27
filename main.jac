@@ -11,6 +11,20 @@ import from market.suggestions { list_my_suggestions, stop_suggestions }
 import from market.feed { for_you_feed, heartbeat }
 import from journey.prompts { my_journey_prompts }
 import from market.decide { help_me_decide }
+import from market.messages {
+    send_market_message,
+    market_stream,
+    message_thread,
+    react_to_message,
+    ask_about_message,
+    offer_on_message,
+    answer_reply,
+    accept_reply,
+    confirm_available,
+    apply_assistant_choice,
+    close_message,
+    nudge_sweep
+}
 import from market.moderation {
     report_post,
     report_chat,
