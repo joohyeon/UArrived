@@ -8,7 +8,7 @@ poll through `heartbeat` so the client's 60-second read cache never hides a new 
 """
 
 import from ui.tokens { color, space }
-import from ui.components.base { AppShell, Button, Card, Badge, Field }
+import from ui.components.base { AppShell, Button, Card, Badge, Field, ResponsiveGrid }
 import from market.screens.common { MarketTabs, PostSummary, query_param, go }
 import from market.feed { heartbeat }
 import from market.notify { unread_suggestions }
@@ -81,9 +81,18 @@ def:pub GroupList -> JsxElement {
         return lambda { clearInterval(timer); };  # jac:ignore[W2001]
     }
 
-    <AppShell title="Groups" active="market">
+    <AppShell title="Groups" active="market" wide={True}>
         <MarketTabs active="/market" unread={unread}/>
-        {[<InviteCard key={inv.id} inv={inv} onAnswer={answer}/> for inv in invites]}
+        {(
+            <ResponsiveGrid min="320px">
+                {[
+                    <InviteCard key={inv.id} inv={inv} onAnswer={answer}/>
+                    for inv in invites
+                ]}
+            </ResponsiveGrid>
+        )
+            if len(invites) > 0
+            else None}
         {(
             <Card>
                 <p style={{"margin": "0"}}>
@@ -93,38 +102,40 @@ def:pub GroupList -> JsxElement {
         )
             if loaded and len(groups) == 0
             else None}
-        {[
-            <a
-                key={g.id}
-                href={"/market/g?id=" + g.id}
-                style={{"textDecoration": "none", "color": color("text")}}
-            >
-                <Card>
-                    <div
-                        style={{
-                            "display": "flex",
-                            "justifyContent": "space-between",
-                            "gap": space("2"),
-                            "alignItems": "baseline"
-                        }}
-                    >
-                        <strong>{g.name}</strong>
-                        <span style={{"color": color("sub"), "fontSize": "14px"}}>
-                            {str(g.members)
-                                + (" member" if g.members == 1 else " members")}
+        <ResponsiveGrid min="320px">
+            {[
+                <a
+                    key={g.id}
+                    href={"/market/g?id=" + g.id}
+                    style={{"textDecoration": "none", "color": color("text")}}
+                >
+                    <Card>
+                        <div
+                            style={{
+                                "display": "flex",
+                                "justifyContent": "space-between",
+                                "gap": space("2"),
+                                "alignItems": "baseline"
+                            }}
+                        >
+                            <strong>{g.name}</strong>
+                            <span style={{"color": color("sub"), "fontSize": "14px"}}>
+                                {str(g.members)
+                                    + (" member" if g.members == 1 else " members")}
+                            </span>
+                        </div>
+                        <span style={{"color": color("sub")}}>
+                            {g.last_message
+                                or (
+                                    "Say hi, or drop a message about something you're buying, selling or looking for."
+                                        if g.kind == "cohort"
+                                        else "No messages yet."
+                                )}
                         </span>
-                    </div>
-                    <span style={{"color": color("sub")}}>
-                        {g.last_message
-                            or (
-                                "Say hi, or drop a message about something you're buying, selling or looking for."
-                                    if g.kind == "cohort"
-                                    else "No messages yet."
-                            )}
-                    </span>
-                </Card>
-            </a> for g in groups
-        ]}
+                    </Card>
+                </a> for g in groups
+            ]}
+        </ResponsiveGrid>
     </AppShell>
 }
 

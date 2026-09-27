@@ -10,7 +10,8 @@ import json;
 import tempfile;
 import uuid;
 import from jaclang.testing.testing { JacTestClient }
-import from core.profile { Mailbox, Profile, sync_mailbox }
+import from market.testkit { served }
+import from core.profile { Mailbox, Profile, sync_mailbox, set_language }
 import from market.graph { Post, Suggestion }
 import from market.notify { sweep, pending_by_student, digest_body }
 
@@ -227,6 +228,53 @@ test "a verified profile gets a mailbox that follows its email setting" {
     del mine[0];
 }
 
+test "a digest to a zh mailbox lists coded reasons in Chinese" {
+    w = world();
+    path = outbox();
+    try {
+        w.made[4].reason_codes = [
+            {"code": "within_budget", "values": {"price": "$25", "budget": "$50"}}
+        ];
+        w.made[6].language = "zh";
+        sweep(TODAY, root);
+        to_mina = [
+            e
+            for e in emails(path)
+            if e["to"] == "mina@umich.edu"
+        ];
+        assert len(to_mina) == 1;
+        assert "$25，在 $50 预算内" in to_mina[0]["body"];
+        assert "within the" not in to_mina[0]["body"];
+    } finally {
+        cleanup(w);
+    }
+}
+
+test "a suggestion without reason codes lists its English reasons in a zh digest" {
+    w = world();
+    try {
+        body = digest_body(pending_by_student(TODAY, root)[w.mina], "zh");
+        assert "$25 is within the $50 budget" in body;
+    } finally {
+        cleanup(w);
+    }
+}
+
+test "changing the profile language updates the mailbox language" {
+    p = Profile(umich_email=f"z-{uuid.uuid4()}@umich.edu", verified=True);
+    sync_mailbox(p, root);
+    set_language(p, "zh", True, root);
+    mine = [
+        m
+        for m in [root-->][?:Mailbox]
+        if m.email == p.umich_email
+    ];
+    assert len(mine) == 1 and mine[0].language == "zh";
+    set_language(p, "ko", True, root);
+    assert mine[0].language == "ko";
+    del mine[0];
+}
+
 def call(client: JacTestClient, name: str, body: dict[str, any]) -> any {
     return client.post(f"/function/{name}", json=body).json()["data"]["result"];
 }
@@ -238,8 +286,7 @@ def student(client: JacTestClient, email: str) {
 }
 
 test "the inbox badge counts only matches the student hasn't opened" {
-    os.environ["UARRIVED_DEV_MODE"] = "1";
-    client = JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp());
+    client = served();
     try {
         student(client, "mina@umich.edu");
         call(

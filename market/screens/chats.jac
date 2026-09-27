@@ -3,8 +3,15 @@ seconds through `heartbeat` (a write) so the client's 60-second read cache never
 message. Closed chats are read-only."""
 
 import from ui.tokens { color, space }
-import from ui.components.base { AppShell, Button, Card, Badge, Field }
-import from market.screens.common { MarketTabs, query_param, go, ReportBox }
+import from ui.components.base { AppShell, Button, Card, Badge, Field, ResponsiveGrid }
+import from market.screens.common {
+    MarketTabs,
+    query_param,
+    go,
+    ReportBox,
+    TranslatedNote
+}
+import from market.constants { labels_for }
 import from market.moderation { report_chat, block_in_chat }
 import from market.connect {
     list_my_chats,
@@ -29,7 +36,7 @@ def:pub ChatList -> JsxElement {
         load();
     }
 
-    <AppShell title="Chats" active="market">
+    <AppShell title="Chats" active="market" wide={True}>
         <MarketTabs active="/market/chats"/>
         {(
             <Card>
@@ -40,34 +47,40 @@ def:pub ChatList -> JsxElement {
         )
             if loaded and len(chats) == 0
             else None}
-        {[
-            <a
-                key={c.id}
-                href={"/market/chat?id=" + c.id}
-                style={{"textDecoration": "none", "color": color("text")}}
-            >
-                <Card>
-                    <div
-                        style={{
-                            "display": "flex",
-                            "justifyContent": "space-between",
-                            "gap": space("2")
-                        }}
-                    >
-                        <strong>{c.other_post_title}</strong>
-                        {<Badge kind="warning" label="Closed"/> if not c.open else None}
-                    </div>
-                    <span style={{"color": color("sub")}}>
-                        {("For your post: " + c.my_post_title)
-                            if c.my_post_title
-                            else "About their post"}
-                    </span>
-                    {<span style={{"color": color("text-2")}}>{c.last_message}</span>
-                        if c.last_message
-                        else None}
-                </Card>
-            </a> for c in chats
-        ]}
+        <ResponsiveGrid min="320px">
+            {[
+                <a
+                    key={c.id}
+                    href={"/market/chat?id=" + c.id}
+                    style={{"textDecoration": "none", "color": color("text")}}
+                >
+                    <Card>
+                        <div
+                            style={{
+                                "display": "flex",
+                                "justifyContent": "space-between",
+                                "gap": space("2")
+                            }}
+                        >
+                            <strong>{c.other_post_title}</strong>
+                            {<Badge kind="warning" label="Closed"/>
+                                if not c.open
+                                else None}
+                        </div>
+                        <span style={{"color": color("sub")}}>
+                            {("For your post: " + c.my_post_title)
+                                if c.my_post_title
+                                else "About their post"}
+                        </span>
+                        {<span style={{"color": color("text-2")}}>
+                            {c.last_message}
+                        </span>
+                            if c.last_message
+                            else None}
+                    </Card>
+                </a> for c in chats
+            ]}
+        </ResponsiveGrid>
     </AppShell>
 }
 
@@ -79,11 +92,41 @@ impl ChatList.load -> None {
     loaded = True;
 }
 
+"""One chat bubble. A message shown in the reader's language by AI translation carries the
+AI-translated label and a See original toggle (TranslatedNote); `lang` is set to the language
+actually shown."""
+def:pub MessageBubble(m: MessageView) -> JsxElement {
+    <div
+        style={{
+            "alignSelf": "flex-end" if m.mine else "flex-start",
+            "maxWidth": "80%",
+            "display": "flex",
+            "flexDirection": "column",
+            "gap": space("1"),
+            "padding": space("2") + " " + space("3"),
+            "borderRadius": "16px",
+            "background": color("action") if m.mine else color("card"),
+            "color": color("on-action") if m.mine else color("text"),
+            "border": "1px solid " + color("border")
+        }}
+    >
+        <span lang={m.language or None}>{m.text}</span>
+        {<TranslatedNote
+            lang={m.language}
+            source_language={m.original_language}
+            text={m.original}
+        />
+            if m.ai_translated
+            else None}
+    </div>
+}
+
 def:pub ChatScreen -> JsxElement {
     has chat_id: str = "",
         thread: ChatThread | None = None,
         draft: str = "",
-        error: str = "";
+        error: str = "",
+        sending: bool = False;
 
     async def load -> None;
     async def sendIt(e: MouseEvent) -> None;
@@ -116,20 +159,8 @@ def:pub ChatScreen -> JsxElement {
             if thread and thread.ok
             else None}
         {[
-            <div
-                key={str(i)}
-                style={{
-                    "alignSelf": "flex-end" if m.mine else "flex-start",
-                    "maxWidth": "80%",
-                    "padding": space("2") + " " + space("3"),
-                    "borderRadius": "16px",
-                    "background": color("action") if m.mine else color("card"),
-                    "color": color("on-action") if m.mine else color("text"),
-                    "border": "1px solid " + color("border")
-                }}
-            >
-                {m.text}
-            </div> for (i, m) in enumerate(thread.messages if thread else [])
+            <MessageBubble key={str(i)} m={m}/>
+            for (i, m) in enumerate(thread.messages if thread else [])
         ]}
         {(
             <Card>
@@ -138,7 +169,13 @@ def:pub ChatScreen -> JsxElement {
                     value={draft}
                     onChange={lambda (v: str) { draft = v; }}
                 />
-                <Button label="Send" disabled={not draft.strip()} onClick={sendIt}/>
+                <Button
+                    label={labels_for(thread.language)["translating"]
+                        if sending
+                        else "Send"}
+                    disabled={sending or not draft.strip()}
+                    onClick={sendIt}
+                />
                 {<p role="alert" style={{"color": color("danger"), "margin": "0"}}>
                     {error}
                 </p>
@@ -182,9 +219,25 @@ impl ChatScreen.load -> None {
     thread = fresh;
 }
 
+"""Send the draft. The button shows "Translating…" and stays disabled until the server answers,
+so a slow translation cannot send the same message twice."""
 impl ChatScreen.sendIt(e: MouseEvent) -> None {
     result: SendResult | None = None;
-    result = await send_message(chat_id, draft);
+    if sending {
+        return;
+    }
+    sending = True;
+    try {
+        result = await send_message(chat_id, draft);
+    } except Exception {
+        error = "Couldn't send that. Please try again.";
+        return;
+    } finally {
+        sending = False;
+    }
+    if result is None {
+        return;
+    }
     if not result.ok {
         error = result.error;
         return;

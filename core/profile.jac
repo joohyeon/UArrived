@@ -8,7 +8,7 @@ import os;
 import from datetime { date }
 import from uuid { UUID }
 import from jaclang { JacRuntime as Jac }
-import from core.constants { ANN_ARBOR_AREAS }
+import from core.constants { ANN_ARBOR_AREAS, PILOT_LANGUAGES }
 
 glob STUDENT_TYPES: list[str] = ["international", "out-of-state", "in-state"],
      HOUSING_STATUSES: list[str] = ["have-housing", "looking", "temporary"];
@@ -20,6 +20,8 @@ node Profile {
         verified: bool = False,
         student_type: str = "",
         preferred_language: str = "en",
+        language_chosen: bool = False,
+        language_defaulted: bool = False,
         arrival_date: str = "",
         arrival_time: str = "",
         housing_status: str = "",
@@ -34,30 +36,75 @@ node Profile {
 
 """Where to email a student, kept on the commons so the system user's notification sweep can
 read it without reaching into private roots. Never granted: only its student and the system
-user can read it."""
+user can read it. `language` is the student's preferred language, for rendering the digest."""
 node Mailbox {
     has owner_root: str,
         email: str,
-        enabled: bool;
+        enabled: bool,
+        language: str = "en";
 }
 
 """Create or update the caller's Mailbox from their profile. Only verified addresses get one."""
 def sync_mailbox(profile: Profile, commons: any = None) -> None {
-    shared: Root = commons if commons is not None else root.shared;
     if not profile.verified {
         return;
     }
+    shared: Root = commons if commons is not None else root.shared;
     me = jid(root);
     for m in [shared-->][?:Mailbox] {
         if m.owner_root == me {
             m.email = profile.umich_email;
             m.enabled = profile.email_notifications;
+            m.language = profile.preferred_language;
             return;
         }
     }
     shared ++> Mailbox(
-        owner_root=me, email=profile.umich_email, enabled=profile.email_notifications
+        owner_root=me,
+        email=profile.umich_email,
+        enabled=profile.email_notifications,
+        language=profile.preferred_language
     );
+}
+
+"""Set `profile`'s language to `lang` (already validated) and keep its Mailbox in step.
+`chosen` records an explicit choice, which a first-message default never overwrites. Nothing
+is written when neither the language nor the chosen flag changes; returns whether it synced."""
+def set_language(
+    profile: Profile, lang: str, chosen: bool, commons: any = None
+) -> bool {
+    if chosen {
+        profile.language_defaulted = True;
+    }
+    if profile.preferred_language == lang and (profile.language_chosen or not chosen) {
+        return False;
+    }
+    profile.preferred_language = lang;
+    if chosen {
+        profile.language_chosen = True;
+    }
+    sync_mailbox(profile, commons);
+    return True;
+}
+
+"""Make `lang` the default language of `profile` (the caller's, if None) unless the student
+already chose one (R29). Only the first message counts: once a default has been considered (or
+the student chose), later messages never change the language. Only pilot languages apply, and
+this never sets the chosen flag. Returns whether the language was applied."""
+def default_language_from(
+    lang: str, profile: Profile | None = None, commons: any = None
+) -> bool {
+    code = lang.strip().lower();
+    p = profile if profile is not None else my_profile();
+    if p.language_chosen or p.language_defaulted {
+        return False;
+    }
+    p.language_defaulted = True;
+    if code not in PILOT_LANGUAGES or p.preferred_language == code {
+        return False;
+    }
+    set_language(p, code, False, commons);
+    return True;
 }
 
 """What the client sees of a profile; `is_moderator` is computed, never stored or editable."""
@@ -67,6 +114,7 @@ obj ProfileView {
         verified: bool,
         student_type: str,
         preferred_language: str,
+        language_chosen: bool,
         arrival_date: str,
         arrival_time: str,
         housing_status: str,
@@ -162,6 +210,7 @@ def view_of(profile: Profile) -> ProfileView {
         verified=profile.verified,
         student_type=profile.student_type,
         preferred_language=profile.preferred_language,
+        language_chosen=profile.language_chosen,
         arrival_date=profile.arrival_date,
         arrival_time=profile.arrival_time,
         housing_status=profile.housing_status,
@@ -284,6 +333,11 @@ def:protect update_my_profile(changes: dict[str, any]) -> ProfileUpdateResult {
         text.get("arrival_time", p.arrival_time),
         text.get("move_in_date", p.move_in_date)
     );
+    if not error
+        and "preferred_language" in text
+        and text["preferred_language"].lower() not in PILOT_LANGUAGES {
+        error = f"Language must be one of: {', '.join(PILOT_LANGUAGES)}.";
+    }
     if error {
         return ProfileUpdateResult(ok=False, error=error);
     }
@@ -292,9 +346,6 @@ def:protect update_my_profile(changes: dict[str, any]) -> ProfileUpdateResult {
     }
     if "student_type" in text {
         p.student_type = text["student_type"];
-    }
-    if "preferred_language" in text {
-        p.preferred_language = text["preferred_language"][:10] or "en";
     }
     if "arrival_date" in text {
         p.arrival_date = text["arrival_date"];
@@ -323,7 +374,9 @@ def:protect update_my_profile(changes: dict[str, any]) -> ProfileUpdateResult {
     if "email_notifications" in changes {
         p.email_notifications = changes["email_notifications"];
     }
-    if "email_notifications" in changes {
+    synced = "preferred_language" in text
+        and set_language(p, text["preferred_language"].lower(), True);
+    if "email_notifications" in changes and not synced {
         sync_mailbox(p);
     }
     return ProfileUpdateResult(ok=True, profile=view_of(p));

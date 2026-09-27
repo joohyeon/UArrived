@@ -2,7 +2,7 @@
 everyone else sees an empty queue."""
 
 import from ui.tokens { color, space }
-import from ui.components.base { AppShell, Button, Card }
+import from ui.components.base { AppShell, Button, Card, ResponsiveGrid }
 import from market.moderation {
     moderation_queue,
     hide_post,
@@ -25,38 +25,46 @@ def:pub Moderate -> JsxElement {
         load();
     }
 
-    <AppShell title="Reports" active="market">
+    <AppShell title="Reports" active="market" wide={True}>
         {<p role="alert" style={{"color": color("danger"), "margin": "0"}}>{error}</p>
             if error
-            else None}{<Card>
+            else None}
+        {<Card>
             <p style={{"margin": "0"}}>No open reports (or you aren't a moderator).</p>
         </Card>
             if loaded and len(reports) == 0
-            else None}{[
-            <Card key={r.id}>
-                <strong>{r.post_title}</strong>
-                <span style={{"color": color("sub"), "fontSize": "14px"}}>
-                    {r.created_at + (" · from a chat" if r.chat_id else "")}
-                </span>
-                <p style={{"margin": "0"}}>{r.reason}</p>
-                <div style={{"display": "flex", "gap": space("2")}}>
-                    <Button
-                        label="Hide post"
-                        onClick={lambda (e: MouseEvent) { hideIt(r.post_id, r.id); }}
-                    />
-                    <Button
-                        label="Suspend poster"
-                        variant="secondary"
-                        onClick={lambda (e: MouseEvent) { suspendIt(r.post_id, r.id); }}
-                    />
-                    <Button
-                        label="Resolve"
-                        variant="text"
-                        onClick={lambda (e: MouseEvent) { resolveIt(r.id); }}
-                    />
-                </div>
-            </Card> for r in reports
-        ]}
+            else None}
+        <ResponsiveGrid min="360px">
+            {[
+                <Card key={r.id}>
+                    <strong>{r.post_title}</strong>
+                    <span style={{"color": color("sub"), "fontSize": "14px"}}>
+                        {r.created_at + (" · from a chat" if r.chat_id else "")}
+                    </span>
+                    <p style={{"margin": "0"}}>{r.reason}</p>
+                    <div style={{"display": "flex", "gap": space("2")}}>
+                        <Button
+                            label="Hide post"
+                            onClick={lambda (e: MouseEvent) { hideIt(
+                                r.post_id, r.id
+                            ); }}
+                        />
+                        <Button
+                            label="Suspend poster"
+                            variant="secondary"
+                            onClick={lambda (e: MouseEvent) { suspendIt(
+                                r.post_id, r.id
+                            ); }}
+                        />
+                        <Button
+                            label="Resolve"
+                            variant="text"
+                            onClick={lambda (e: MouseEvent) { resolveIt(r.id); }}
+                        />
+                    </div>
+                </Card> for r in reports
+            ]}
+        </ResponsiveGrid>
     </AppShell>
 }
 

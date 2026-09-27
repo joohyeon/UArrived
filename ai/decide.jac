@@ -3,12 +3,18 @@
 The facts, missing information and risk flags are computed by rules in market/decide.jac; the
 model only turns them into short plain-language notes and questions to ask. It never judges
 whether a post is safe or legitimate, and market/decide.jac filters any output that tries.
-The model is `advisor`, a module glob so tests can swap in MockLLM.
+The model is `advisor`, a module glob so tests can swap in MockLLM, or None to switch it off.
 """
 
 import from jaclang.byllm.lib { Model }
+import from ai.models { model_ready }
 
 glob advisor: any = Model(model_name="claude-haiku-4-5-20251001");
+
+"""Whether an advisor call can be made (see ai/models.jac `model_ready`)."""
+def advisor_ready -> bool {
+    return model_ready(advisor);
+}
 
 obj DecideNotes {
     has questions: list[str] = [],

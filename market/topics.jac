@@ -44,10 +44,11 @@ import from market.graph {
     blocked_keys
 }
 import from market.drafting { make_draft }
+import from market.translation { reader_of }
 import from market.lifecycle { publish, view_of, own_post, finish, PostView }
 import from market.messages { blocking_question, fields_from, parse_answers, FollowUp }
 import from market.matching { place, money }
-import from market.items { standard_item, category_for }
+import from market.items { standard_item }
 
 glob MONTH_NAMES: list[str] = [
          "Jan",
@@ -63,8 +64,6 @@ glob MONTH_NAMES: list[str] = [
          "Nov",
          "Dec"
      ];
-
-glob MAX_ITEMS_PER_MESSAGE: int = 5;
 
 glob MAX_GROUP_MESSAGE_CHARS: int = 1000,
      SKIP_WORDS: list[str] = [
@@ -411,7 +410,7 @@ intent is unclear it returns one follow-up question for the poster and files not
 def file_market(
     cohort: ChatGroup, text: str, message_id: str, answers: str, today: str
 ) -> GroupPostResult {
-    drafted = make_draft(text, today);
+    drafted = make_draft(text, today, verified_profile());
     if not drafted.ok or drafted.draft is None {
         return GroupPostResult(ok=True, message_id=message_id);
     }
@@ -434,38 +433,26 @@ def file_market(
     if question is not None {
         return GroupPostResult(ok=True, message_id=message_id, follow_up=question);
     }
-    items = [fields_from(card, known, text)];
-    for x in card.extras {
-        one = dict(items[0]);
-        # Shared facts (kind, dates, area, conditions) carry over; title, item and price are the
-        # item's own, and the description is the student's whole message, never the model's
-        # words for another item.
-        one.update(
-            {
-                "title": x.title,
-                "item": x.item,
-                "price": x.price,
-                "description": text[:500],
-                "route_from": "",
-                "route_to": "",
-                "arrangement": ""
-            }
-        );
-        # The AI sometimes leaves an extra's category empty; the item list knows a mattress is
-        # furniture even when the first item was a bike.
-        one["category"] = x.category
-            or category_for(x.item, x.title)
-            or one["category"];
-        items.append(one);
-    }
-    if len(items) > 1 {
-        items[0]["description"] = text[:500];
-    }
-    over = max(0, len(items) - MAX_ITEMS_PER_MESSAGE);
+    # One post per distinct need the drafter found (market/drafting.jac, #46). The answer to the
+    # question about the first draft applies to the others only where they guessed the same field.
+    items = [
+        fields_from(
+            c,
+            known
+                if i == 0
+                else {
+                    k: v
+                    for (k, v) in known.items()
+                    if k in c.guessed
+                },
+            text
+        ) for (i, c) in enumerate(drafted.drafts or [card])
+    ];
+    over = drafted.dropped;
     filed: list[tuple[Post, ChatGroup, int, bool]] = [];
     failed: list[str] = [];
     last_error = "";
-    for fields in items[:MAX_ITEMS_PER_MESSAGE] {
+    for fields in items {
         result = publish(fields, today, ai_generated=card.ai_generated);
         post = own_post(result.post.id) if result.ok and result.post else None;
         if post is None {
@@ -482,7 +469,7 @@ def file_market(
     }
     if over > 0 {
         notes.append(
-            f"I filed the first {MAX_ITEMS_PER_MESSAGE} items; post the other {over} in another message."
+            f"I filed the first {len(items)} items; post the other {over} in another message."
         );
     }
     notice = " ".join(notes);
@@ -616,7 +603,7 @@ def links_for(
     return out;
 }
 
-def view(group_id: str, today: str) -> GroupView {
+def view(group_id: str, today: str, reader: str = "") -> GroupView {
     g = group_by_id(group_id);
     if g is None {
         return GroupView(ok=False, error="That group isn't available.");
@@ -666,7 +653,7 @@ def view(group_id: str, today: str) -> GroupView {
         if m.ai or m.author_root == me or pair_key(me, m.author_root) not in blocked
     ];
     filed = [
-        view_of(p, today)
+        view_of(p, today, reader)
         for p in visible
         if p.topic_group_id == group_id and post_status(p, today) == "live"
     ];
@@ -783,7 +770,7 @@ def:protect my_group_invites -> list[InviteView] {
 def:protect group_view(group_id: str) -> GroupView {
     return GroupView(ok=False, error=denied())
         if denied()
-        else view(group_id, today_iso());
+        else view(group_id, today_iso(), reader_of(verified_profile()));
 }
 
 def:protect post_in_group(group_id: str, text: str) -> GroupPostResult {

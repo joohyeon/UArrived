@@ -41,28 +41,6 @@ def standard_item(category: str, title: str, suggested: str = "") -> str {
     return item_from_text(category, title) or "other";
 }
 
-"""The goods category whose list has `item` or matches `title` ("" if none), for an extra item the
-AI didn't give a category."""
-def category_for(item: str, title: str) -> str {
-    for (category, items) in STANDARD_ITEMS.items() {
-        if item in items {
-            return category;
-        }
-    }
-    for category in STANDARD_ITEMS {
-        if item_from_text(category, title) {
-            return category;
-        }
-    }
-    return "";
-}
-
-test "an extra item's category comes from the item list" {
-    assert category_for("mattress", "Twin mattress") == "furniture";
-    assert category_for("", "Floor lamp") == "essentials";
-    assert category_for("", "Kayak") == "";
-}
-
 test "titles map to standard items" {
     assert standard_item("furniture", "Study table") == "desk";
     assert standard_item("furniture", "IKEA MALM desk") == "desk";

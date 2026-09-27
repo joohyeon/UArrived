@@ -22,6 +22,8 @@ import from jaclang.server.identity.app_tokens { token_create }
 import from core.auth { verified_profile }
 import from core.clock { today_iso, now_iso }
 import from core.profile { my_profile, sync_mailbox }
+import from market.translation { reader_of }
+import from market.constants { reasons_for }
 import from market.graph {
     Post,
     Suggestion,
@@ -198,13 +200,14 @@ def fields_from(card: DraftCard, known: dict[str, str], text: str) -> dict[str, 
         "route_to": card.route_to,
         "arrangement": known.get("arrangement", card.arrangement),
         "constraints": card.constraints,
+        "language": card.language,
         "item": card.item
     };
 }
 
 """Post `text` (plus any quick-reply answers) as a message, or ask one follow-up question."""
 def send_message_as_post(text: str, answers: str, today: str) -> MessageResult {
-    drafted = make_draft(text, today);
+    drafted = make_draft(text, today, verified_profile());
     if not drafted.ok or drafted.draft is None {
         return MessageResult(ok=False, error=drafted.error);
     }
@@ -359,7 +362,7 @@ def apply_choice_to(post_id: str, value: str, today: str) -> ActionResult {
 }
 
 """Messages for my stream: mine, the ones matching mine (with reasons), else recent ones."""
-def stream(today: str) -> list[StreamItem] {
+def stream(today: str, reader: str = "") -> list[StreamItem] {
     me = jid(root);
     posts = [
         p
@@ -382,7 +385,7 @@ def stream(today: str) -> list[StreamItem] {
         }
         other_id = s.post_b if s.root_a == me else s.post_a;
         if other_id in by_id and other_id not in reasons {
-            reasons[other_id] = s.reasons;
+            reasons[other_id] = reasons_for(s.reasons, s.reason_codes, reader);
         }
     }
     chosen = mine + [by_id[i] for i in reasons];
@@ -415,7 +418,7 @@ def stream(today: str) -> list[StreamItem] {
         );
         items.append(
             StreamItem(
-                post=view_of(p, today),
+                post=view_of(p, today, reader),
                 reasons=reasons.get(pid, []),
                 replies=sum(counts.values()),
                 unread=unread
@@ -430,13 +433,13 @@ def stream(today: str) -> list[StreamItem] {
     return items;
 }
 
-def note_view(n: AssistantNote, today: str) -> NoteView {
+def note_view(n: AssistantNote, today: str, reader: str = "") -> NoteView {
     posts: dict[str, Post] = {jid(p): p for p in all_posts()};
     items: list[NoteItem] = [];
     for it in n.items {
         p = posts.get(it["post_id"]);
         if p is not None and post_status(p, today) == "live" {
-            items.append(NoteItem(post=view_of(p, today), reasons=[]));
+            items.append(NoteItem(post=view_of(p, today, reader), reasons=[]));
         }
     }
     choices = [
@@ -450,7 +453,7 @@ def note_view(n: AssistantNote, today: str) -> NoteView {
 }
 
 """A message and what the caller may see of its thread."""
-def thread(post_id: str, today: str) -> ThreadView {
+def thread(post_id: str, today: str, reader: str = "") -> ThreadView {
     me = jid(root);
     post: Post | None = None;
     for p in visible_to(all_posts(), me) {
@@ -472,12 +475,12 @@ def thread(post_id: str, today: str) -> ThreadView {
         }
     }
     visible.sort(key=lambda (r: Reply) -> str { return r.created_at; });
-    notes = [note_view(n, today) for n in notes_for(post_id)]
+    notes = [note_view(n, today, reader) for n in notes_for(post_id)]
         if post.owner_root == me
         else [];
     return ThreadView(
         ok=True,
-        post=view_of(post, today),
+        post=view_of(post, today, reader),
         notes=notes,
         replies=[
             ReplyView(
@@ -695,7 +698,9 @@ def:protect send_market_message(text: str, answers: str) -> MessageResult {
 }
 
 def:protect market_stream -> list[StreamItem] {
-    return [] if verified_profile() is None else stream(today_iso());
+    return []
+        if verified_profile() is None
+        else stream(today_iso(), reader_of(verified_profile()));
 }
 
 def:protect message_thread(post_id: str) -> ThreadView {
@@ -704,7 +709,7 @@ def:protect message_thread(post_id: str) -> ThreadView {
             ok=False, error="Verify your UMich email to use the marketplace."
         );
     }
-    return thread(post_id, today_iso());
+    return thread(post_id, today_iso(), reader_of(verified_profile()));
 }
 
 def:protect react_to_message(post_id: str, kind: str) -> ActionResult {

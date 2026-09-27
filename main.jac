@@ -62,6 +62,7 @@ import from market.lifecycle {
 import from "@jac/runtime" { jacIsLoggedIn }
 import from core.screens.welcome { Welcome }
 import from ui.components.gallery { Gallery }
+import from market.screens.preview { MarketPreview }
 import from market.screens.inbox { MatchesInbox }
 import from market.screens.groups { GroupList, GroupChat }
 import from market.screens.compose { Compose }
@@ -77,6 +78,9 @@ def:pub app -> JsxElement {
     path = current_path().rstrip("/") or "/";
     if path == "/ui" {
         return <Gallery/>;
+    }
+    if path == "/market/preview" {
+        return <MarketPreview/>;
     }
     if (path.startswith("/market") or path == "/today") and not jacIsLoggedIn() {
         return <Welcome/>;

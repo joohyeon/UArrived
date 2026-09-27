@@ -1,12 +1,20 @@
-"""AI drafting: one free-text message -> a structured post draft (R1, R2, R5, R19).
+"""AI drafting: one free-text message in any language -> its language plus one or more
+structured post drafts, each with an English copy (R1, R2, R5, R19, R22, R25).
 
 Knows nothing about the graph or the marketplace rules; `market/drafting.jac` validates and
-normalizes what comes back. The model is `drafter`, a module glob so tests can swap in MockLLM.
+normalizes what comes back. The model is `drafter`, a module glob so tests can swap in MockLLM,
+or None to switch drafting off.
 """
 
 import from jaclang.byllm.lib { Model }
+import from ai.models { model_ready }
 
 glob drafter: any = Model(model_name="claude-haiku-4-5-20251001");
+
+"""Whether a drafting call can be made (see ai/models.jac `model_ready`)."""
+def drafter_ready -> bool {
+    return model_ready(drafter);
+}
 
 enum PostKind { OFFER, REQUEST }
 
@@ -20,19 +28,6 @@ sem Category.ESSENTIALS = "Kitchenware, bedding, lamps, small appliances, books,
 sem Category.HOUSING = "Rooms, sublets, roommate openings, lease transfers, apartments.";
 sem Category.VEHICLE = "Cars, bikes, scooters, e-bikes.";
 sem Category.SERVICE = "Rides (including airport rides), help moving, storage, other favors.";
-
-"""Another item in the same message (a moving-out sale lists several)."""
-obj ExtraItem {
-    has title: str,
-        category: Category | None = None,
-        item: str = "",
-        price: float | None = None;
-}
-
-sem ExtraItem.title = "The item in a few words, like 'Floor lamp'.";
-sem ExtraItem.category = "Its own category when it differs from the main item's (a lamp is essentials, a bike is vehicle); None if the same.";
-sem ExtraItem.item = "Its standard name, from the same list as PostDraft.item.";
-sem ExtraItem.price = "Its own price in US dollars if the student gave one for this item; otherwise None.";
 
 obj PostDraft {
     has kind: PostKind,
@@ -54,16 +49,18 @@ obj PostDraft {
         suggested_price: float | None = None,
         price_reason: str = "",
         about_market: bool = True,
-        item: str = "",
-        extra_items: list[ExtraItem] = [];
+        title_en: str = "",
+        description_en: str = "",
+        item: str = "";
 }
 
-sem PostDraft.extra_items = "When the message offers or asks for several different items (e.g. 'selling a bike, a lamp and a mattress'), the main fields describe the first item and this lists all the others in the order written. Only items the student names; never split one item into parts. Empty for a single item.";
 
 sem PostDraft.about_market = "True only if the student says they want to buy, sell, give away, rent, find or offer housing, share a ride, or get moving help. False for greetings, introductions, asking who else is arriving or on a flight, and questions about campus life.";
 sem PostDraft.item = "The item as one standard name. furniture: desk, chair, bed, mattress, sofa, shelf, table, dresser. essentials: lamp, fridge, microwave, kitchenware, bedding, fan, monitor, textbook. vehicle: bike, scooter, car. Map synonyms (study table -> desk, mini fridge -> fridge, bookcase -> shelf). 'other' if none fits; empty for housing and services.";
-sem PostDraft.title = "The item or need itself in a few words, like 'Bike', 'Wooden desk' or 'Ride from DTW', in the student's own language. Never start with 'Selling', 'Looking for' or 'Need'; the post type already says that.";
-sem PostDraft.description = "One or two plain sentences in the student's own voice (first person, e.g. 'I need a desk near campus this weekend.'), restating only what they said. Never invent condition, brand or features.";
+sem PostDraft.title = "The item or need itself in a few words, like 'Bike', 'Wooden desk' or 'Ride from DTW', in the student's own language. Never start with 'Selling', 'Looking for' or 'Need'; the post type already says that. At most 8 words.";
+sem PostDraft.description = "One or two plain sentences in the student's own voice (first person, e.g. 'I need a desk near campus this weekend.') in the student's own language, restating only what they said. Never invent condition, brand or features. Keep every number as digits.";
+sem PostDraft.title_en = "The title in English. Keep every number as digits exactly as written.";
+sem PostDraft.description_en = "The description in English, adding and removing nothing. Keep every number as digits exactly as written.";
 sem PostDraft.price = "For an offer: the asking price in US dollars. For a request: the maximum budget. None if not stated.";
 sem PostDraft.free = "True only if the student says it is free or a giveaway.";
 sem PostDraft.available_from = "First date it is available or needed, YYYY-MM-DD, resolved against today. Empty if unknown.";
@@ -79,8 +76,17 @@ sem PostDraft.guessed = "Names of the fields above that you inferred rather than
 sem PostDraft.suggested_price = "For offers of items only: a fair secondhand price in US dollars for Ann Arbor students. None for requests, housing and services.";
 sem PostDraft.price_reason = "One short sentence explaining suggested_price. Empty if suggested_price is None.";
 
-sem draft_post = "Turn a student's marketplace message into a structured draft post. Only use facts in the message; mark anything inferred in guessed.";
-sem draft_post.message = "The student's message, exactly as typed.";
-sem draft_post.today = "Today's date, YYYY-MM-DD, for resolving words like 'sat' or 'next week'.";
+"""What one message becomes: its language and one draft per distinct need."""
+obj DraftSet {
+    has language: str,
+        drafts: list[PostDraft] = [];
+}
 
-def draft_post(message: str, today: str) -> PostDraft by drafter();
+sem DraftSet.language = "ISO 639-1 code of the language the student wrote in, for example 'en', 'ko', 'zh'.";
+sem DraftSet.drafts = "One draft per distinct need in the message (for example a ride, a room and a desk are three drafts; a bike, a lamp and a mattress for sale are three drafts). A message about one thing is one draft.";
+
+sem draft_posts = "Turn a student's marketplace message, in any language, into structured draft posts. Detect the language. Split distinct needs and distinct items into separate drafts. Write each title and description in the student's language and the English copy separately. Keep every number as digits. Only use facts in the message; mark anything inferred in guessed.";
+sem draft_posts.message = "The student's message, exactly as typed.";
+sem draft_posts.today = "Today's date, YYYY-MM-DD, for resolving words like 'sat' or 'next week'.";
+
+def draft_posts(message: str, today: str) -> DraftSet by drafter();

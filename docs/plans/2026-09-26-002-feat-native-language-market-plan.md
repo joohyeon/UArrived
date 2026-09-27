@@ -1,7 +1,7 @@
 ---
 title: "feat: Native-language posting and chat in the marketplace"
 type: feat
-status: active
+status: completed
 date: 2026-09-26
 origin: docs/brainstorms/2026-09-26-002-arrival-story-native-language-market-requirements.md
 ---

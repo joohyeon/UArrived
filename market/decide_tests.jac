@@ -1,13 +1,22 @@
 """Tests for Help me decide (U10). The model is always MockLLM."""
 
-import os;
-import tempfile;
 import ai.decide;
+import ai.translate;
 import from jaclang.byllm.lib { MockLLM, MockError, AuthenticationError }
 import from jaclang.testing.testing { JacTestClient }
+import from market.testkit { served }
 import from ai.decide { DecideNotes }
+import from ai.translate { PostText, PostTranslations, TextList }
 import from market.graph { Post }
-import from market.decide { missing_info, risk_flags, clean_notes }
+import from market.decide {
+    missing_info,
+    missing_codes,
+    risk_flags,
+    risk_codes,
+    clean_notes,
+    notes_for,
+    BANNED_CLAIMS
+}
 
 test "a sublet with no lease dates lists them as missing (AE6)" {
     sublet = Post(
@@ -68,6 +77,59 @@ test "known risk patterns are flagged by rule" {
         description="Pick up Saturday"
     );
     assert risk_flags(fine) == [];
+}
+
+test "a ko sublet whose English copy asks to wire the deposit gets the payment flag (AE11)" {
+    sublet = Post(
+        owner_root="jae",
+        kind="offer",
+        category="housing",
+        title="방 양도",
+        description="보기 전에 보증금 송금해 주세요",
+        price=800.0,
+        arrangement="sublet",
+        language="ko",
+        texts={
+            "ko": {"title": "방 양도", "description": "보기 전에 보증금 송금해 주세요"},
+            "en": {
+                "title": "Room sublet",
+                "description": "Please wire the deposit before viewing"
+            }
+        }
+    );
+    flags = risk_flags(sublet);
+    assert any(["payment method" in f for f in flags]);
+    assert any(["deposit" in f for f in flags]);
+    sublet.texts = {};
+    assert risk_codes(sublet) == ["hard_to_reverse_payment", "deposit_pressure"];
+}
+
+test "a ko reader sees the deposit-before-viewing flag and missing lease dates in Korean" {
+    sublet = Post(
+        owner_root="jae",
+        kind="offer",
+        category="housing",
+        title="Room",
+        price=780.0,
+        arrangement="sublet",
+        area="Kerrytown",
+        description="Send the deposit before viewing"
+    );
+    assert missing_codes(sublet) == ["lease_dates"];
+    assert missing_info(sublet) == ["lease dates"];
+    assert missing_info(sublet, "ko") == ["계약 기간"];
+    assert risk_codes(sublet) == ["deposit_pressure"];
+    assert risk_flags(sublet, "ko") == ["보증금이나 빠른 결정을 요구해요. 직접 보기 전일 수도 있어요"];
+    assert risk_flags(sublet)
+        == ["Asks for a deposit or quick decision, possibly before viewing"];
+}
+
+test "English notes stay as they are; failed translations fall back to English" {
+    ai.translate.translator = MockLLM(outputs=[TextList(texts=["방을 먼저 볼 수 있나요?", ""])]);
+    assert notes_for(["Can I see the room first?"], "en")
+        == ["Can I see the room first?"];
+    assert notes_for(["Can I see the room first?", "Ask for the lease."], "ko")
+        == ["방을 먼저 볼 수 있나요?", "Ask for the lease."];
 }
 
 test "AI notes that call a post safe or legit are dropped" {
@@ -131,7 +193,7 @@ def two_sublets(client: JacTestClient) -> list[str] {
 }
 
 test "comparing two posts gives facts, missing info, flags and filtered AI notes" {
-    os.environ["UARRIVED_DEV_MODE"] = "1";
+    client = served();
     ai.decide.advisor = MockLLM(
         outputs=[
             DecideNotes(
@@ -146,7 +208,6 @@ test "comparing two posts gives facts, missing info, flags and filtered AI notes
             )
         ]
     );
-    client = JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp());
     try {
         ids = two_sublets(client);
         r = call(client, "help_me_decide", {"post_ids": ids});
@@ -167,11 +228,10 @@ test "comparing two posts gives facts, missing info, flags and filtered AI notes
 }
 
 test "when AI fails the facts and flags still show, without AI notes" {
-    os.environ["UARRIVED_DEV_MODE"] = "1";
+    client = served();
     ai.decide.advisor = MockLLM(
         outputs=[MockError(error=AuthenticationError("no key"))]
     );
-    client = JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp());
     try {
         ids = two_sublets(client);
         r = call(client, "help_me_decide", {"post_ids": ids});
@@ -183,9 +243,24 @@ test "when AI fails the facts and flags still show, without AI notes" {
     }
 }
 
+test "with AI switched off and no advisor, facts and flags render with the unavailable note" {
+    client = served();
+    try {
+        ids = two_sublets(client);
+        r = call(client, "help_me_decide", {"post_ids": ids});
+        assert r["ok"] and not r["ai_generated"];
+        assert "aren't available" in r["ai_note"];
+        assert r["questions"] == [] and r["risk_notes"] == [];
+        assert [c["post"]["title"] for c in r["posts"]] == ["Room A", "Room B"];
+        assert "lease dates" in r["posts"][0]["missing"];
+        assert len(r["posts"][1]["flags"]) == 3;
+    } finally {
+        client.close();
+    }
+}
+
 test "one post, four posts, or a closed post cannot be compared" {
-    os.environ["UARRIVED_DEV_MODE"] = "1";
-    client = JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp());
+    client = served();
     try {
         ids = two_sublets(client);
         assert not call(client, "help_me_decide", {"post_ids": [ids[0]]})["ok"];
@@ -197,4 +272,172 @@ test "one post, four posts, or a closed post cannot be compared" {
     } finally {
         client.close();
     }
+}
+
+test "help me decide shows a ko sublet in the reader's language and advises on its English" {
+    client = served();
+    ai.translate.translator = MockLLM(
+        outputs=[
+            PostTranslations(
+                items=[
+                    PostText(
+                        language="en",
+                        title="Room sublet",
+                        description="Please wire the deposit before viewing, $800 a month"
+                    ),
+                    PostText(language="zh", title="房间转租", description="看房前请电汇押金，每月$800")
+                ]
+            ),
+            PostTranslations(items=[])
+        ]
+    );
+    advisor = MockLLM(
+        outputs=[DecideNotes(questions=["Can I see the room before paying?"])]
+    );
+    ai.decide.advisor = advisor;
+    try {
+        student(client, "jae@umich.edu");
+        ko_room = call(
+            client,
+            "publish_post",
+            {
+                "fields": {
+                    "kind": "offer",
+                    "category": "housing",
+                    "title": "방 양도",
+                    "description": "보기 전에 보증금 송금해 주세요, 월 $800",
+                    "price": 800,
+                    "arrangement": "sublet",
+                    "language": "ko"
+                }
+            }
+        )["post"]["id"];
+        room_a = call(
+            client,
+            "publish_post",
+            {
+                "fields": {
+                    "kind": "offer",
+                    "category": "housing",
+                    "title": "Room A",
+                    "price": 780,
+                    "arrangement": "sublet"
+                }
+            }
+        )["post"]["id"];
+        student(client, "mina@umich.edu");
+        r = call(client, "help_me_decide", {"post_ids": [room_a, ko_room]});
+        assert r["ok"] and r["ai_generated"];
+        shown = r["posts"][1]["post"];
+        assert shown["title"] == "Room sublet" and shown["ai_translated"];
+        assert shown["original_title"] == "방 양도";
+        assert any(["payment method" in f for f in r["posts"][1]["flags"]]);
+        assert "wire the deposit" in str(advisor.sent("messages")[0]);
+    } finally {
+        client.close();
+    }
+}
+
+test "a ko reader comparing two sublets gets Korean labels and notes, filtered first (AE11)" {
+    client = served();
+    translator = MockLLM(
+        outputs=[
+            PostTranslations(items=[]),
+            PostTranslations(items=[]),
+            TextList(texts=["임대 기간은 언제 시작하고 끝나나요?", "B 방은 되돌리기 어려운 송금을 요구해요."])
+        ]
+    );
+    ai.translate.translator = translator;
+    ai.decide.advisor = MockLLM(
+        outputs=[
+            DecideNotes(
+                questions=["When does the lease start and end?"],
+                risk_notes=[
+                    "This listing is safe.",
+                    "Room B asks for a wire transfer, which is hard to reverse."
+                ]
+            )
+        ]
+    );
+    try {
+        ids = two_sublets(client);
+        assert call(
+            client, "update_my_profile", {"changes": {"preferred_language": "ko"}}
+        )["ok"];
+        r = call(client, "help_me_decide", {"post_ids": ids});
+        assert r["ok"] and r["ai_generated"];
+        assert r["posts"][0]["missing"] == ["계약 기간", "지역"];
+        assert r["posts"][0]["missing_codes"] == ["lease_dates", "area"];
+        assert r["posts"][1]["flag_codes"]
+            == ["hard_to_reverse_payment", "deposit_pressure", "low_rent"];
+        assert "되돌리기 어려운 결제 방법을 언급해요 (송금, 기프트 카드, 앱 송금)" in r["posts"][1]["flags"];
+        assert r["questions"] == ["임대 기간은 언제 시작하고 끝나나요?"];
+        assert r["risk_notes"] == ["B 방은 되돌리기 어려운 송금을 요구해요."];
+        sent = str(translator.sent("messages"));
+        assert "This listing is safe" not in sent;
+        shown = str(
+            [
+                r["questions"],
+                r["risk_notes"],
+                [c["flags"] + c["missing"] for c in r["posts"]]
+            ]
+        ).lower();
+        assert not any([w in shown for w in BANNED_CLAIMS]);
+    } finally {
+        client.close();
+    }
+}
+
+test "a provider timeout on the advisor keeps the facts and flags" {
+    client = served();
+    ai.decide.advisor = MockLLM(outputs=[MockError(error=TimeoutError("slow"))]);
+    try {
+        ids = two_sublets(client);
+        r = call(client, "help_me_decide", {"post_ids": ids});
+        assert r["ok"] and not r["ai_generated"] and r["ai_note"];
+        assert len(r["posts"]) == 2;
+    } finally {
+        client.close();
+    }
+}
+
+test "a ko post whose English translation failed the guard still gets the payment flag" {
+    ko = Post(
+        owner_root="x",
+        kind="offer",
+        category="essentials",
+        title="책상",
+        price=15.0,
+        description="먼저 선입금 해주세요, 급해요"
+    );
+    assert risk_codes(ko) == ["hard_to_reverse_payment", "deposit_pressure"];
+    zh = Post(
+        owner_root="x",
+        kind="offer",
+        category="essentials",
+        title="桌子",
+        price=15.0,
+        description="请先转账,尽快"
+    );
+    assert risk_codes(zh) == ["hard_to_reverse_payment", "deposit_pressure"];
+    other = Post(
+        owner_root="x",
+        kind="offer",
+        category="essentials",
+        title="Desk",
+        price=15.0,
+        description="Nice",
+        texts={"ko": {"title": "책상", "description": "송금 먼저"}}
+    );
+    assert risk_codes(other) == ["hard_to_reverse_payment"];
+}
+
+test "a translated note that claims safety in Korean or Chinese is dropped" {
+    ai.translate.translator = MockLLM(
+        outputs=[TextList(texts=["이 방은 안전해요.", "임대 기간을 물어보세요."])]
+    );
+    assert notes_for(["It is fine.", "Ask about the lease."], "ko")
+        == ["", "임대 기간을 물어보세요."];
+    ai.translate.translator = MockLLM(outputs=[TextList(texts=["这个房源很可靠。"])]);
+    assert notes_for(["Fine."], "zh") == [""];
 }

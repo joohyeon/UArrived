@@ -1,8 +1,8 @@
 """Help me decide (U10): 2-3 posts side by side (stacked on phones), what each is missing, rule
 flags, then AI-phrased questions and notes, labeled. Opened from the For you feed."""
 
-import from ui.tokens { color, space }
-import from ui.components.base { AppShell, Card, Badge }
+import from ui.tokens { color }
+import from ui.components.base { AppShell, Card, Badge, ResponsiveGrid }
 import from market.screens.common { MarketTabs, PostSummary, query_param }
 import from market.decide { help_me_decide, DecideResult, Compared }
 
@@ -15,7 +15,7 @@ def:pub Compare -> JsxElement {
         load();
     }
 
-    <AppShell title="Help me decide" active="market">
+    <AppShell title="Help me decide" active="market" wide={True}>
         <MarketTabs active="/market/feed"/>
         {<Card>
             <p style={{"margin": "0"}}>Comparing...</p>
@@ -27,13 +27,7 @@ def:pub Compare -> JsxElement {
         </Card>
             if result and not result.ok
             else None}
-        <div
-            style={{
-                "display": "grid",
-                "gridTemplateColumns": "repeat(auto-fit, minmax(240px, 1fr))",
-                "gap": space("3")
-            }}
-        >
+        <ResponsiveGrid min="240px">
             {[
                 <Card key={c.post.id}>
                     <PostSummary p={c.post}/>
@@ -46,7 +40,7 @@ def:pub Compare -> JsxElement {
                     {[<Badge key={f} kind="warning" label={f}/> for f in c.flags]}
                 </Card> for c in (result.posts if result and result.ok else [])
             ]}
-        </div>
+        </ResponsiveGrid>
         {(
             <Card>
                 <div
