@@ -21,6 +21,10 @@ glob KINDS: list[str] = ["offer", "request"],
          "service"
      ];
 
+"""One marketplace post. `language` is the language the poster wrote `title`/`description` in;
+`texts` maps a language to {"title", "description"}: the original under `language` plus every
+pilot-language translation that passed the number guard (U5). Posts from before U5 have
+neither and render as written."""
 node Post {
     has owner_root: str,
         kind: str,
@@ -44,6 +48,8 @@ node Post {
         done: bool = False,
         suggestions_stopped: bool = False,
         hidden: bool = False,
+        language: str = "",
+        texts: dict[str, dict[str, str]] = {},
         confirmed_on: str = "",
         published_at: str = "",
         constraints: list[str] = [],
@@ -88,6 +94,10 @@ def all_posts(commons: any = None) -> list[Post] {
 
 `post_a` is the offer (or, for two ride requests, the one with the smaller id); `post_b` the
 other. Acceptance is per side (U6). `withdrawn` means matching replaced or stopped it.
+`reasons` is the English text; `reason_codes` holds one {"code", "values"} entry per reason so
+readers see them in their language (suggestions made before that have none and show English).
+`language_a`/`language_b` is each side's language, recorded when that side taps Connect; empty
+for sides that connected before chat translation, whose chat is not translated.
 """
 node Suggestion {
     has post_a: str,
@@ -97,6 +107,7 @@ node Suggestion {
         score: int,
         reasons: list[str],
         created_on: str,
+        reason_codes: list[dict[str, any]] = [],
         accepted_a: bool = False,
         accepted_b: bool = False,
         declined: bool = False,
@@ -107,7 +118,9 @@ node Suggestion {
         emailed_b: bool = False,
         origin: str = "match",
         reply_id: str = "",
-        open_token: str = "";
+        open_token: str = "",
+        language_a: str = "",
+        language_b: str = "";
 }
 
 """The private chat for one connected suggestion. Shared WRITE with exactly its two students;
@@ -119,11 +132,16 @@ node Chat {
         created_on: str;
 }
 
-"""One chat message, attached to its Chat and readable by both students."""
+"""One chat message, attached to its Chat and readable by both students. `text` is what the
+author wrote in `language`; `translated_text` is the stored AI translation into
+`translated_language` for the other student, empty when none was made or it failed the guard."""
 node Message {
     has author_root: str,
         text: str,
-        sent_at: str;
+        sent_at: str,
+        language: str = "",
+        translated_text: str = "",
+        translated_language: str = "";
 }
 
 def all_chats -> list[Chat] {

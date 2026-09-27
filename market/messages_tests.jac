@@ -9,16 +9,12 @@ import tempfile;
 import ai.draft;
 import from jaclang.byllm.lib { MockLLM, MockError, AuthenticationError }
 import from jaclang.testing.testing { JacTestClient }
-import from ai.draft { PostDraft, PostKind, Category }
+import from market.testkit { served }
+import from ai.draft { PostDraft, DraftSet, PostKind, Category }
 import from core.profile { Mailbox }
 import from market.graph { Post, Reply, notes_for }
 import from market.messages { nudge_due }
 import from market.notify { reply_sweep }
-
-def served -> JacTestClient {
-    os.environ["UARRIVED_DEV_MODE"] = "1";
-    return JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp());
-}
 
 def call(client: JacTestClient, name: str, body: dict[str, any]) -> any {
     return client.post(f"/function/{name}", json=body).json()["data"]["result"];
@@ -35,7 +31,12 @@ def act_as(client: JacTestClient, email: str) {
 }
 
 def ai_says(drafts: list[any]) {
-    ai.draft.drafter = MockLLM(outputs=drafts);
+    ai.draft.drafter = MockLLM(
+        outputs=[
+            DraftSet(language="en", drafts=[d]) if isinstance(d, PostDraft) else d
+            for d in drafts
+        ]
+    );
 }
 
 def desk_offer -> PostDraft {

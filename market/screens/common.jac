@@ -3,6 +3,7 @@
 import from ui.tokens { color, space }
 import from ui.components.base { Badge, Button, Field }
 import from market.lifecycle { PostView }
+import from market.constants { labels_for }
 
 glob MARKET_TABS: list[tuple[str, str]] = [
          ("/market", "Groups"),
@@ -24,6 +25,45 @@ def:pub query_param(name: str) -> str {
 
 def:pub go(path: str) {
     window.location.assign(path);  # jac:ignore[E1032,W2001]
+}
+
+"""A labeled <select> in the same style as Field."""
+def:pub Choice(
+    label: str,
+    value: str,
+    options: list[tuple[str, str]],
+    onChange: Callable[[str], None],
+    note: str = ""
+) -> JsxElement {
+    <label
+        style={{
+            "display": "flex",
+            "flexDirection": "column",
+            "gap": space("1"),
+            "fontSize": "14px",
+            "fontWeight": "600"
+        }}
+    >
+        {label}
+        <select
+            value={value}
+            onChange={lambda (e: ChangeEvent) { onChange(e.target.value); }}
+            style={{
+                "minHeight": "44px",
+                "padding": "0 " + space("2"),
+                "border": "1px solid " + color("border-strong"),
+                "borderRadius": "8px",
+                "background": color("card"),
+                "color": color("text"),
+                "fontSize": "16px"
+            }}
+        >
+            {[<option key={v} value={v}>{t}</option> for (v, t) in options]}
+        </select>
+        {<span style={{"color": color("warning"), "fontWeight": "400"}}>{note}</span>
+            if note
+            else None}
+    </label>
 }
 
 def:pub price_text(p: PostView) -> str {
@@ -87,8 +127,58 @@ def:pub MarketTabs(active: str, unread: int = 0) -> JsxElement {
     </nav>
 }
 
+"""The AI-translated label and a See original toggle (local state only) for text shown in `lang`
+by AI translation; the toggle reveals the author's words (`title` in bold, then `text`) marked
+with their `source_language`. Used by post summaries and chat bubbles."""
+def:pub TranslatedNote(
+    lang: str, source_language: str = "", title: str = "", text: str = ""
+) -> JsxElement {
+    has show: bool = False;
+
+    L = labels_for(lang);
+    <div style={{"display": "flex", "flexDirection": "column", "gap": space("1")}}>
+        <div
+            style={{
+                "display": "flex",
+                "gap": space("2"),
+                "alignItems": "center",
+                "flexWrap": "wrap"
+            }}
+        >
+            <Badge kind="ai" label={L["ai_translated"]}/>
+            <Button
+                label={L["hide_original"] if show else L["see_original"]}
+                variant="text"
+                onClick={lambda (e: MouseEvent) { show = not show; }}
+            />
+        </div>
+        {(
+            <div
+                lang={source_language or None}
+                style={{
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "gap": space("1"),
+                    "padding": space("2"),
+                    "borderLeft": "3px solid " + color("border-strong"),
+                    "color": color("text-2")
+                }}
+            >
+                {<strong>{title}</strong> if title else None}{<span>{text}</span>
+                    if text
+                    else None}
+            </div>
+        )
+            if show
+            else None}
+    </div>
+}
+
 """Facts first (title, kind, price, dates, area, arrangement), then the poster's own words
-under "Seller says" (design rule 6), with the AI-generated label when AI wrote them."""
+under "Seller says" (design rule 6), with the AI-generated label when AI wrote them. A post
+shown in the reader's language by AI translation carries the AI-translated label and a See
+original toggle (TranslatedNote) revealing the poster's words. Text blocks set `lang` to the
+language actually shown so screen readers pronounce it correctly."""
 def:pub PostSummary(p: PostView) -> JsxElement {
     facts = [
         x
@@ -104,7 +194,9 @@ def:pub PostSummary(p: PostView) -> JsxElement {
                 "alignItems": "baseline"
             }}
         >
-            <strong style={{"fontSize": "18px"}}>{p.title}</strong>
+            <strong lang={p.language or None} style={{"fontSize": "18px"}}>
+                {p.title}
+            </strong>
             <span
                 style={{
                     "color": color("sub"),
@@ -133,11 +225,19 @@ def:pub PostSummary(p: PostView) -> JsxElement {
                 <strong>
                     {"Seller says: " if p.kind == "offer" else "They say: "}
                 </strong>
-                {p.description}{" "}
+                <span lang={p.language or None}>{p.description}</span>{" "}
                 {<Badge kind="ai" label="AI-generated"/> if p.ai_generated else None}
             </p>
         )
             if p.description
+            else None}
+        {<TranslatedNote
+            lang={p.language}
+            source_language={p.source_language}
+            title={p.original_title}
+            text={p.original_description}
+        />
+            if p.ai_translated
             else None}
     </div>
 }

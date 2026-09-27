@@ -1,19 +1,29 @@
-"""Draft a post from one message (U3): call the AI, then validate and normalize its output.
+"""Draft posts from one message (U3, native-language U4): call the AI, then validate and
+normalize its output.
 
-Nothing is stored here; U4 publishes a confirmed draft. Every rule about what a valid post
-looks like lives here, not in the prompt: the AI can guess, but only these checks decide.
+One message in any language becomes up to MAX_DRAFTS drafts, each in the student's language with
+an English preview copy. Nothing is stored here; publishing a confirmed draft is separate. Every
+rule about what a valid post looks like lives here, not in the prompt: the AI can guess, but
+only these checks decide.
 """
 
 import from core.clock { today_iso as clock_today }
 import from datetime { date }
-import from jaclang.byllm.lib { ByLLMError, OutputConversionError }
-import from ai.draft { draft_post, PostDraft, PostKind, Category }
+import from jaclang.byllm.lib { OutputConversionError }
+import from ai.draft { draft_posts, drafter_ready, PostDraft, PostKind, Category }
 import from core.auth { verified_profile }
 import from core.constants { ANN_ARBOR_AREAS }
-import from core.profile { valid_date, valid_time }
+import from core.profile { Profile, valid_date, valid_time, default_language_from }
 import from market.constants { ARRANGEMENTS }
+import from market.translation {
+    digit_groups,
+    language_code,
+    profile_language,
+    note_ai_failure
+}
 
-glob MAX_MESSAGE_CHARS: int = 1000;
+glob MAX_MESSAGE_CHARS: int = 1000,
+     MAX_DRAFTS: int = 3;
 
 """A draft ready for the poster to review. Plain fields so the client can edit every one."""
 obj DraftCard {
@@ -36,20 +46,46 @@ obj DraftCard {
         suggested_price: float | None,
         price_reason: str,
         ai_generated: bool = True,
+        language: str = "en",
+        title_en: str = "",
+        description_en: str = "",
         constraints: list[str] = [],
         about_market: bool = True;
 }
 
+"""`language` is the detected (or, for non-AI cards, the poster's profile) language; `draft`
+is `drafts[0]`, kept for callers that handle a single draft."""
 obj DraftResult {
     has ok: bool,
         error: str = "",
         notice: str = "",
-        draft: DraftCard | None = None;
+        draft: DraftCard | None = None,
+        drafts: list[DraftCard] = [],
+        language: str = "";
+}
+
+"""A successful result holding `cards` (at least one) in `language`."""
+def drafted_result(
+    cards: list[DraftCard], language: str, notice: str = ""
+) -> DraftResult {
+    return DraftResult(
+        ok=True, notice=notice, draft=cards[0], drafts=cards, language=language
+    );
+}
+
+"""Tag `card` with `language`; an English card's English copy is its own text."""
+def in_language(card: DraftCard, language: str) -> DraftCard {
+    card.language = language;
+    if language == "en" {
+        card.title_en = card.title;
+        card.description_en = card.description;
+    }
+    return card;
 }
 
 """A blank, non-AI draft holding the student's own words, for when AI drafting is unavailable."""
-def manual_card(text: str) -> DraftCard {
-    return DraftCard(
+def manual_card(text: str, language: str = "en") -> DraftCard {
+    card = DraftCard(
         kind="offer",
         category="furniture",
         title=text[:80],
@@ -70,6 +106,7 @@ def manual_card(text: str) -> DraftCard {
         price_reason="",
         ai_generated=False
     );
+    return in_language(card, language);
 }
 
 """Map free-text area to one of ANN_ARBOR_AREAS; unknown text becomes "Other"."""
@@ -180,8 +217,73 @@ def normalize(d: PostDraft) -> DraftCard {
     );
 }
 
-"""Draft a post from `message` as of `today` (YYYY-MM-DD)."""
-def make_draft(message: str, today: str) -> DraftResult {
+"""The digit groups of a price: 900.0 -> {"900"}, 12.5 -> {"12", "5"}."""
+def price_groups(price: float) -> set[str] {
+    return digit_groups(f"{price:.0f}" if price == int(price) else f"{price}");
+}
+
+"""Whether the message digit `groups` support the YYYY-MM-DD `value`: its day number appears,
+and so does its month, as a number ("8월 20일", "8/20", "8月20日") or an English month word
+("Aug 20", which `digit_groups` maps to its number). The year is not required."""
+def date_supported(value: str, groups: set[str]) -> bool {
+    (month, day) = (int(value[5:7]), int(value[8:10]));
+    return str(day) in groups and str(month) in groups;
+}
+
+"""Whether `message` supports the HH:MM `value`: its hour appears on the 24- or 12-hour clock
+("15:00" from "3pm" or "오후 3시"), and so do non-zero minutes."""
+def time_supported(value: str, groups: set[str]) -> bool {
+    (hour, minute) = (int(value[:2]), int(value[3:]));
+    twelve = hour % 12 or 12;
+    if str(hour) not in groups and str(twelve) not in groups {
+        return False;
+    }
+    return minute == 0 or str(minute) in groups;
+}
+
+"""Key-fact check (R24): a price, date or time on `card` whose numbers do not appear in the
+original `message` is marked guessed, so the poster checks it before publishing."""
+def check_key_facts(card: DraftCard, message: str) -> DraftCard {
+    groups = digit_groups(message);
+    unsupported: list[str] = [];
+    if card.price is not None and not price_groups(card.price).issubset(groups) {
+        unsupported.append("price");
+    }
+    for field in ["available_from", "available_until"] {
+        value = getattr(card, field);
+        if value and not date_supported(value, groups) {
+            unsupported.append(field);
+        }
+    }
+    for field in ["time_from", "time_to"] {
+        value = getattr(card, field);
+        if value and not time_supported(value, groups) {
+            unsupported.append(field);
+        }
+    }
+    for field in unsupported {
+        if field not in card.guessed {
+            card.guessed.append(field);
+        }
+    }
+    return card;
+}
+
+"""One reviewed card from an AI draft in `language`: normalized, English copy attached (the
+card's own text when the language is English), key facts checked against `message`."""
+def card_from(d: PostDraft, language: str, message: str) -> DraftCard {
+    card = normalize(d);
+    card.title_en = d.title_en.strip()[:80];
+    card.description_en = d.description_en.strip()[:500];
+    return check_key_facts(in_language(card, language), message);
+}
+
+"""Draft posts from `message` as of `today` (YYYY-MM-DD) for `profile` (the poster; None in
+tests without one). A detected pilot language becomes the poster's default language unless
+they chose one; non-AI cards use the profile's language."""
+def make_draft(
+    message: str, today: str, profile: Profile | None = None
+) -> DraftResult {
     text = message.strip();
     if text == "" {
         return DraftResult(ok=False, error="Type what you're offering or looking for.");
@@ -191,35 +293,52 @@ def make_draft(message: str, today: str) -> DraftResult {
             ok=False, error=f"Keep it under {MAX_MESSAGE_CHARS} characters."
         );
     }
-    try {
-        raw = draft_post(text, today);
-    } except OutputConversionError {
-        return DraftResult(
-            ok=False,
-            error="Couldn't read that. Try adding what it is, a price or budget, and dates."
-        );
-    } except ByLLMError {
-        return DraftResult(
-            ok=True,
-            notice="AI drafting isn't available right now, so fill in the details yourself.",
-            draft=manual_card(text)
-        );
+    unreadable = DraftResult(
+        ok=False,
+        error="Couldn't read that. Try adding what it is, a price or budget, and dates."
+    );
+    fallback = profile_language(profile);
+    manual = drafted_result(
+        [manual_card(text, fallback)],
+        fallback,
+        notice="AI drafting isn't available right now, so fill in the details yourself."
+    );
+    if not drafter_ready() {
+        return manual;
     }
-    return DraftResult(ok=True, draft=normalize(raw));
+    try {
+        raw = draft_posts(text, today);
+    } except OutputConversionError {
+        return unreadable;
+    } except Exception as err {
+        note_ai_failure("draft_posts", err);
+        return manual;
+    }
+    if not raw.drafts {
+        return unreadable;
+    }
+    language = language_code(raw.language, fallback);
+    cards = [card_from(d, language, text) for d in raw.drafts[:MAX_DRAFTS]];
+    if profile is not None {
+        default_language_from(language, profile);
+    }
+    return drafted_result(cards, language);
 }
 
 """Draft a post from the caller's message. Verified UMich students only (R15)."""
 def:protect draft_from_message(message: str) -> DraftResult {
-    if verified_profile() is None {
+    profile = verified_profile();
+    if profile is None {
         return DraftResult(
             ok=False, error="Verify your UMich email to use the marketplace."
         );
     }
-    return make_draft(message, clock_today());
+    return make_draft(message, clock_today(), profile);
 }
 
 """A non-AI ride-request draft from the DTW prompt (U9): DTW to Ann Arbor on `day`, from `time`
-for two hours. Invalid values are dropped; the student reviews everything before publishing."""
+for two hours. Invalid values are dropped; the student reviews everything before publishing.
+The text is app-written English, so the card is English whatever the poster's language."""
 def ride_card(day: str, time: str) -> DraftCard {
     day = day if day and valid_date(day) else "";
     start = time if time and valid_time(time) else "";
@@ -228,7 +347,7 @@ def ride_card(day: str, time: str) -> DraftCard {
         (h, m) = (int(start.split(":")[0]), start.split(":")[1]);
         end = f"{min(h + 2, 23):02d}:{m}";
     }
-    return DraftCard(
+    card = DraftCard(
         kind="request",
         category="service",
         title="Ride from DTW to Ann Arbor",
@@ -249,16 +368,20 @@ def ride_card(day: str, time: str) -> DraftCard {
         price_reason="",
         ai_generated=False
     );
+    return in_language(card, "en");
 }
 
-"""The pre-filled ride draft for compose's `?prefill=ride&date=&time=` link. Nothing is stored."""
+"""The pre-filled ride draft for compose's `?prefill=ride&date=&time=` link. Nothing is stored.
+The card is English (app-written text); the result's `language` is the poster's, for labels."""
 def:protect ride_prefill(day: str, time: str) -> DraftResult {
-    if verified_profile() is None {
+    profile = verified_profile();
+    if profile is None {
         return DraftResult(
             ok=False, error="Verify your UMich email to use the marketplace."
         );
     }
-    return DraftResult(ok=True, draft=ride_card(day, time));
+    language = profile_language(profile);
+    return drafted_result([ride_card(day, time)], language);
 }
 
 test "the ride prefill is a non-AI DTW request on the arrival day, two hours from the time" {
@@ -268,6 +391,7 @@ test "the ride prefill is a non-AI DTW request on the arrival day, two hours fro
     assert card.available_from == card.available_until == "2026-08-20";
     assert card.time_from == "15:00" and card.time_to == "17:00";
     assert not card.ai_generated and card.missing == [];
+    assert card.language == "en" and card.title_en == card.title;
 }
 
 test "bad prefill values are dropped, and a missing date is flagged" {

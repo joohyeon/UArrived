@@ -4,7 +4,8 @@ In-app: a suggestion is unread for a student until they open it or act on it.
 Email: every NOTIFY_INTERVAL_SECONDS the system user's sweep sends each student one email listing
 their new, unread, open suggestions (titles and reasons, never chat text), then marks them
 emailed. The student whose own post created a suggestion is never emailed about it. Addresses
-come from Mailbox records on the commons, so the sweep never reads private profiles.
+come from Mailbox records on the commons, so the sweep never reads private profiles; reasons are
+listed in the language copied onto each Mailbox (the student's profile language).
 Topic-group invites (plan 004 G-R8) count in the badge until answered and are emailed once, with
 the group's name and the reason; group chat messages never email.
 The sweep only fires under `jac run --serve` with [scale.scheduler] enabled.
@@ -16,6 +17,7 @@ import from datetime { date }
 import from interop.email_sender { send }
 import from core.auth { verified_profile }
 import from core.profile { Mailbox }
+import from market.constants { reasons_for }
 import from market.graph {
     Post,
     Suggestion,
@@ -39,7 +41,8 @@ obj Pending {
         side: str,
         my_title: str,
         other_title: str,
-        reasons: list[str];
+        reasons: list[str],
+        reason_codes: list[dict[str, any]] = [];
 }
 
 """Unread, un-emailed, open suggestions grouped by the student to notify, as of `today`."""
@@ -58,7 +61,8 @@ def pending_by_student(today: str, commons: any = None) -> dict[str, list[Pendin
                     side="a",
                     my_title=a.title,
                     other_title=b.title,
-                    reasons=s.reasons
+                    reasons=s.reasons,
+                    reason_codes=s.reason_codes
                 )
             );
         }
@@ -69,7 +73,8 @@ def pending_by_student(today: str, commons: any = None) -> dict[str, list[Pendin
                     side="b",
                     my_title=b.title,
                     other_title=a.title,
-                    reasons=s.reasons
+                    reasons=s.reasons,
+                    reason_codes=s.reason_codes
                 )
             );
         }
@@ -77,7 +82,8 @@ def pending_by_student(today: str, commons: any = None) -> dict[str, list[Pendin
     return out;
 }
 
-def digest_body(items: list[Pending]) -> str {
+"""The digest email text, with each match's reasons in `lang`."""
+def digest_body(items: list[Pending], lang: str = "en") -> str {
     base = os.environ.get("UARRIVED_PUBLIC_URL", "http://localhost:8000");
     lines = [
         f"You have {len(items)} new match{'es'
@@ -87,8 +93,9 @@ def digest_body(items: list[Pending]) -> str {
     ];
     for it in items {
         lines.append(f"- \"{it.other_title}\" for your post \"{it.my_title}\"");
-        if it.reasons {
-            lines.append(f"  {'; '.join(it.reasons)}");
+        reasons = reasons_for(it.reasons, it.reason_codes, lang);
+        if reasons {
+            lines.append(f"  {'; '.join(reasons)}");
         }
     }
     lines.extend(
@@ -133,7 +140,7 @@ def sweep(today: str, commons: any = None) -> int {
             else f"{len(items)} new matches on UArrived";
         ok = False;
         try {
-            ok = send(box.email, subject, digest_body(items));
+            ok = send(box.email, subject, digest_body(items, box.language));
         } except Exception {
             ok = False;
         }

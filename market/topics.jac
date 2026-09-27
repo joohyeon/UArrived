@@ -40,6 +40,7 @@ import from market.graph {
     blocked_keys
 }
 import from market.drafting { make_draft }
+import from market.translation { reader_of }
 import from market.lifecycle { publish, view_of, own_post, finish, PostView }
 import from market.messages { blocking_question, fields_from, parse_answers, FollowUp }
 import from market.matching { place, money }
@@ -342,7 +343,7 @@ intent is unclear it returns one follow-up question for the poster and files not
 def file_market(
     cohort: ChatGroup, text: str, message_id: str, answers: str, today: str
 ) -> GroupPostResult {
-    drafted = make_draft(text, today);
+    drafted = make_draft(text, today, verified_profile());
     if not drafted.ok or drafted.draft is None {
         return GroupPostResult(ok=True, message_id=message_id);
     }
@@ -459,7 +460,7 @@ def my_invite_for(group_id: str) -> Invite | None {
     return None;
 }
 
-def view(group_id: str, today: str) -> GroupView {
+def view(group_id: str, today: str, reader: str = "") -> GroupView {
     g = group_by_id(group_id);
     if g is None {
         return GroupView(ok=False, error="That group isn't available.");
@@ -501,7 +502,7 @@ def view(group_id: str, today: str) -> GroupView {
         if m.ai or m.author_root == me or pair_key(me, m.author_root) not in blocked
     ];
     filed = [
-        view_of(p, today)
+        view_of(p, today, reader)
         for p in visible
         if p.topic_group_id == group_id and post_status(p, today) == "live"
     ];
@@ -612,7 +613,7 @@ def:protect my_group_invites -> list[InviteView] {
 def:protect group_view(group_id: str) -> GroupView {
     return GroupView(ok=False, error=denied())
         if denied()
-        else view(group_id, today_iso());
+        else view(group_id, today_iso(), reader_of(verified_profile()));
 }
 
 def:protect post_in_group(group_id: str, text: str) -> GroupPostResult {

@@ -46,10 +46,10 @@ node Mailbox {
 
 """Create or update the caller's Mailbox from their profile. Only verified addresses get one."""
 def sync_mailbox(profile: Profile, commons: any = None) -> None {
-    shared: Root = commons if commons is not None else root.shared;
     if not profile.verified {
         return;
     }
+    shared: Root = commons if commons is not None else root.shared;
     me = jid(root);
     for m in [shared-->][?:Mailbox] {
         if m.owner_root == me {

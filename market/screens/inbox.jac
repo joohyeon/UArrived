@@ -1,9 +1,18 @@
-"""Matches inbox: the market's landing screen (R8, R13, R21). Suggestions with fact-only reasons,
-Connect / Not interested, and an unread badge. Polls while open."""
+"""Matches inbox: the market's landing screen (R8, R13, R21, R29). Suggestions with fact-only
+reasons (already in the reader's language), Connect / Not interested, and an unread badge. Polls
+while open. The language picker here stands in for a Profile screen setting until one exists: it
+saves `preferred_language`, which also clears the client read cache so the reload is localized."""
 
 import from ui.tokens { color, space }
 import from ui.components.base { AppShell, Button, Card, Badge }
-import from market.screens.common { MarketTabs, PostSummary, go, ReportBox }
+import from core.constants { PILOT_LANGUAGES, LANGUAGE_NAMES }
+import from core.profile {
+    get_my_profile,
+    update_my_profile,
+    ProfileView,
+    ProfileUpdateResult
+}
+import from market.screens.common { MarketTabs, PostSummary, go, ReportBox, Choice }
 import from market.moderation { report_post, block_in_suggestion }
 import from market.suggestions { list_my_suggestions, SuggestionView }
 import from market.connect { connect, decline, ConnectResult }
@@ -15,14 +24,18 @@ glob POLL_MS: int = 10000;
 def:pub MatchesInbox -> JsxElement {
     has items: list[SuggestionView] = [],
         loaded: bool = False,
-        status: str = "";
+        status: str = "",
+        lang: str = "en";
 
     async def load -> None;
     async def accept(sid: str) -> None;
     async def pass_on(sid: str) -> None;
     async def blockThem(sid: str) -> None;
+    async def loadLanguage -> None;
+    async def chooseLanguage(code: str) -> None;
 
     can with entry {
+        loadLanguage();
         load();
         timer = setInterval(lambda { load(); }, POLL_MS);  # jac:ignore[W2001]
         return lambda { clearInterval(timer); };  # jac:ignore[W2001]
@@ -38,6 +51,12 @@ def:pub MatchesInbox -> JsxElement {
                     if i.unread
                 ]
             )}
+        />
+        <Choice
+            label="Language"
+            value={lang}
+            options={[(code, LANGUAGE_NAMES[code]) for code in PILOT_LANGUAGES]}
+            onChange={lambda (v: str) { chooseLanguage(v); }}
         />
         {<p role="status">{status}</p> if status else None}
         {(
@@ -70,6 +89,7 @@ def:pub MatchesInbox -> JsxElement {
                 </div>
                 <PostSummary p={s.other_post}/>
                 <ul
+                    lang={lang}
                     style={{
                         "margin": "0",
                         "paddingLeft": "20px",
@@ -130,6 +150,26 @@ impl MatchesInbox.load -> None {
     if len(unseen) > 0 {
         await mark_suggestions_seen(unseen);
     }
+}
+
+impl MatchesInbox.loadLanguage -> None {
+    me: ProfileView | None = None;
+    me = await get_my_profile();
+    lang = me.preferred_language or "en";
+}
+
+"""Save the picked language (a write, so the read cache clears) and reload the matches in it."""
+impl MatchesInbox.chooseLanguage(code: str) -> None {
+    result: ProfileUpdateResult | None = None;
+    lang = code;
+    result = await update_my_profile({"preferred_language": code});
+    if not result.ok {
+        status = result.error;
+        await loadLanguage();
+        return;
+    }
+    status = "";
+    await load();
 }
 
 impl MatchesInbox.accept(sid: str) -> None {
