@@ -4,6 +4,7 @@ Nothing is stored here; U4 publishes a confirmed draft. Every rule about what a 
 looks like lives here, not in the prompt: the AI can guess, but only these checks decide.
 """
 
+import from core.clock { today_iso as clock_today }
 import from datetime { date }
 import from jaclang.byllm.lib { ByLLMError, OutputConversionError }
 import from ai.draft { draft_post, PostDraft, PostKind, Category }
@@ -206,7 +207,7 @@ def:protect draft_from_message(message: str) -> DraftResult {
             ok=False, error="Verify your UMich email to use the marketplace."
         );
     }
-    return make_draft(message, date.today().isoformat());
+    return make_draft(message, clock_today());
 }
 
 """A non-AI ride-request draft from the DTW prompt (U9): DTW to Ann Arbor on `day`, from `time`

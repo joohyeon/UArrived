@@ -4,16 +4,23 @@ Every write re-validates what the client sent: the draft card is editable, so no
 is trusted. Only the poster's calls may change a post (owner check here, plus Jac ownership).
 """
 
+import from core.clock { today_iso as clock_today }
 import from datetime { date, timedelta }
 import from core.auth { verified_profile }
 import from core.constants { ANN_ARBOR_AREAS }
 import from core.profile { valid_date, valid_time }
 import from market.constants { ARRANGEMENTS }
-import from market.graph { Post, KINDS, CATEGORIES, post_status, all_posts }
+import from market.graph {
+    Post,
+    KINDS,
+    CATEGORIES,
+    post_status,
+    all_posts,
+    visible_to,
+    suspended_roots
+}
 import from market.matching { run_matching }
-import from uuid { UUID }
-import from jaclang { JacRuntime as Jac }
-import from core.profile { moderator_roots }
+import from core.profile { share_with_moderators }
 
 glob ITEM_DAYS: int = 14,
      HOUSING_DAYS: int = 30,
@@ -94,7 +101,7 @@ def expiry_for(fields: dict[str, any], start: str) -> str {
 }
 
 """The first reason `fields` is not a publishable post, or "". Normalizes `fields` in place."""
-def post_error(fields: dict[str, any]) -> str {
+def post_error(fields: dict[str, any], today: str = "") -> str {
     for name in [
         "kind",
         "category",
@@ -153,6 +160,10 @@ def post_error(fields: dict[str, any]) -> str {
         and fields["available_until"]
         and fields["available_from"] > fields["available_until"] {
         return "The start date is after the end date.";
+    }
+    window_end = fields["available_until"] or fields["available_from"];
+    if today and window_end and window_end < today {
+        return "That date has already passed. Pick today or a later date.";
     }
     if not valid_time(fields["time_from"]) or not valid_time(fields["time_to"]) {
         return "Times must be written HH:MM.";
@@ -266,7 +277,12 @@ def publish(
         for k in EDITABLE
         if k in fields
     };
-    error = post_error(clean);
+    if jid(root) in suspended_roots() {
+        return PostResult(
+            ok=False, error="Your account can't post right now. Contact a moderator."
+        );
+    }
+    error = post_error(clean, today);
     if error {
         return PostResult(ok=False, error=error);
     }
@@ -282,17 +298,18 @@ def publish(
     );
     apply_fields(post, clean);
     grant(post, level=AccessLevel.READ);
-    for m in moderator_roots() {
-        if m != jid(root) {
-            Jac.allow_root(post, UUID(m), AccessLevel.WRITE);  # jac:ignore[E1053]
-        }
-    }
+    share_with_moderators(post);
     run_matching(post, today);
     return PostResult(ok=True, post=view_of(post, today));
 }
 
 """Edit the caller's own post: `changes` overrides any EDITABLE field; the result is re-validated."""
 def edit(post_id: str, changes: dict[str, any], today: str) -> PostResult {
+    if verified_profile() is None {
+        return PostResult(
+            ok=False, error="Verify your UMich email to use the marketplace."
+        );
+    }
     post = own_post(post_id);
     if post is None {
         return PostResult(ok=False, error="You can only change your own posts.");
@@ -303,7 +320,7 @@ def edit(post_id: str, changes: dict[str, any], today: str) -> PostResult {
             merged[k] = changes[k];
         }
     }
-    error = post_error(merged);
+    error = post_error(merged, today);
     if error {
         return PostResult(ok=False, error=error);
     }
@@ -317,6 +334,11 @@ def edit(post_id: str, changes: dict[str, any], today: str) -> PostResult {
 }
 
 def finish(post_id: str, today: str) -> PostResult {
+    if verified_profile() is None {
+        return PostResult(
+            ok=False, error="Verify your UMich email to use the marketplace."
+        );
+    }
     post = own_post(post_id);
     if post is None {
         return PostResult(ok=False, error="You can only change your own posts.");
@@ -327,6 +349,11 @@ def finish(post_id: str, today: str) -> PostResult {
 
 """Make an expired post live again from `today`. Done posts stay done."""
 def renew(post_id: str, today: str) -> PostResult {
+    if verified_profile() is None {
+        return PostResult(
+            ok=False, error="Verify your UMich email to use the marketplace."
+        );
+    }
     post = own_post(post_id);
     if post is None {
         return PostResult(ok=False, error="You can only change your own posts.");
@@ -346,7 +373,7 @@ def renew(post_id: str, today: str) -> PostResult {
 def live_posts(today: str) -> list[PostView] {
     posts = [
         p
-        for p in all_posts()
+        for p in visible_to(all_posts(), jid(root))
         if post_status(p, today) == "live"
     ];
     posts.sort(key=lambda (p: Post) -> str { return p.published_on; }, reverse=True);
@@ -365,7 +392,7 @@ def mine(today: str) -> list[PostView] {
 }
 
 def today_iso -> str {
-    return date.today().isoformat();
+    return clock_today();
 }
 
 def:protect publish_post(fields: dict[str, any]) -> PostResult {

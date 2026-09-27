@@ -6,29 +6,27 @@
   (their chat closes and disappears for both), and matching never pairs them again. The blocked
   student is not told. Blocks are stored as a salted one-way key of the pair.
 - Moderators (verified, listed in UARRIVED_MODERATORS) see open reports, hide posts (hidden is a
-  post status like done or expired, so it leaves feeds, matching and chats), and resolve reports.
+  post status like done or expired, so it leaves feeds, matching and chats), suspend a poster (they
+  can't publish and their posts disappear for everyone else), and resolve reports. Posts and
+  reports are shared with the moderator *group*, so moderators added later see everything.
 """
 
-import from datetime { date, datetime, timezone }
-import from uuid { UUID }
-import from jaclang { JacRuntime as Jac }
+import from datetime { datetime, timezone }
 import from core.auth { verified_profile }
-import from core.profile { my_profile, is_moderator, moderator_roots }
+import from core.profile { share_with_moderators, sync_moderator_membership }
 import from market.graph {
-    Post,
     Suggestion,
-    Chat,
     Block,
     Report,
+    Suspension,
     all_posts,
     all_suggestions,
     all_chats,
-    all_blocks,
     all_reports,
     pair_key,
-    blocked_keys
+    blocked_keys,
+    suspended_roots
 }
-import from market.matching { withdraw_pending }
 
 glob MAX_REASON_CHARS: int = 500;
 
@@ -106,17 +104,15 @@ def file_report(post_id: str, chat_id: str, reason: str) -> bool {
         reason=text,
         created_at=datetime.now(timezone.utc).isoformat(timespec="seconds")
     );
-    for m in moderator_roots() {
-        if m != me {
-            Jac.allow_root(r, UUID(m), AccessLevel.WRITE);  # jac:ignore[E1053]
-        }
-    }
+    share_with_moderators(r);
     return True;
 }
 
+"""Whether the caller is a moderator right now; also (re)joins or leaves the moderator group so
+changes to UARRIVED_MODERATORS take effect without re-verifying."""
 def caller_is_moderator -> bool {
     p = verified_profile();
-    return p is not None and is_moderator(p);
+    return p is not None and sync_moderator_membership(p);
 }
 
 def queue -> list[ReportView] {
@@ -147,8 +143,25 @@ def hide(post_id: str) -> bool {
     for p in all_posts() {
         if jid(p) == post_id {
             p.hidden = True;
-            withdraw_pending(post_id);
-            return True;
+            return p.hidden;
+        }
+    }
+    return False;
+}
+
+"""Suspend the poster of `post_id`: they can't publish, their posts disappear for everyone else,
+and this post is hidden. Returns False unless both took effect."""
+def suspend(post_id: str) -> bool {
+    if not caller_is_moderator() {
+        return False;
+    }
+    for p in all_posts() {
+        if jid(p) == post_id {
+            if p.owner_root not in suspended_roots() {
+                root.shared ++> Suspension(root_id=p.owner_root);
+            }
+            p.hidden = True;
+            return p.hidden and p.owner_root in suspended_roots();
         }
     }
     return False;
@@ -205,6 +218,10 @@ def:protect moderation_queue -> list[ReportView] {
 
 def:protect hide_post(post_id: str) -> bool {
     return hide(post_id);
+}
+
+def:protect suspend_poster(post_id: str) -> bool {
+    return suspend(post_id);
 }
 
 def:protect resolve_report(report_id: str) -> bool {

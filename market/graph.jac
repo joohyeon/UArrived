@@ -165,6 +165,32 @@ def blocked_keys(commons: any = None) -> set[str] {
     return {b.pair_key for b in all_blocks(commons)};
 }
 
-def is_blocked(a: str, b: str, keys: set[str]) -> bool {
-    return pair_key(a, b) in keys;
+"""A student a moderator suspended (U11): they can't publish, and their posts are hidden from
+everyone else. Readable by everyone; holds only a root id."""
+node Suspension {
+    has root_id: str;
+
+    def __jac_access__ -> AccessLevel | None {
+        return AccessLevel.READ;
+    }
+}
+
+def suspended_roots(commons: any = None) -> set[str] {
+    return {x.root_id for x in [commons_or_shared(commons)-->][?:Suspension]};
+}
+
+"""The posts in `posts` that `me` should see: not from a student either side has blocked, and
+not from a suspended student (their own posts always stay visible to them)."""
+def visible_to(posts: list[Post], me: str, commons: any = None) -> list[Post] {
+    blocked = blocked_keys(commons);
+    suspended = suspended_roots(commons);
+    return [
+        p
+        for p in posts
+        if p.owner_root == me
+            or (
+                p.owner_root not in suspended
+                and pair_key(me, p.owner_root) not in blocked
+            )
+    ];
 }

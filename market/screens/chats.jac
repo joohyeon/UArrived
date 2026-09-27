@@ -158,7 +158,7 @@ def:pub ChatScreen -> JsxElement {
         {(
             <Card>
                 <ReportBox
-                    onSubmit={lambda (r: str) { report_chat(chat_id, r); }}
+                    onSubmit={lambda (r: str) { return report_chat(chat_id, r); }}
                     label="Report this conversation"
                 />
                 <Button

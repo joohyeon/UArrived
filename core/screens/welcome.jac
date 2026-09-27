@@ -101,7 +101,12 @@ def:pub Welcome -> JsxElement {
             else None}
         {(
             <section>
-                <p>Verified as {verified_email}. You can use the marketplace.</p>
+                <p>Verified as {verified_email}.</p>
+                <p>
+                    <a href="/market">Go to the marketplace</a>
+                    {" · "}
+                    <a href="/today">Today</a>
+                </p>
                 <button
                     type="button"
                     onClick={lambda {

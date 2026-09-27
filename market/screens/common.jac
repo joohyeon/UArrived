@@ -1,7 +1,7 @@
 """Shared pieces of the market screens: the market tab bar, a post summary, and small helpers."""
 
 import from ui.tokens { color, space }
-import from ui.components.base { Badge }
+import from ui.components.base { Badge, Button, Field }
 import from market.lifecycle { PostView }
 
 glob MARKET_TABS: list[tuple[str, str]] = [
@@ -142,21 +142,23 @@ def:pub PostSummary(p: PostView) -> JsxElement {
     </div>
 }
 
-"""A small "Report" control: opens a reason box and calls `onSubmit(reason)`. Used on posts
-and in chats (R17)."""
-def:pub ReportBox(
-    onSubmit: Callable[[str], None], label: str = "Report"
-) -> JsxElement {
+"""A small "Report" control built from ui components: opens a reason box, calls
+`onSubmit(reason)` (which returns whether the report was filed) and only then confirms (R17)."""
+def:pub ReportBox(onSubmit: Callable[[str], any], label: str = "Report") -> JsxElement {
     has open: bool = False,
         reason: str = "",
-        sent: bool = False;
+        sent: bool = False,
+        failed: bool = False;
 
-    def submit(e: MouseEvent) {
-        if reason.strip() {
-            onSubmit(reason);
-            sent = True;
-            open = False;
+    async def submit(e: MouseEvent) -> None {
+        ok: bool = False;
+        if not reason.strip() {
+            return;
         }
+        ok = await onSubmit(reason);
+        sent = ok;
+        failed = not ok;
+        open = not ok;
     }
 
     <div style={{"display": "flex", "flexDirection": "column", "gap": space("1")}}>
@@ -164,23 +166,15 @@ def:pub ReportBox(
             Thanks. A moderator will look at it.
         </span>
             if sent
-            else None}{(
-            <button
-                type="button"
-                onClick={lambda (e: MouseEvent) { open = True; }}
-                style={{
-                    "background": "none",
-                    "border": "0",
-                    "color": color("sub"),
-                    "textDecoration": "underline",
-                    "minHeight": "44px",
-                    "textAlign": "left",
-                    "cursor": "pointer"
-                }}
-            >
-                {label}
-            </button>
-        )
+            else None}{<span role="alert" style={{"color": color("danger")}}>
+            We couldn't send that report. Try again.
+        </span>
+            if failed
+            else None}{<Button
+            label={label}
+            variant="text"
+            onClick={lambda (e: MouseEvent) { open = True; }}
+        />
             if not open and not sent
             else None}{(
             <div
@@ -190,42 +184,18 @@ def:pub ReportBox(
                     "gap": space("1")
                 }}
             >
-                <label
-                    style={{
-                        "display": "flex",
-                        "flexDirection": "column",
-                        "gap": space("1"),
-                        "fontSize": "14px"
-                    }}
-                >
-                    What's wrong?
-                    <textarea
-                        rows={3}
-                        value={reason}
-                        onChange={lambda (e: ChangeEvent) { reason = e.target.value; }}
-                        style={{
-                            "fontSize": "16px",
-                            "padding": space("2"),
-                            "borderRadius": "8px",
-                            "border": "1px solid " + color("border-strong")
-                        }}
-                    />
-                </label>
-                <button
-                    type="button"
-                    onClick={submit}
+                <Field
+                    label="What's wrong?"
+                    value={reason}
+                    multiline={True}
+                    onChange={lambda (v: str) { reason = v; }}
+                />
+                <Button
+                    label="Send report"
+                    variant="secondary"
                     disabled={not reason.strip()}
-                    style={{
-                        "minHeight": "44px",
-                        "borderRadius": "12px",
-                        "border": "1px solid " + color("border-strong"),
-                        "background": color("card"),
-                        "color": color("danger"),
-                        "fontWeight": "600"
-                    }}
-                >
-                    Send report
-                </button>
+                    onClick={submit}
+                />
             </div>
         )
             if open

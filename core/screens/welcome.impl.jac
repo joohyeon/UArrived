@@ -30,6 +30,9 @@ impl Welcome.signUp(e: FormEvent) -> None {
     ok = await jacLogin(email, password);
     signed_in = ok;
     status = "" if ok else "Account created, but logging in failed.";
+    if ok {
+        await confirmFromLink();
+    }
 }
 
 impl Welcome.logIn(e: MouseEvent) -> None {
@@ -38,7 +41,7 @@ impl Welcome.logIn(e: MouseEvent) -> None {
     signed_in = ok;
     status = "" if ok else "Wrong email or password.";
     if ok {
-        await refresh();
+        await confirmFromLink();
     }
 }
 

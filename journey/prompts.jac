@@ -5,6 +5,7 @@ confirms the post. The link is the whole contract with the marketplace: journey/
 imports market/ (scripts/check_rules.sh), it only builds a URL that /market/new understands.
 """
 
+import from core.clock { today_iso as clock_today }
 import from datetime { date }
 import from urllib.parse { urlencode }
 import from core.profile { Profile, my_profile, valid_date, valid_time }
@@ -52,7 +53,7 @@ def prompts_for(p: Profile, today: str) -> list[JourneyPrompt] {
 }
 
 def:protect my_journey_prompts -> list[JourneyPrompt] {
-    return prompts_for(my_profile(), date.today().isoformat());
+    return prompts_for(my_profile(), clock_today());
 }
 
 test "a student arriving with no car gets the ride prompt with date and time in the link (AE4)" {

@@ -11,7 +11,12 @@ instead of requiring email, for demos and tests. Never enable it in the pilot.
 import os;
 import from jaclang.server.identity.app_tokens { token_create, token_consume }
 import from interop.email_sender { send }
-import from core.profile { Profile, my_profile, sync_mailbox, sync_moderator_seat }
+import from core.profile {
+    Profile,
+    my_profile,
+    sync_mailbox,
+    sync_moderator_membership
+}
 
 """Outcome of a verification step, returned to the client."""
 obj VerifyResult {
@@ -53,8 +58,7 @@ def:protect start_verification(email: str) -> VerifyResult {
     }
     address = email.strip().lower();
     profile = my_profile();
-    profile.umich_email = address;
-    profile.verified = False;
+    profile.pending_email = address;
     token = token_create(
         VERIFY_PURPOSE,
         subject=jid(root),
@@ -68,11 +72,18 @@ def:protect start_verification(email: str) -> VerifyResult {
         return VerifyResult(ok=True, dev_token=token);
     }
     base = os.environ.get("UARRIVED_PUBLIC_URL", "http://localhost:8000");
-    sent = send(
-        address,
-        "Verify your UArrived account",
-        f"Open this link to verify your UMich email:\n\n{base}/verify?token={token}\n\nIt expires in 24 hours. If you didn't ask for this, ignore this email."
-    );
+    sent = False;
+    try {
+        sent = send(
+            address,
+            "Verify your UArrived account",
+            f"Open this link to verify your UMich email:\n\n{base}/verify?token={token}\n\nIt expires in 24 hours. If you didn't ask for this, ignore this email."
+        );
+    } except Exception {
+        return VerifyResult(
+            ok=False, error="We couldn't send the email. Try again in a few minutes."
+        );
+    }
     if not sent {
         return VerifyResult(ok=False, error="Email is not configured on this server.");
     }
@@ -88,15 +99,18 @@ def:protect confirm_verification(token: str) -> VerifyResult {
         );
     }
     profile = my_profile();
-    if got["subject"] != jid(root) or got["payload"]["email"] != profile.umich_email {
+    if got["subject"] != jid(root)
+        or got["payload"]["email"] != profile.pending_email {
         return VerifyResult(
             ok=False,
             error="This link belongs to a different sign-up. Request a new one."
         );
     }
+    profile.umich_email = profile.pending_email;
+    profile.pending_email = "";
     profile.verified = True;
     sync_mailbox(profile);
-    sync_moderator_seat(profile);
+    sync_moderator_membership(profile);
     return VerifyResult(ok=True, email=profile.umich_email);
 }
 

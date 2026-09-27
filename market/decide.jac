@@ -5,12 +5,13 @@ Then optional AI phrasing (ai/decide.jac), labeled AI-generated and filtered so 
 post safe or legitimate. If the AI fails, the facts and flags still show.
 """
 
+import from core.clock { today_iso as clock_today }
 import re;
 import from datetime { date }
 import from jaclang.byllm.lib { ByLLMError }
 import from ai.decide { advise, DecideNotes }
 import from core.auth { verified_profile }
-import from market.graph { Post, post_status, all_posts }
+import from market.graph { Post, post_status, all_posts, visible_to }
 import from market.lifecycle { PostView, view_of }
 
 glob MIN_COMPARE: int = 2,
@@ -89,16 +90,21 @@ def missing_info(p: Post) -> list[str] {
     return out;
 }
 
+"""Whether `phrase` appears in `text` as whole words ("wire" matches "wire it", not "wireless")."""
+def has_word(text: str, phrase: str) -> bool {
+    return re.search(r"\b" + re.escape(phrase) + r"\b", text) is not None;
+}
+
 """Known risk patterns, by rule. A flag is a reason to ask, not a verdict."""
 def risk_flags(p: Post) -> list[str] {
     text = (p.title + " " + p.description).lower();
     out: list[str] = [];
-    if any([w in text for w in PAYMENT_WORDS]) {
+    if any([has_word(text, w) for w in PAYMENT_WORDS]) {
         out.append(
             "Mentions a payment method that is hard to reverse (wire, gift card, app transfer)"
         );
     }
-    if any([w in text for w in PRESSURE_WORDS]) {
+    if any([has_word(text, w) for w in PRESSURE_WORDS]) {
         out.append("Asks for a deposit or quick decision, possibly before viewing");
     }
     if p.category == "housing"
@@ -150,7 +156,7 @@ def compare(post_ids: list[str], today: str) -> DecideResult {
     if len(wanted) > MAX_COMPARE {
         return DecideResult(ok=False, error="Compare up to three posts at a time.");
     }
-    posts: dict[str, Post] = {jid(p): p for p in all_posts()};
+    posts: dict[str, Post] = {jid(p): p for p in visible_to(all_posts(), jid(root))};
     items: list[Compared] = [];
     for pid in wanted {
         p = posts.get(pid);
@@ -189,5 +195,26 @@ def:protect help_me_decide(post_ids: list[str]) -> DecideResult {
             ok=False, error="Verify your UMich email to use the marketplace."
         );
     }
-    return compare(post_ids, date.today().isoformat());
+    return compare(post_ids, clock_today());
+}
+
+test "risk words match whole words only" {
+    wireless = Post(
+        owner_root="x",
+        kind="offer",
+        category="essentials",
+        title="Wireless keyboard",
+        price=15.0,
+        description="Works great"
+    );
+    assert risk_flags(wireless) == [];
+    wire = Post(
+        owner_root="x",
+        kind="offer",
+        category="essentials",
+        title="Keyboard",
+        price=15.0,
+        description="please wire the money"
+    );
+    assert len(risk_flags(wire)) == 1;
 }

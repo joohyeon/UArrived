@@ -193,6 +193,7 @@ test "the email never includes chat text and says how to turn it off" {
     try {
         body = digest_body(pending_by_student(TODAY, root)[w.mina]);
         assert "Turn these emails off in Profile" in body;
+        assert "/market" in body;
         assert "Need a desk" in body;
     } finally {
         cleanup(w);

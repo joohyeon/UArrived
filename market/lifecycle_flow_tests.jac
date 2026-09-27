@@ -98,19 +98,46 @@ test "a ride whose day has passed is expired on read, and renewing brings it bac
     client = served();
     try {
         student(client, "jae@umich.edu");
-        yesterday = (date.today() - timedelta(days=1)).isoformat();
+        tomorrow = (date.today() + timedelta(days=1)).isoformat();
         ride: dict[str, any] = {
             "kind": "offer",
             "category": "service",
             "title": "Ride from DTW",
-            "available_from": yesterday
+            "available_from": tomorrow
         };
         post_id = call(client, "publish_post", {"fields": ride})["post"]["id"];
+        assert len(call(client, "list_live_posts", {})) == 1;
+        os.environ["UARRIVED_TODAY"] = (date.today() + timedelta(days=3)).isoformat();
         assert call(client, "list_live_posts", {}) == [];
         assert call(client, "list_my_posts", {})[0]["status"] == "expired";
         renewed = call(client, "renew_post", {"post_id": post_id});
         assert renewed["ok"] and renewed["post"]["status"] == "live";
         assert len(call(client, "list_live_posts", {})) == 1;
+    } finally {
+        os.environ["UARRIVED_TODAY"] = "";
+        client.close();
+    }
+}
+
+test "a post whose date has already passed is refused, not published expired" {
+    client = served();
+    try {
+        student(client, "jae@umich.edu");
+        yesterday = (date.today() - timedelta(days=1)).isoformat();
+        result = call(
+            client,
+            "publish_post",
+            {
+                "fields": {
+                    "kind": "offer",
+                    "category": "service",
+                    "title": "Ride",
+                    "available_from": yesterday
+                }
+            }
+        );
+        assert not result["ok"] and "already passed" in result["error"];
+        assert call(client, "list_my_posts", {}) == [];
     } finally {
         client.close();
     }

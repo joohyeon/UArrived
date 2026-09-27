@@ -17,6 +17,7 @@ import from market.moderation {
     block_in_suggestion,
     block_in_chat,
     moderation_queue,
+    suspend_poster,
     hide_post,
     resolve_report
 }
