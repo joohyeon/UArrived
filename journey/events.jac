@@ -11,6 +11,7 @@ import html;
 import json;
 import os;
 import re;
+import from datetime { datetime }
 import from core.clock { today_iso }
 import from journey.task_data { world_px }
 
@@ -115,7 +116,31 @@ obj EventView {
         cost: str,
         free: bool,
         url: str,
-        sponsor: str;
+        sponsor: str,
+        when: str = "";
+}
+
+"""A readable date and time for an event: 'Sat, Sep 27 · 1:00 PM – 4:00 PM' (a range of days
+reads 'Sat, Sep 27 – Oct 11'). Falls back to the raw date when it doesn't parse."""
+def when_label(start: str, end: str, time: str, time_end: str) -> str {
+    try {
+        d = datetime.strptime(start, "%Y-%m-%d");
+    } except ValueError {
+        return (start + " " + time).strip();
+    }
+    day = d.strftime("%a, %b ") + str(d.day);
+    if end and end != start {
+        try {
+            e = datetime.strptime(end, "%Y-%m-%d");
+            return day + " – " + e.strftime("%b ") + str(e.day);
+        } except ValueError {
+            return day;
+        }
+    }
+    if not time {
+        return day;
+    }
+    return day + " · " + time + (" – " + time_end if time_end else "");
 }
 
 def clean(s: any) -> str {
@@ -212,6 +237,12 @@ def parse_events(doc: dict[str, any], today: str) -> list[EventView] {
                 date_end=end,
                 time=time_12h(str(e.get("time_start") or "")),
                 time_end=time_12h(str(e.get("time_end") or "")),
+                when=when_label(
+                    start,
+                    end,
+                    time_12h(str(e.get("time_start") or "")),
+                    time_12h(str(e.get("time_end") or ""))
+                ),
                 location=loc or "Online",
                 venue=label or ("Online" if virtual else loc[:40]),
                 virtual=virtual,
@@ -341,4 +372,13 @@ test "the public preview lists only in-person events with a source link, capped 
     assert [e.title for e in preview_of(events, 3)] == ["Film night"];
     assert len(preview_of(all_events("2026-09-27"), 50)) == 6;
     assert preview_of(events, -1) == [];
+}
+
+test "event times read as weekday, date and time range" {
+    assert when_label("2026-09-27", "2026-09-27", "1:00 PM", "4:00 PM")
+        == "Sun, Sep 27 · 1:00 PM – 4:00 PM";
+    assert when_label("2026-09-27", "2026-10-11", "7:00 AM", "")
+        == "Sun, Sep 27 – Oct 11";
+    assert when_label("2026-10-02", "", "", "") == "Fri, Oct 2";
+    assert when_label("soon", "", "7:00 PM", "") == "soon 7:00 PM";
 }

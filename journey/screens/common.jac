@@ -3,6 +3,7 @@ badge and the task map. journey/ never imports market/, so the small URL helpers
 
 import from ui.tokens { color, space, text_style, SIZE }
 import from ui.components.base { Badge }
+import from ui.components.blocks { TabStrip }
 import from ui.components.map { MapCanvas }
 import from journey.constants { STATUS_LABELS, ANN_ARBOR_BOUNDS, CAMPUS_CENTER }
 import from journey.walkers { TaskView }
@@ -24,36 +25,7 @@ def:pub go(path: str) {
 }
 
 def:pub JourneyTabs(active: str) -> JsxElement {
-    <nav
-        aria-label="Journey"
-        style={{
-            "display": "flex",
-            "gap": space("1"),
-            "borderBottom": "1px solid " + color("border")
-        }}
-    >
-        {[
-            <a
-                key={href}
-                href={href}
-                aria-current={"page" if href == active else None}
-                style={{
-                    "minHeight": f"{SIZE['touch-min']}px",
-                    "display": "inline-flex",
-                    "alignItems": "center",
-                    "padding": "0 " + space("3"),
-                    "textDecoration": "none",
-                    "fontWeight": "700" if href == active else "500",
-                    "color": color("action") if href == active else color("sub"),
-                    "borderBottom": ("2px solid " + color("action"))
-                        if href == active
-                        else "2px solid transparent"
-                }}
-            >
-                {label}
-            </a> for (href, label) in JOURNEY_TABS
-        ]}
-    </nav>
+    <TabStrip items={JOURNEY_TABS} active={active} label="Journey"/>
 }
 
 """The status chip for a task: done is always "Marked done by you", never official-sounding."""
