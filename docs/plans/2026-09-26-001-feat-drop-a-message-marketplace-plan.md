@@ -1,7 +1,7 @@
 ---
 title: "feat: Drop-a-message student marketplace"
 type: feat
-status: active
+status: completed
 date: 2026-09-26
 origin: docs/brainstorms/2026-09-26-001-drop-a-message-marketplace-requirements.md
 ---
