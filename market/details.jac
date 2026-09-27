@@ -137,6 +137,30 @@ def choices(pairs: list[str]) -> list[Choice] {
     return [Choice(label=x[0].upper() + x[1:], value=x) for x in pairs];
 }
 
+glob REASON_FIELDS: dict[str, list[str]] = {
+         "within_budget": ["price"],
+         "same_area": ["area"],
+         "dates_overlap": ["available_from", "available_until"],
+         "same_day": ["available_from", "available_until"],
+         "times_overlap": ["time_from"],
+         "times_apart": ["time_from"]
+     };
+
+"""Match reasons with any that rest on an AI guess (on either post) labelled as such (M-R1), so a
+guess is never presented as a confirmed fit."""
+def label_guessed(
+    reasons: list[str], codes: list[dict[str, any]], a: Post, b: Post
+) -> list[str] {
+    guessed = set(a.inferred + b.inferred);
+    out: list[str] = [];
+    for (i, r) in enumerate(reasons) {
+        code = str(codes[i].get("code", "")) if i < len(codes) else "";
+        fields = REASON_FIELDS.get(code, []);
+        out.append(r + " (based on an AI guess)" if guessed & set(fields) else r);
+    }
+    return out;
+}
+
 """Up to MAX_QUESTIONS focused questions for the owner: missing details first by importance, then
 AI guesses to confirm. Questions already answered or skipped don't come back."""
 def detail_questions(p: Post) -> list[DetailQuestion] {
@@ -359,4 +383,29 @@ test "answers confirm details and bad answers are refused" {
     assert apply_detail(p, "price", "$45", "2026-09-27") == "" and p.price == 45.0;
     assert apply_detail(p, "timing", "week", "2026-09-27") == ""
         and p.available_until == "2026-10-04";
+}
+
+test "a reason that rests on a guessed area is labelled" {
+    a = Post(
+        owner_root="x", kind="offer", category="vehicle", title="Bike", area="Kerrytown"
+    );
+    b = Post(
+        owner_root="y",
+        kind="request",
+        category="vehicle",
+        title="Bike",
+        area="Kerrytown",
+        inferred=["area"]
+    );
+    out = label_guessed(
+        ["$80 is within the $100 budget", "Both in Kerrytown"],
+        [{"code": "within_budget"}, {"code": "same_area"}],
+        a,
+        b
+    );
+    assert out
+        == [
+            "$80 is within the $100 budget",
+            "Both in Kerrytown (based on an AI guess)"
+        ];
 }

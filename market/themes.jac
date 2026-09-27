@@ -49,7 +49,8 @@ import from market.details {
     facts_split,
     unknowns,
     detail_questions,
-    apply_detail
+    apply_detail,
+    label_guessed
 }
 import from market.threads { thread_state, release_if_closed }
 
@@ -390,7 +391,7 @@ def matches_for(p: Post, posts: dict[str, Post], today: str) -> list[MatchCard] 
             poster=other.poster_name or "A student",
             confirmed=sure,
             guesses=guessed,
-            reasons=s.reasons,
+            reasons=label_guessed(s.reasons, s.reason_codes, p, other),
             unknown=unknowns(other)
         );
         for (ts, tc) in mine_threads {

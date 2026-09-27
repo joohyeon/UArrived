@@ -44,7 +44,7 @@ import from market.connect {
     MessageView,
     SendResult
 }
-import from market.details { facts_split, unknowns }
+import from market.details { facts_split, unknowns, label_guessed }
 
 obj SideSummary {
     has post_id: str,
@@ -266,7 +266,9 @@ def thread_view(chat_id: str, today: str) -> ThreadView {
     fits: list[str] = [];
     if offer is not None and request is not None {
         m = match_pair(offer, request, today);
-        fits = m.reasons if m is not None else [];
+        fits = label_guessed(m.reasons, m.codes, offer, request)
+            if m is not None
+            else [];
     }
     open_q: list[str] = [];
     if offer is not None {
