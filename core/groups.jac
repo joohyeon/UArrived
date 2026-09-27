@@ -155,6 +155,15 @@ def add_message(
     return msg;
 }
 
+def message_by_id(message_id: str) -> GroupMessage | None {
+    for m in [root.shared-->][?:GroupMessage] {
+        if jid(m) == message_id {
+            return m;
+        }
+    }
+    return None;
+}
+
 def messages_in(group_id: str) -> list[GroupMessage] {
     msgs = [
         m

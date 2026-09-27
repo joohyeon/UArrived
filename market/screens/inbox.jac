@@ -16,7 +16,7 @@ import from market.screens.common { MarketTabs, PostSummary, go, ReportBox, Choi
 import from market.moderation { report_post, block_in_suggestion }
 import from market.suggestions { list_my_suggestions, SuggestionView }
 import from market.connect { decline }
-import from market.themes { message_poster, ActionOutcome }
+import from market.threads { start_thread, ThreadResult }
 import from market.notify { mark_suggestions_seen }
 import from market.feed { heartbeat }
 
@@ -29,7 +29,7 @@ def:pub MatchesInbox -> JsxElement {
         lang: str = "en";
 
     async def load -> None;
-    async def accept(post_id: str) -> None;
+    async def accept(pair: str) -> None;
     async def pass_on(sid: str) -> None;
     async def blockThem(sid: str) -> None;
     async def loadLanguage -> None;
@@ -103,9 +103,9 @@ def:pub MatchesInbox -> JsxElement {
                     {(
                         <div style={{"display": "flex", "gap": space("2")}}>
                             <Button
-                                label="Message privately"
+                                label="I'm interested"
                                 onClick={lambda (e: MouseEvent) { accept(
-                                    s.other_post.id
+                                    s.other_post.id + "|" + s.my_post.id
                                 ); }}
                             />
                             <Button
@@ -177,10 +177,15 @@ impl MatchesInbox.chooseLanguage(code: str) -> None {
     await load();
 }
 
-"""Open a private chat with the other post's owner (plan 2026-09-27-002 R13)."""
-impl MatchesInbox.accept(post_id: str) -> None {
-    result: ActionOutcome | None = None;
-    result = await message_poster(post_id);
+"""Open a private thread with the other post's owner (plan 2026-09-27-003 M-R4). `pair` is
+"<their post id>|<my post id>"."""
+impl MatchesInbox.accept(pair: str) -> None {
+    result: ThreadResult | None = None;
+    ids = pair.split("|");
+    result = await start_thread(ids[0], ids[1], "", "");
+    if result is None {
+        return;
+    }
     if not result.ok {
         status = result.error;
         await load();

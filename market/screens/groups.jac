@@ -12,6 +12,7 @@ import from ui.tokens { color, space }
 import from ui.components.base { AppShell, Button, Card, Badge, Field, ResponsiveGrid }
 import from market.screens.common { MarketTabs, query_param, go }
 import from market.feed { heartbeat }
+import from market.threads { start_thread, ThreadResult }
 import from market.notify { unread_suggestions }
 import from market.messages { FollowUp, Choice }
 import from market.themes {
@@ -23,7 +24,7 @@ import from market.themes {
     leave_group,
     untag_group_message,
     close_group_post,
-    message_poster,
+    answer_detail,
     GroupSummary,
     GroupView,
     GroupMessageView,
@@ -154,42 +155,233 @@ impl GroupList.joinIt(group_id: str) -> None {
     await load();
 }
 
-"""One Buying/Selling tag: the label, the item and its facts, and the status once closed."""
+def:pub is_live(t: TagView) -> bool {
+    return t.status == "available" or t.status == "reserved";
+}
+
+"""One Buying/Selling tag: label, public status, the item, what the poster stated, and what the AI
+only guessed (marked, never presented as fact)."""
 def:pub TagLine(t: TagView) -> JsxElement {
-    live = t.status == "live";
-    <div
-        style={{
-            "display": "flex",
-            "flexWrap": "wrap",
-            "gap": space("1"),
-            "alignItems": "center"
-        }}
-    >
-        <Badge kind={"action" if t.kind == "selling" else "progress"} label={t.label}/>
-        {<Badge kind="neutral" label={t.status_label}/> if not live else None}
-        <strong
+    live = is_live(t);
+    <div style={{"display": "flex", "flexDirection": "column", "gap": space("1")}}>
+        <div
             style={{
-                "fontSize": "14px",
-                "textDecoration": "none" if live else "line-through"
+                "display": "flex",
+                "flexWrap": "wrap",
+                "gap": space("1"),
+                "alignItems": "center"
             }}
         >
-            {t.title}
-        </strong>
-        {<span style={{"fontSize": "13px"}}>{t.facts}</span> if t.facts else None}
+            <Badge
+                kind={"action" if t.kind == "selling" else "progress"}
+                label={t.label}
+            />
+            <Badge
+                kind={"neutral"
+                    if not live
+                    else ("warning" if t.status == "reserved" else "official")}
+                label={t.status_label}
+            />
+            <strong
+                style={{
+                    "fontSize": "14px",
+                    "textDecoration": "none" if live else "line-through"
+                }}
+            >
+                {t.title}
+            </strong>
+        </div>
+        {<span style={{"fontSize": "13px"}}>{"Stated: " + t.confirmed}</span>
+            if t.confirmed
+            else None}
+        {(
+            <span style={{"fontSize": "13px", "color": color("sub")}}>
+                {"AI guess, not confirmed: " + t.guesses}
+            </span>
+        )
+            if t.guesses
+            else None}
     </div>
 }
 
-"""One message bubble with its tags; the assistant's notes are labelled."""
+"""The owner's private assistant panel for one tag (M-R2, M-R3, M-R9): progress, focused
+questions, matches with reasons and unknowns, and the private threads about it."""
+def:pub OwnerPanel(
+    t: TagView,
+    onAnswer: Callable[[str, str, str], None],
+    onInterest: Callable[[str, str, str, str], None]
+) -> JsxElement {
+    has price: str = "";
+
+    <div
+        style={{
+            "display": "flex",
+            "flexDirection": "column",
+            "gap": space("2"),
+            "padding": space("2"),
+            "borderRadius": "12px",
+            "background": color("ai-bg")
+        }}
+    >
+        <Badge kind="ai" label="Assistant · only you see this"/>
+        <span style={{"fontSize": "14px", "fontWeight": "700"}}>{t.owner_state}</span>
+        {[
+            <div
+                key={q.field}
+                style={{
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "gap": space("1")
+                }}
+            >
+                <span style={{"fontSize": "14px"}}>{q.question}</span>
+                <div style={{"display": "flex", "gap": space("1"), "flexWrap": "wrap"}}>
+                    {[
+                        <Button
+                            key={c.value}
+                            label={c.label}
+                            variant="secondary"
+                            onClick={lambda (e: MouseEvent) { onAnswer(
+                                t.post_id, q.field, c.value
+                            ); }}
+                        /> for c in q.choices
+                    ]}
+                    <Button
+                        label="Skip"
+                        variant="text"
+                        onClick={lambda (e: MouseEvent) { onAnswer(
+                            t.post_id, q.field, "skip"
+                        ); }}
+                    />
+                </div>
+                {(
+                    <div
+                        style={{
+                            "display": "flex",
+                            "gap": space("1"),
+                            "alignItems": "flex-end"
+                        }}
+                    >
+                        <Field
+                            label="Amount in $"
+                            value={price}
+                            onChange={lambda (v: str) { price = v; }}
+                        />
+                        <Button
+                            label="Save"
+                            disabled={not price.strip()}
+                            onClick={lambda (e: MouseEvent) { onAnswer(
+                                t.post_id, q.field, price
+                            ); }}
+                        />
+                    </div>
+                )
+                    if q.input == "price"
+                    else None}
+            </div> for q in t.questions
+        ]}
+        {(<strong style={{"fontSize": "14px"}}>Your matches</strong>)
+            if len(t.matches) > 0
+            else None}
+        {[
+            <div
+                key={mc.post_id}
+                style={{
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "gap": space("1"),
+                    "padding": space("2"),
+                    "borderRadius": "12px",
+                    "background": color("card"),
+                    "border": "1px solid " + color("border")
+                }}
+            >
+                <div
+                    style={{
+                        "display": "flex",
+                        "gap": space("1"),
+                        "alignItems": "center"
+                    }}
+                >
+                    <Badge
+                        kind={"action" if mc.label == "Selling" else "progress"}
+                        label={mc.label}
+                    />
+                    <strong style={{"fontSize": "14px"}}>{mc.title}</strong>
+                    <span style={{"fontSize": "13px", "color": color("sub")}}>
+                        {"· " + mc.poster}
+                    </span>
+                </div>
+                {<span style={{"fontSize": "13px"}}>{"Stated: " + mc.confirmed}</span>
+                    if mc.confirmed
+                    else None}
+                {(
+                    <span style={{"fontSize": "13px", "color": color("sub")}}>
+                        {"AI guess, not confirmed: " + mc.guesses}
+                    </span>
+                )
+                    if mc.guesses
+                    else None}
+                {(
+                    <span style={{"fontSize": "13px", "color": color("progress")}}>
+                        {"Why it fits: " + "; ".join(mc.reasons)}
+                    </span>
+                )
+                    if len(mc.reasons) > 0
+                    else None}
+                {(
+                    <span style={{"fontSize": "13px", "color": color("sub")}}>
+                        {"Still unknown: " + ", ".join(mc.unknown)}
+                    </span>
+                )
+                    if len(mc.unknown) > 0
+                    else None}
+                {<a
+                    href={"/market/chat?id=" + mc.chat_id}
+                    style={{"color": color("text")}}
+                >
+                    {"Open your thread · " + mc.thread_label}
+                </a>
+                    if mc.chat_id
+                    else <Button
+                        label={"I'm interested"
+                            if mc.label == "Selling"
+                            else "I have one"}
+                        variant="secondary"
+                        onClick={lambda (e: MouseEvent) { onInterest(
+                            mc.post_id, t.post_id, mc.title, mc.poster
+                        ); }}
+                    />}
+            </div> for mc in t.matches
+        ]}
+        {(<strong style={{"fontSize": "14px"}}>Private threads</strong>)
+            if len(t.threads) > 0
+            else None}
+        {[
+            <a
+                key={l.chat_id}
+                href={"/market/chat?id=" + l.chat_id}
+                style={{"color": color("text"), "fontSize": "14px"}}
+            >
+                {"🔒 " + l.other_name + " · " + l.state_label}
+            </a> for l in t.threads
+        ]}
+    </div>
+}
+
+"""One message bubble with its tags. Everyone sees the tag and its public status; the owner also
+gets their private assistant panel and controls; others get "I'm interested"."""
 def:pub GroupBubble(
     m: GroupMessageView,
     onClose: Callable[[str, str], None],
     onUntag: Callable[[str], None],
-    onMessage: Callable[[str], None]
+    onInterest: Callable[[str, str, str, str], None],
+    onAnswer: Callable[[str, str, str], None]
 ) -> JsxElement {
     <div
         style={{
             "alignSelf": "flex-end" if m.mine else "flex-start",
-            "maxWidth": "85%",
+            "maxWidth": "90%",
             "display": "flex",
             "flexDirection": "column",
             "gap": space("1"),
@@ -219,6 +411,9 @@ def:pub GroupBubble(
                 }}
             >
                 <TagLine t={t}/>
+                {<OwnerPanel t={t} onAnswer={onAnswer} onInterest={onInterest}/>
+                    if t.mine
+                    else None}
                 {(
                     <div
                         style={{
@@ -243,14 +438,24 @@ def:pub GroupBubble(
                         />
                     </div>
                 )
-                    if t.mine and t.status == "live"
+                    if t.mine and is_live(t)
+                    else None}
+                {<a
+                    href={"/market/chat?id=" + t.my_chat}
+                    style={{"color": color("text")}}
+                >
+                    Open your private thread
+                </a>
+                    if not t.mine and t.my_chat
                     else None}
                 {<Button
-                    label="Message privately"
+                    label={t.interest_label}
                     variant="secondary"
-                    onClick={lambda (e: MouseEvent) { onMessage(t.post_id); }}
+                    onClick={lambda (e: MouseEvent) { onInterest(
+                        t.post_id, "", t.title, m.author
+                    ); }}
                 />
-                    if not t.mine and t.status == "live"
+                    if not t.mine and not t.my_chat and is_live(t)
                     else None}
             </div> for t in m.tags
         ]}
@@ -264,7 +469,7 @@ def:pub GroupBubble(
                     [
                         t
                         for t in m.tags
-                        if t.status == "live"
+                        if is_live(t)
                     ]
                 )
                     > 0
@@ -283,7 +488,11 @@ def:pub GroupChat -> JsxElement {
         notice: str = "",
         answers: str = "",
         pending: str = "",
-        confirm_leave: bool = False;
+        confirm_leave: bool = False,
+        interest_post: str = "",
+        interest_via: str = "",
+        interest_title: str = "",
+        interest_name: str = "";
 
     async def load -> None;
     async def sendIt(e: MouseEvent) -> None;
@@ -292,7 +501,8 @@ def:pub GroupChat -> JsxElement {
     async def joinIt(e: MouseEvent) -> None;
     async def closePost(post_id: str, reason: str) -> None;
     async def untagIt(message_id: str) -> None;
-    async def messageIt(post_id: str) -> None;
+    async def startIt(e: MouseEvent) -> None;
+    async def answerIt(post_id: str, field: str, value: str) -> None;
     async def leaveIt(e: MouseEvent) -> None;
 
     can with entry {
@@ -337,7 +547,13 @@ def:pub GroupChat -> JsxElement {
                 m={m}
                 onClose={closePost}
                 onUntag={untagIt}
-                onMessage={messageIt}
+                onInterest={lambda (p: str, via: str, title: str, name: str) {
+                    interest_post = p;
+                    interest_via = via;
+                    interest_title = title;
+                    interest_name = name;
+                }}
+                onAnswer={answerIt}
             /> for m in (group.messages if group and group.ok else [])
         ]}
         {(
@@ -363,6 +579,35 @@ def:pub GroupChat -> JsxElement {
             </div>
         )
             if pending
+            else None}
+        {(
+            <Card>
+                <strong>
+                    {"Start a private thread with "
+                        + interest_name
+                        + " about \""
+                        + interest_title
+                        + "\"?"}
+                </strong>
+                <span>
+                    {"🔒 Only you and "
+                        + interest_name
+                        + " can see it. Other group members and other interested students can't."}
+                </span>
+                <span style={{"color": color("sub"), "fontSize": "14px"}}>
+                    The assistant will summarize the offer and request and suggest replies. Nothing is sent until you send it.
+                </span>
+                <div style={{"display": "flex", "gap": space("2")}}>
+                    <Button label="Start private thread" onClick={startIt}/>
+                    <Button
+                        label="Cancel"
+                        variant="text"
+                        onClick={lambda (e: MouseEvent) { interest_post = ""; }}
+                    />
+                </div>
+            </Card>
+        )
+            if interest_post
             else None}
         {(
             <Card>
@@ -538,14 +783,28 @@ impl GroupChat.untagIt(message_id: str) -> None {
     await load();
 }
 
-impl GroupChat.messageIt(post_id: str) -> None {
-    result: ActionOutcome | None = None;
-    result = await message_poster(post_id);
+impl GroupChat.startIt(e: MouseEvent) -> None {
+    result: ThreadResult | None = None;
+    result = await start_thread(interest_post, interest_via, "", "");
+    interest_post = "";
+    if result is None {
+        return;
+    }
     if not result.ok {
         error = result.error;
         return;
     }
     go("/market/chat?id=" + result.chat_id);
+}
+
+impl GroupChat.answerIt(post_id: str, field: str, value: str) -> None {
+    result: ActionOutcome | None = None;
+    result = await answer_detail(post_id, field, value);
+    if result is None {
+        return;
+    }
+    error = "" if result.ok else result.error;
+    await load();
 }
 
 impl GroupChat.leaveIt(e: MouseEvent) -> None {

@@ -206,8 +206,8 @@ test "a sell message stays in the chat with a Selling tag and its facts" {
         assert len(msgs) == 1 and msgs[0]["text"] == "Selling my IKEA desk $30";
         tag = msgs[0]["tags"][0];
         assert tag["label"] == "Selling" and tag["title"] == "IKEA desk";
-        assert tag["facts"].startswith("$30")
-            and tag["status"] == "live"
+        assert tag["confirmed"].startswith("$30")
+            and tag["status"] == "available"
             and tag["mine"];
     } finally {
         client.close();
@@ -385,7 +385,7 @@ test "without AI, a clear sell message asks and then gets its tag" {
     }
 }
 
-test "a match in the same group gets one labelled note under the message" {
+test "a match shows only in the owner's private panel, with the reason; the feed gets no note" {
     client = served();
     try {
         student(client, "mina@umich.edu");
@@ -397,10 +397,17 @@ test "a match in the same group gets one labelled note under the message" {
         ai_says([sell_desk()]);
         say(client, g, "Selling my IKEA desk $30");
         msgs = messages(client, g);
-        note = msgs[-1];
-        assert note["ai"] and note["tags"] == [];
-        assert note["text"].startswith("Mina is looking for \"Desk\": ");
-        assert "$30 is within the $40 budget" in note["text"];
+        assert [
+            m
+            for m in msgs
+            if m["ai"]
+        ]
+            == [];
+        jae_tag = msgs[-1]["tags"][0];
+        card = jae_tag["matches"][0];
+        assert card["poster"] == "Mina"
+            and "$30 is within the $40 budget" in card["reasons"];
+        assert msgs[0]["tags"][0]["matches"] == [];
     } finally {
         client.close();
     }
@@ -433,31 +440,24 @@ test "a match in another group notifies privately and adds no note" {
     }
 }
 
-test "no note when nothing fits, and at most three matches in a note" {
+test "with nothing that fits the owner sees Finding matches, and a match panel lists at most five" {
     client = served();
     try {
         student(client, "jae@umich.edu");
         g = joined(client, "furniture");
         ai_says([sell_desk()]);
         say(client, g, "Selling my IKEA desk $30");
-        assert [
-            m
-            for m in messages(client, g)
-            if m["ai"]
-        ]
-            == [];
-        for name in ["a1", "a2", "a3", "a4"] {
+        first = messages(client, g)[0]["tags"][0];
+        assert first["owner_state"].startswith("Finding matches");
+        for name in ["a1", "a2", "a3", "a4", "a5", "a6"] {
             student(client, f"{name}@umich.edu");
             joined(client, "furniture");
             ai_says([want_desk()]);
             say(client, g, "Looking for a desk, up to $40");
         }
-        student(client, "zed@umich.edu");
-        joined(client, "furniture");
-        ai_says([draft("Oak desk", PostKind.OFFER, Category.FURNITURE, "desk", 35.0)]);
-        say(client, g, "Selling an oak desk $35");
-        note = messages(client, g)[-1];
-        assert note["ai"] and len(note["text"].split("\n")) == 3;
+        act_as(client, "jae@umich.edu");
+        mine = messages(client, g)[0]["tags"][0];
+        assert len(mine["matches"]) == 5 and mine["owner_state"] == "Match found (5)";
     } finally {
         client.close();
     }
@@ -482,33 +482,34 @@ test "a same-category match with no fact doesn't notify" {
     }
 }
 
-test "Message privately opens one chat with the poster, who sees who started it" {
+test "I'm interested opens one private thread with the poster, who sees who started it" {
     client = served();
     try {
         student(client, "jae@umich.edu");
         g = joined(client, "furniture");
         ai_says([sell_desk()]);
         say(client, g, "Selling my IKEA desk $30");
-        post_id = messages(client, g)[0]["tags"][0]["post_id"];
-        assert not call(client, "message_poster", {"post_id": post_id})["ok"];
+        msg = messages(client, g)[0];
+        body = {
+            "post_id": msg["tags"][0]["post_id"],
+            "via_post_id": "",
+            "group_id": g,
+            "message_id": msg["id"]
+        };
         student(client, "mina@umich.edu");
-        first = call(client, "message_poster", {"post_id": post_id});
-        assert first["ok"] and first["chat_id"];
-        assert call(client, "message_poster", {"post_id": post_id})["chat_id"]
-            == first["chat_id"];
-        assert call(
-            client,
-            "send_message",
-            {"chat_id": first["chat_id"], "text": "Still there?"}
-        )["ok"];
+        first = call(client, "start_thread", body);
+        assert first["ok"];
+        assert messages(client, g)[0]["tags"][0]["my_chat"] == first["chat_id"];
+        call(
+            client, "thread_send", {"chat_id": first["chat_id"], "text": "Still there?"}
+        );
         act_as(client, "jae@umich.edu");
-        chats = call(client, "list_my_chats", {});
-        assert [c["other_post_title"] for c in chats] == ["Mina messaged you"];
-        assert chats[0]["my_post_title"] == "IKEA desk";
-        call(client, "close_group_post", {"post_id": post_id, "reason": "sold"});
-        student(client, "kai@umich.edu");
-        closed = call(client, "message_poster", {"post_id": post_id});
-        assert not closed["ok"] and "closed" in closed["error"];
+        threads = call(client, "list_threads", {});
+        assert [t["other_name"] for t in threads] == ["Mina"];
+        assert threads[0]["state"] == "your_turn";
+        owner = messages(client, g)[0]["tags"][0];
+        assert owner["owner_state"] == "1 interested"
+            and owner["threads"][0]["other_name"] == "Mina";
     } finally {
         client.close();
     }

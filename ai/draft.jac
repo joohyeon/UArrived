@@ -51,11 +51,13 @@ obj PostDraft {
         about_market: bool = True,
         title_en: str = "",
         description_en: str = "",
-        item: str = "";
+        item: str = "",
+        condition: str = "";
 }
 
 
 sem PostDraft.about_market = "True only if the student says they want to buy, sell, give away, rent, find or offer housing, share a ride, or get moving help. False for greetings, introductions, asking who else is arriving or on a flight, and questions about campus life.";
+sem PostDraft.condition = "The item's condition only if the student states it: one of 'new', 'like new', 'good', 'fair'. Empty otherwise; never guess.";
 sem PostDraft.item = "The item as one standard name. furniture: desk, chair, bed, mattress, sofa, shelf, table, dresser. essentials: lamp, fridge, microwave, kitchenware, bedding, fan, monitor, textbook. vehicle: bike, scooter, car. Map synonyms (study table -> desk, mini fridge -> fridge, bookcase -> shelf). 'other' if none fits; empty for housing and services.";
 sem PostDraft.title = "The item or need itself in a few words, like 'Bike', 'Wooden desk' or 'Ride from DTW', in the student's own language. Never start with 'Selling', 'Looking for' or 'Need'; the post type already says that. At most 8 words.";
 sem PostDraft.description = "One or two plain sentences in the student's own voice (first person, e.g. 'I need a desk near campus this weekend.') in the student's own language, restating only what they said. Never invent condition, brand or features. Keep every number as digits.";
