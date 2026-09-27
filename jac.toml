@@ -43,3 +43,10 @@ enabled = true
 # Parallel `jac test` workers. Each served test opens its own database on the shared local
 # Postgres (256 connections); keep this low. Run tests via scripts/test.sh (turns off pooling).
 test_jobs = 4
+
+[jacpack]
+name = 'UMadeIt'
+description = 'Jac IDE snapshot for UMadeIt'
+
+[jachammer]
+project_id = "prj_6b4802b86e9b45d5a6e4673dc2fc22e7"
