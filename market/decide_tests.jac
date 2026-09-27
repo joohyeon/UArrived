@@ -101,7 +101,7 @@ test "a ko sublet whose English copy asks to wire the deposit gets the payment f
     assert any(["payment method" in f for f in flags]);
     assert any(["deposit" in f for f in flags]);
     sublet.texts = {};
-    assert risk_flags(sublet) == [];
+    assert risk_codes(sublet) == ["hard_to_reverse_payment", "deposit_pressure"];
 }
 
 test "a ko reader sees the deposit-before-viewing flag and missing lease dates in Korean" {
@@ -386,4 +386,58 @@ test "a ko reader comparing two sublets gets Korean labels and notes, filtered f
     } finally {
         client.close();
     }
+}
+
+test "a provider timeout on the advisor keeps the facts and flags" {
+    client = served();
+    ai.decide.advisor = MockLLM(outputs=[MockError(error=TimeoutError("slow"))]);
+    try {
+        ids = two_sublets(client);
+        r = call(client, "help_me_decide", {"post_ids": ids});
+        assert r["ok"] and not r["ai_generated"] and r["ai_note"];
+        assert len(r["posts"]) == 2;
+    } finally {
+        client.close();
+    }
+}
+
+test "a ko post whose English translation failed the guard still gets the payment flag" {
+    ko = Post(
+        owner_root="x",
+        kind="offer",
+        category="essentials",
+        title="책상",
+        price=15.0,
+        description="먼저 선입금 해주세요, 급해요"
+    );
+    assert risk_codes(ko) == ["hard_to_reverse_payment", "deposit_pressure"];
+    zh = Post(
+        owner_root="x",
+        kind="offer",
+        category="essentials",
+        title="桌子",
+        price=15.0,
+        description="请先转账,尽快"
+    );
+    assert risk_codes(zh) == ["hard_to_reverse_payment", "deposit_pressure"];
+    other = Post(
+        owner_root="x",
+        kind="offer",
+        category="essentials",
+        title="Desk",
+        price=15.0,
+        description="Nice",
+        texts={"ko": {"title": "책상", "description": "송금 먼저"}}
+    );
+    assert risk_codes(other) == ["hard_to_reverse_payment"];
+}
+
+test "a translated note that claims safety in Korean or Chinese is dropped" {
+    ai.translate.translator = MockLLM(
+        outputs=[TextList(texts=["이 방은 안전해요.", "임대 기간을 물어보세요."])]
+    );
+    assert notes_for(["It is fine.", "Ask about the lease."], "ko")
+        == ["", "임대 기간을 물어보세요."];
+    ai.translate.translator = MockLLM(outputs=[TextList(texts=["这个房源很可靠。"])]);
+    assert notes_for(["Fine."], "zh") == [""];
 }
