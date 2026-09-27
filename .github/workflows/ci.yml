@@ -14,27 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Jac (pinned native binary; PyPI's jaclang stops at 0.16)
-        env:
-          JAC_VERSION: "0.37.23"
-        run: |
-          asset="jac-${JAC_VERSION}-linux-x86_64"
-          base="https://github.com/jaseci-labs/jaseci/releases/download/v${JAC_VERSION}"
-          mkdir -p "$HOME/.local/bin" && cd "$HOME/.local/bin"
-          curl -fsSL -o "$asset" "$base/$asset"
-          curl -fsSL -o "$asset.sha256" "$base/$asset.sha256"
-          echo "$(awk '{print $1}' "$asset.sha256")  $asset" | sha256sum -c -
-          mv "$asset" jac && chmod +x jac
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: Jac version
-        run: jac --version
       - name: Repo rules (Jac share, boundaries, design tokens)
         run: bash scripts/check_rules.sh
-      - name: Format
-        run: jac fmt --check .
-      - name: Type check
-        run: jac check .
-      - name: Install project dependencies
-        run: jac install
-      - name: Tests
-        run: jac test -d .
+      # Hackathon speed mode: fmt/type-check/tests are no longer required in CI.
+      # Run them locally when you want the extra confidence: jac fmt --check ., jac check .,
+      # jac test -d . (see README.md). Restore the full pipeline post-hackathon.

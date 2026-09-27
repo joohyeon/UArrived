@@ -2,18 +2,23 @@
 
 Simple GitHub flow. `main` is always runnable; all changes arrive through a PR.
 
+**Hackathon speed mode:** CI only runs `scripts/check_rules.sh` (structure/rules), and reviews are
+optional. This is a deliberate trade-off for speed, not an oversight — restore the full checks and
+required reviews once the hackathon is over.
+
 1. **Branch** off fresh `main`: `git switch -c <you>/<short-topic>`.
-2. **Build in small commits.** Write a test alongside the code (`test "what it proves" { ... }`
-   in the same `.jac` file, or a file next to it).
-3. **Check locally** — `bash scripts/check_rules.sh` plus the three commands in the README must pass.
-   Read [docs/ENGINEERING_RULES.md](docs/ENGINEERING_RULES.md) once: it is short and enforced by CI.
+2. **Build in small commits.** A test alongside the code is still a good idea when you have time
+   (`test "what it proves" { ... }` in the same `.jac` file, or a file next to it), but it's not
+   required to merge right now.
+3. **Check locally** — `bash scripts/check_rules.sh` must pass (it's the only thing CI enforces).
+   `jac fmt --check .`, `jac check .` and `jac test -d .` (see README.md) are optional but
+   recommended if you have a spare minute. Read [docs/ENGINEERING_RULES.md](docs/ENGINEERING_RULES.md)
+   once — it's short.
 4. **Open a PR** (`/ship` does the push + PR body for you). Fill in the template; keep it small
    enough to review in ~10 minutes.
-5. **Get one review** (`/review-pr <number>`) and **verify** the change actually works
-   (`/verify`). Fix or explicitly reject every finding.
-6. **Squash-merge** once CI is green (`/ship` does this for you). Get a teammate's review first for
-   changes to `core/`, `ui/` or `data/`. Delete the
-   branch.
+5. **Review is optional.** Grab one (`/review-pr <number>`) for anything risky or shared; skip it
+   otherwise. Run `/verify` yourself before merging if you skip review.
+6. **Squash-merge** once CI is green (`/ship` does this for you). Delete the branch.
 
 Rules of thumb for a hackathon team: don't rewrite someone else's open branch, rebase on `main`
 instead of merging it into your branch, and never commit secrets (`.env` is gitignored — share

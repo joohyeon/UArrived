@@ -39,7 +39,9 @@ def:pub Compare -> JsxElement {
                     <PostSummary p={c.post}/>
                     <strong style={{"fontSize": "14px"}}>Missing</strong>
                     <span style={{"color": color("sub")}}>
-                        {", ".join(c.missing) if c.missing else "Nothing obvious"}
+                        {", ".join(c.missing)
+                            if len(c.missing) > 0
+                            else "Nothing obvious"}
                     </span>
                     {[<Badge key={f} kind="warning" label={f}/> for f in c.flags]}
                 </Card> for c in (result.posts if result and result.ok else [])
@@ -69,7 +71,7 @@ def:pub Compare -> JsxElement {
                 >
                     {[<li key={n}>{n}</li> for n in result.risk_notes]}
                 </ul>
-                    if result.risk_notes
+                    if len(result.risk_notes) > 0
                     else None}
                 <p style={{"margin": "0", "color": color("sub"), "fontSize": "14px"}}>
                     These notes explain the flags above. They can't tell you whether a post is genuine: meet in public and never pay before you've seen it.

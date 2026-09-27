@@ -48,7 +48,8 @@ node Post {
         published_at: str = "",
         constraints: list[str] = [],
         closed_reason: str = "",
-        nudged: bool = False;
+        nudged: bool = False,
+        topic_group_id: str = "";
 }
 
 """live, done, expired or hidden (by a moderator), as of `today` (YYYY-MM-DD). A post is visible while today < expires_on."""

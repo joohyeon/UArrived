@@ -47,10 +47,18 @@ jac guide                            # current, version-matched Jac reference gu
   module into the browser and fails (`E5082`). Put shared constants in import-free modules
   (`core/constants.jac`, `market/constants.jac`). A client helper imported by another client module must be
   `def:pub`. Server endpoints (`def:protect`) and their obj/node types import fine.
+- **Client code runs as JavaScript: an empty list is truthy.** In screens write `len(xs) > 0` / `len(xs) == 0`,
+  never `if xs` / `not xs` for lists (strings and numbers are fine).
 - **Client reads are cached 60s**; any writer call clears the cache. Polling screens call `heartbeat()`
   (a tiny write) before reading so they see other students' changes.
 - Served-app tests: `JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp())`, call
   `/function/<name>`; never name a file `test_*.jac`.
+- **Mocking the AI in served tests:** setting `ai.draft.drafter = MockLLM(...)` only reaches the served app if
+  the test file also imports a server module (e.g. `import from market.topics { Invite }`); otherwise the
+  app loads its own copy and calls the real model whenever `ANTHROPIC_API_KEY` is set.
+- **Each student sees only their own edges.** `[g <-:MemberOf:<-]` from another student's request returns
+  just the caller's edge, so anything others must count or check (group members) needs a public node
+  (`Membership`, `ReplyTick`).
 - `# jac:ignore[CODE]` is ignored inside `.impl.jac` annexes; keep browser-global code (`new(URLSearchParams, ...)`,
   `window.*`) in the main file with the ignore comment.
 - Module constants are `glob NAME: type = ...;`; booleans are `True`/`False`.
