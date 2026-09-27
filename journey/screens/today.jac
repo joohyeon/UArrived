@@ -8,6 +8,8 @@ import from ui.components.blocks { ProgressBar, LevelBadge, SectionLabel }
 import from journey.prompts { my_journey_prompts, JourneyPrompt }
 import from journey.walkers { my_journey, JourneySummary }
 import from journey.screens.journey { TaskListCard }
+import from core.profile { get_my_profile, ProfileView }
+import from journey.screens.common { go }
 
 def:pub same_text(s: str) -> str {
     return s;
@@ -92,6 +94,12 @@ def:pub Today -> JsxElement {
 }
 
 impl Today.load -> None {
+    profile: ProfileView | None = None;
+    profile = await get_my_profile();
+    if not profile.onboarding_done {
+        go("/onboarding");
+        return;
+    }
     fresh: list[JourneyPrompt] = [];
     fresh = await my_journey_prompts();
     prompts = fresh;

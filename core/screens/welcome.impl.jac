@@ -2,9 +2,16 @@
 
 impl Welcome.refresh -> None {
     state: VerificationState | None = None;
+    profile: ProfileView | None = None;
     state = await my_verification();
     verified = state.verified;
     verified_email = state.email;
+    if verified {
+        profile = await get_my_profile();
+        if not profile.onboarding_done {
+            go("/onboarding");
+        }
+    }
 }
 
 impl Welcome.confirmFromLink -> None {

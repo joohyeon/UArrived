@@ -14,12 +14,17 @@ import from core.auth {
     VerifyResult,
     VerificationState
 }
+import from core.profile { get_my_profile, ProfileView }
 import from ui.tokens { color, space }
 
 """The `token` query parameter from an emailed verification link, or ""."""
 def link_token -> str {
     params = new(URLSearchParams, window.location.search);  # jac:ignore[E1053]
     return params.get("token") or "";  # jac:ignore[E1032,E1002]
+}
+
+def go(path: str) {
+    window.location.assign(path);  # jac:ignore[E1032,W2001]
 }
 
 def:pub Welcome -> JsxElement {
