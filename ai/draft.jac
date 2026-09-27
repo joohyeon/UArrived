@@ -1,4 +1,5 @@
-"""AI drafting: one free-text message -> a structured post draft (R1, R2, R5, R19).
+"""AI drafting: one free-text message in any language -> its language plus up to three
+structured post drafts, each with an English copy (R1, R2, R5, R19, R22, R25).
 
 Knows nothing about the graph or the marketplace rules; `market/drafting.jac` validates and
 normalizes what comes back. The model is `drafter`, a module glob so tests can swap in MockLLM.
@@ -38,11 +39,15 @@ obj PostDraft {
         arrangement: str = "",
         guessed: list[str] = [],
         suggested_price: float | None = None,
-        price_reason: str = "";
+        price_reason: str = "",
+        title_en: str = "",
+        description_en: str = "";
 }
 
 sem PostDraft.title = "Short title, at most 8 words, in the student's own language.";
-sem PostDraft.description = "One or two plain sentences restating only what the student said. Never invent condition, brand or features.";
+sem PostDraft.description = "One or two plain sentences in the student's own language, restating only what the student said about this one need. Never invent condition, brand or features. Keep every number as digits.";
+sem PostDraft.title_en = "The title in English. Keep every number as digits exactly as written.";
+sem PostDraft.description_en = "The description in English, adding and removing nothing. Keep every number as digits exactly as written.";
 sem PostDraft.price = "For an offer: the asking price in US dollars. For a request: the maximum budget. None if not stated.";
 sem PostDraft.free = "True only if the student says it is free or a giveaway.";
 sem PostDraft.available_from = "First date it is available or needed, YYYY-MM-DD, resolved against today. Empty if unknown.";
@@ -57,8 +62,17 @@ sem PostDraft.guessed = "Names of the fields above that you inferred rather than
 sem PostDraft.suggested_price = "For offers of items only: a fair secondhand price in US dollars for Ann Arbor students. None for requests, housing and services.";
 sem PostDraft.price_reason = "One short sentence explaining suggested_price. Empty if suggested_price is None.";
 
-sem draft_post = "Turn a student's marketplace message into a structured draft post. Only use facts in the message; mark anything inferred in guessed.";
-sem draft_post.message = "The student's message, exactly as typed.";
-sem draft_post.today = "Today's date, YYYY-MM-DD, for resolving words like 'sat' or 'next week'.";
+"""What one message becomes: its language and one draft per distinct need."""
+obj DraftSet {
+    has language: str,
+        drafts: list[PostDraft] = [];
+}
 
-def draft_post(message: str, today: str) -> PostDraft by drafter();
+sem DraftSet.language = "ISO 639-1 code of the language the student wrote in, for example 'en', 'ko', 'zh'.";
+sem DraftSet.drafts = "One draft per distinct need in the message (for example a ride, a room and a desk are three drafts), at most three. A message about one thing is one draft.";
+
+sem draft_posts = "Turn a student's marketplace message, in any language, into structured draft posts. Detect the language. Split distinct needs into separate drafts, at most three. Write each title and description in the student's language and the English copy separately. Keep every number as digits. Only use facts in the message; mark anything inferred in guessed.";
+sem draft_posts.message = "The student's message, exactly as typed.";
+sem draft_posts.today = "Today's date, YYYY-MM-DD, for resolving words like 'sat' or 'next week'.";
+
+def draft_posts(message: str, today: str) -> DraftSet by drafter();
