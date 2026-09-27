@@ -201,13 +201,12 @@ def:pub Events -> JsxElement {
         words: dict[str, str] = {};
 
     async def load(cat: str, free: bool) -> None;
-    async def load_personalization -> None;
+    async def init -> None;
     async def markInterested(eid: str) -> None;
 
     can with entry {
         venue = query_param("venue");
-        load("All", False);
-        load_personalization();
+        init();
     }
 
     def tx(s: str) -> str {
@@ -399,15 +398,18 @@ impl Events.load(cat: str, free: bool) -> None {
     words = found;
 }
 
-impl Events.load_personalization -> None {
+"""Fetches interests, then the default (All / not-free-only) event list once and reuses it for
+both the filtered list and the personalization spotlight -- load(cat, free) below re-fetches only
+when the student actually changes a filter, so the initial page load makes one events call, not
+two."""
+impl Events.init -> None {
     picks: list[str] = [];
     picks = await my_interests();
     interests = picks;
-    upcoming: list[EventView] = [];
-    upcoming = await upcoming_events("All", False);
-    all_upcoming = upcoming;
+    await load("All", False);
+    all_upcoming = events;
     fetched: dict[str, int] = {};
-    fetched = await interest_counts([e.eid for e in upcoming]);
+    fetched = await interest_counts([e.eid for e in all_upcoming]);
     counts = fetched;
 }
 

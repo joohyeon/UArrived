@@ -10,6 +10,15 @@ import from journey.constants { EVENT_CATEGORIES }
 import from journey.interests { set_interests }
 import from journey.screens.common { query_param }
 
+# EVENT_CATEGORIES also carries "All" (the events screen's "no filter" chip) and "Other" (its
+# catch-all fallback) -- neither is a real interest a student can match on, and R5's taxonomy
+# names exactly these eight. Picking "All" would silently never match any event's category.
+glob PICKABLE_CATEGORIES: list[str] = [
+         c
+         for c in EVENT_CATEGORIES
+         if c not in ["All", "Other"]
+     ];
+
 def:pub InterestsGate -> JsxElement {
     has picked: list[str] = [],
         busy: bool = False;
@@ -52,7 +61,7 @@ def:pub InterestsGate -> JsxElement {
                         label={cat}
                         selected={cat in picked}
                         onSelect={lambda { toggle(cat); }}
-                    /> for cat in EVENT_CATEGORIES
+                    /> for cat in PICKABLE_CATEGORIES
                 ]}
             </div>
             <Button
