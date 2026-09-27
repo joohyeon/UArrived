@@ -395,7 +395,8 @@ def publish(
     post.inferred = [
         f
         for f in fields.get("inferred", [])
-        if f in GUESSABLE_FIELDS and fields_of(post).get(f, post.condition if f == "condition" else "")
+        if f in GUESSABLE_FIELDS
+            and fields_of(post).get(f, post.condition if f == "condition" else "")
     ];
     grant(post, level=AccessLevel.READ);
     share_with_moderators(post);

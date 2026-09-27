@@ -214,7 +214,13 @@ def fields_from(card: DraftCard, known: dict[str, str], text: str) -> dict[str, 
         "item": card.item,
         "condition": card.condition,
         # Fields the model inferred rather than read; the post keeps them marked as guesses.
-        "inferred": [g for g in card.guessed if g not in known] if card.ai_generated else []
+        "inferred": [
+            g
+            for g in card.guessed
+            if g not in known
+        ]
+            if card.ai_generated
+            else []
     };
 }
 
