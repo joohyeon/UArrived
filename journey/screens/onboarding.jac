@@ -2,8 +2,8 @@
 first-week tasks a student already finished before arriving. Each step's "Skip" advances without
 writing that step's field(s). Welcome and Today redirect here until `onboarding_done` is set."""
 
-import from ui.tokens { color, space }
-import from ui.components.base { Button, Field }
+import from ui.tokens { color, space, FONTS }
+import from ui.components.base { BaseStyles, Button, Field }
 import from ui.components.blocks {
     QuestionBlock,
     SectionLabel,
@@ -57,201 +57,227 @@ def:pub Onboarding -> JsxElement {
         step = step + 1;
     }
 
-    <main
-        style={{
-            "maxWidth": "480px",
-            "margin": "0 auto",
-            "padding": space("4"),
-            "minHeight": "100vh",
-            "boxSizing": "border-box",
-            "background": color("ground"),
-            "display": "flex",
-            "flexDirection": "column",
-            "gap": space("6")
-        }}
-    >
-        <ProgressDots steps={4} current={step}/>
-        {<p role="alert" style={{"color": color("danger"), "margin": "0"}}>{error}</p>
-            if error
-            else None}
-        {(
+    <div style={{"minHeight": "100vh", "background": color("canvas")}}>
+        <BaseStyles/>
+        <main
+            style={{
+                "maxWidth": "480px",
+                "margin": "0 auto",
+                "padding": space("4") + " " + space("4") + " " + space("8"),
+                "boxSizing": "border-box",
+                "display": "flex",
+                "flexDirection": "column",
+                "gap": space("6")
+            }}
+        >
             <div
                 style={{
                     "display": "flex",
-                    "flexDirection": "column",
-                    "gap": space("4")
+                    "alignItems": "center",
+                    "justifyContent": "space-between",
+                    "minHeight": "44px"
                 }}
             >
-                <QuestionBlock
-                    eyebrow="Step 1 of 4"
-                    title="When do you arrive in Ann Arbor?"
-                />
-                <Field
-                    label="Arrival date"
-                    value={arrival_date}
-                    onChange={lambda (v: str) { arrival_date = v; }}
-                    input_type="date"
-                />
-                <Field
-                    label="Arrival time (optional)"
-                    value={arrival_time}
-                    onChange={lambda (v: str) { arrival_time = v; }}
-                    input_type="time"
-                    hint="24-hour, e.g. 15:00"
-                />
-                <Button
-                    label="Continue"
-                    onClick={lambda (e: MouseEvent) { saveArrival(); }}
-                    disabled={saving or arrival_date == ""}
-                    full={True}
-                />
-                <Button
-                    label="Skip"
-                    onClick={skipStep}
-                    variant="text"
-                    disabled={saving}
-                />
+                <span
+                    style={{
+                        "fontFamily": FONTS["display"],
+                        "fontSize": "22px",
+                        "fontWeight": "700",
+                        "color": color("action")
+                    }}
+                >
+                    UMade
+                    <span style={{"color": color("coral-ink")}}>It</span>
+                </span>
+                <span style={{"fontSize": "14px", "color": color("sub")}}>
+                    {f"Setup · {step + 1} of 4"}
+                </span>
             </div>
-        )
-            if step == 0
-            else None}
-        {(
-            <div
-                style={{
-                    "display": "flex",
-                    "flexDirection": "column",
-                    "gap": space("4")
-                }}
-            >
-                <QuestionBlock eyebrow="Step 2 of 4" title="Where will you live?"/>
+            <ProgressDots steps={4} current={step}/>
+            {<p role="alert" style={{"color": color("danger"), "margin": "0"}}>
+                {error}
+            </p>
+                if error
+                else None}
+            {(
                 <div
                     style={{
                         "display": "flex",
                         "flexDirection": "column",
-                        "gap": space("2")
+                        "gap": space("4")
                     }}
                 >
-                    {[
-                        <SelectableCard
-                            key={a}
-                            title={a}
-                            selected={area == a}
-                            onSelect={lambda { area = a; }}
-                        /> for a in ANN_ARBOR_AREAS
-                    ]}
+                    <QuestionBlock
+                        eyebrow="Step 1 of 4"
+                        title="When do you arrive in Ann Arbor?"
+                    />
+                    <Field
+                        label="Arrival date"
+                        value={arrival_date}
+                        onChange={lambda (v: str) { arrival_date = v; }}
+                        input_type="date"
+                    />
+                    <Field
+                        label="Arrival time (optional)"
+                        value={arrival_time}
+                        onChange={lambda (v: str) { arrival_time = v; }}
+                        input_type="time"
+                        hint="24-hour, e.g. 15:00"
+                    />
+                    <Button
+                        label="Continue"
+                        onClick={lambda (e: MouseEvent) { saveArrival(); }}
+                        disabled={saving or arrival_date == ""}
+                        full={True}
+                    />
+                    <Button
+                        label="Skip"
+                        onClick={skipStep}
+                        variant="text"
+                        disabled={saving}
+                    />
                 </div>
-                <SectionLabel label="Housing status"/>
+            )
+                if step == 0
+                else None}
+            {(
                 <div
                     style={{
                         "display": "flex",
                         "flexDirection": "column",
-                        "gap": space("2")
+                        "gap": space("4")
                     }}
                 >
-                    {[
-                        <SelectableCard
-                            key={value}
-                            title={label}
-                            selected={housing_status == value}
-                            onSelect={lambda { housing_status = value; }}
-                        /> for (value, label) in HOUSING_OPTIONS
-                    ]}
+                    <QuestionBlock eyebrow="Step 2 of 4" title="Where will you live?"/>
+                    <div
+                        style={{
+                            "display": "flex",
+                            "flexDirection": "column",
+                            "gap": space("2")
+                        }}
+                    >
+                        {[
+                            <SelectableCard
+                                key={a}
+                                title={a}
+                                selected={area == a}
+                                onSelect={lambda { area = a; }}
+                            /> for a in ANN_ARBOR_AREAS
+                        ]}
+                    </div>
+                    <SectionLabel label="Housing status"/>
+                    <div
+                        style={{
+                            "display": "flex",
+                            "flexDirection": "column",
+                            "gap": space("2")
+                        }}
+                    >
+                        {[
+                            <SelectableCard
+                                key={value}
+                                title={label}
+                                selected={housing_status == value}
+                                onSelect={lambda { housing_status = value; }}
+                            /> for (value, label) in HOUSING_OPTIONS
+                        ]}
+                    </div>
+                    <Button
+                        label="Continue"
+                        onClick={lambda (e: MouseEvent) { saveHousing(); }}
+                        disabled={saving or area == "" or housing_status == ""}
+                        full={True}
+                    />
+                    <Button
+                        label="Skip"
+                        onClick={skipStep}
+                        variant="text"
+                        disabled={saving}
+                    />
                 </div>
-                <Button
-                    label="Continue"
-                    onClick={lambda (e: MouseEvent) { saveHousing(); }}
-                    disabled={saving or area == "" or housing_status == ""}
-                    full={True}
-                />
-                <Button
-                    label="Skip"
-                    onClick={skipStep}
-                    variant="text"
-                    disabled={saving}
-                />
-            </div>
-        )
-            if step == 1
-            else None}
-        {(
-            <div
-                style={{
-                    "display": "flex",
-                    "flexDirection": "column",
-                    "gap": space("4")
-                }}
-            >
-                <QuestionBlock
-                    eyebrow="Step 3 of 4"
-                    title="Which language do you want first?"
-                    subtitle="You can switch anytime from any screen."
-                />
-                <div style={{"display": "flex", "gap": space("3")}}>
-                    {[
-                        <OptionTile
-                            key={code}
-                            glyph={code.upper()}
-                            title={LANGUAGE_NAMES[code]}
-                            selected={preferred_language == code}
-                            onSelect={lambda { preferred_language = code; }}
-                        /> for code in PILOT_LANGUAGES
-                    ]}
+            )
+                if step == 1
+                else None}
+            {(
+                <div
+                    style={{
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "gap": space("4")
+                    }}
+                >
+                    <QuestionBlock
+                        eyebrow="Step 3 of 4"
+                        title="Which language do you want first?"
+                        subtitle="You can switch anytime from any screen."
+                    />
+                    <div style={{"display": "flex", "gap": space("3")}}>
+                        {[
+                            <OptionTile
+                                key={code}
+                                glyph={code.upper()}
+                                title={LANGUAGE_NAMES[code]}
+                                selected={preferred_language == code}
+                                onSelect={lambda { preferred_language = code; }}
+                            /> for code in PILOT_LANGUAGES
+                        ]}
+                    </div>
+                    <Button
+                        label="Continue"
+                        onClick={lambda (e: MouseEvent) { saveLanguage(); }}
+                        disabled={saving or preferred_language == ""}
+                        full={True}
+                    />
+                    <Button
+                        label="Skip"
+                        onClick={skipStep}
+                        variant="text"
+                        disabled={saving}
+                    />
                 </div>
-                <Button
-                    label="Continue"
-                    onClick={lambda (e: MouseEvent) { saveLanguage(); }}
-                    disabled={saving or preferred_language == ""}
-                    full={True}
-                />
-                <Button
-                    label="Skip"
-                    onClick={skipStep}
-                    variant="text"
-                    disabled={saving}
-                />
-            </div>
-        )
-            if step == 2
-            else None}
-        {(
-            <div
-                style={{
-                    "display": "flex",
-                    "flexDirection": "column",
-                    "gap": space("3")
-                }}
-            >
-                <QuestionBlock
-                    eyebrow="Final step"
-                    title="What have you already finished?"
-                    subtitle="Check anything you took care of before you got here."
-                />
-                {[
-                    <ChecklistRow
-                        key={v.task.tid}
-                        label={v.task.title}
-                        checked={v.status == "done"}
-                        onToggle={lambda { toggleTask(
-                            v.task.tid, v.status == "done"
-                        ); }}
-                        reward={("+" + str(v.task.xp) + " XP")
-                            if v.task.required
-                            else ""}
-                    /> for v in tasks
-                ]
-                    if loaded
-                    else []}
-                <Button
-                    label="Finish"
-                    onClick={lambda (e: MouseEvent) { finish(); }}
-                    disabled={saving}
-                    full={True}
-                />
-            </div>
-        )
-            if step == 3
-            else None}
-    </main>
+            )
+                if step == 2
+                else None}
+            {(
+                <div
+                    style={{
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "gap": space("3")
+                    }}
+                >
+                    <QuestionBlock
+                        eyebrow="Final step"
+                        title="What have you already finished?"
+                        subtitle="Check anything you took care of before you got here."
+                    />
+                    {[
+                        <ChecklistRow
+                            key={v.task.tid}
+                            label={v.task.title}
+                            checked={v.status == "done"}
+                            onToggle={lambda { toggleTask(
+                                v.task.tid, v.status == "done"
+                            ); }}
+                            reward={("+" + str(v.task.xp) + " XP")
+                                if v.task.required
+                                else ""}
+                        /> for v in tasks
+                    ]
+                        if loaded
+                        else []}
+                    <Button
+                        label="Finish"
+                        onClick={lambda (e: MouseEvent) { finish(); }}
+                        disabled={saving}
+                        full={True}
+                    />
+                </div>
+            )
+                if step == 3
+                else None}
+        </main>
+    </div>
 }
 
 impl Onboarding.load -> None {

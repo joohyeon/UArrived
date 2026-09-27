@@ -11,11 +11,6 @@ import from journey.events { upcoming_events, EventView }
 import from journey.guide { translate_journey_texts }
 import from journey.screens.common { JourneyTabs, query_param }
 
-def:pub event_when(e: EventView) -> str {
-    when = e.date + (" " + e.time if e.time else "");
-    return when + (" – " + e.time_end if e.time_end else "");
-}
-
 def:pub EventCard(e: EventView, tx: Callable[[str], str]) -> JsxElement {
     small = text_style("small");
     <Card>
@@ -24,7 +19,7 @@ def:pub EventCard(e: EventView, tx: Callable[[str], str]) -> JsxElement {
             {<Badge kind="progress" label="Free"/> if e.free else None}
         </div>
         <strong style={text_style("card-title")}>{tx(e.title)}</strong>
-        <span style={{** small, "color": color("text-2")}}>{event_when(e)}</span>
+        <span style={{** small, "color": color("text-2")}}>{e.when}</span>
         <span style={{** small, "color": color("sub")}}>
             {"Online" if e.virtual else e.location}
         </span>

@@ -556,3 +556,47 @@ def:pub TopBar(back_href: str, back_label: str = "Back") -> JsxElement {
     style["textDecoration"] = "none";
     <a href={back_href} style={style}>{"‹ " + back_label}</a>
 }
+
+"""Section tabs under a screen title (Journey: Tasks / Events; Market: Groups / Matches / ...).
+`items` are (href, label) pairs; the current one is `active`. 44px targets, underlined in `action`,
+and the row scrolls sideways instead of wrapping when it runs out of room."""
+def:pub TabStrip(
+    items: list[tuple[str, str]], active: str, label: str = "Sections"
+) -> JsxElement {
+    <nav
+        aria-label={label}
+        style={{
+            "display": "flex",
+            "gap": space("1"),
+            "overflowX": "auto",
+            "borderBottom": "1px solid " + color("border"),
+            "scrollbarWidth": "none"
+        }}
+    >
+        {[
+            <a
+                key={href}
+                href={href}
+                aria-current={"page" if href == active else None}
+                style={{
+                    ** _text("meta"),
+                    "fontSize": "15px",
+                    "flexShrink": "0",
+                    "minHeight": _px(SIZE["touch-min"]),
+                    "display": "inline-flex",
+                    "alignItems": "center",
+                    "padding": "0 " + space("3"),
+                    "textDecoration": "none",
+                    "whiteSpace": "nowrap",
+                    "fontWeight": "700" if href == active else "500",
+                    "color": color("action") if href == active else color("text-2"),
+                    "borderBottom": "2px solid "
+                        + (color("action") if href == active else "transparent"),
+                    "marginBottom": "-1px"
+                }}
+            >
+                {text}
+            </a> for (href, text) in items
+        ]}
+    </nav>
+}
