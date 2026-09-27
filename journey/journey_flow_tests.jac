@@ -121,3 +121,38 @@ test "upcoming events hide past events and filter by category and cost" {
         del os.environ["UARRIVED_TODAY"];
     }
 }
+
+test "onboarding can self-report a task already finished, bypassing the step check" {
+    client = served();
+    try {
+        client.register_user("mina@umich.edu", "password123");
+        blocked = call(client, "mark_task_done", {"tid": "banking"});
+        assert not blocked["ok"] and "step" in blocked["error"];
+        early = call(
+            client, "mark_task_done", {"tid": "banking", "skip_step_check": True}
+        );
+        assert early["ok"] and early["task"]["status"] == "done";
+        after = call(client, "my_journey", {});
+        assert task_of(after, "banking")["status"] == "done";
+        undone = call(client, "reopen_task", {"tid": "banking"});
+        assert undone["ok"] and undone["task"]["status"] == "started";
+    } finally {
+        client.close();
+    }
+}
+
+test "skip_step_check never bypasses task applicability" {
+    client = served();
+    try {
+        client.register_user("sam@umich.edu", "password123");
+        call(client, "update_my_profile", {"changes": {"student_type": "in-state"}});
+        blocked = call(
+            client,
+            "mark_task_done",
+            {"tid": "international_center", "skip_step_check": True}
+        );
+        assert not blocked["ok"];
+    } finally {
+        client.close();
+    }
+}
