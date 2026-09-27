@@ -41,6 +41,27 @@ def standard_item(category: str, title: str, suggested: str = "") -> str {
     return item_from_text(category, title) or "other";
 }
 
+"""The goods category that lists `title`'s item, when `category` doesn't; "" otherwise (including
+when the title matches nothing or already matches its own category)."""
+def category_for(title: str, category: str) -> str {
+    if category not in STANDARD_ITEMS or item_from_text(category, title) {
+        return "";
+    }
+    for other in STANDARD_ITEMS {
+        if other != category and item_from_text(other, title) {
+            return other;
+        }
+    }
+    return "";
+}
+
+test "a title the list knows under another goods category moves there" {
+    assert category_for("Twin mattress", "essentials") == "furniture";
+    assert category_for("Twin mattress", "furniture") == "";
+    assert category_for("Kayak", "furniture") == "";
+    assert category_for("Room", "housing") == "";
+}
+
 test "titles map to standard items" {
     assert standard_item("furniture", "Study table") == "desk";
     assert standard_item("furniture", "IKEA MALM desk") == "desk";

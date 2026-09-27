@@ -62,6 +62,10 @@ glob MAX_NOTE_ITEMS: int = 3,
          ("I'm selling or giving it away", "kind:offer"),
          ("I'm looking for it", "kind:request")
      ],
+     SERVICE_KIND_CHOICES: list[tuple[str, str]] = [
+         ("I'm offering it", "kind:offer"),
+         ("I'm looking for it", "kind:request")
+     ],
      CATEGORY_CHOICES: list[tuple[str, str]] = [
          ("Furniture", "category:furniture"),
          ("Household essentials", "category:essentials"),
@@ -158,6 +162,12 @@ def parse_answers(answers: str) -> dict[str, str] {
 """The follow-up question that blocks publishing, or None when the message can be posted."""
 def blocking_question(card: DraftCard, known: dict[str, str]) -> FollowUp | None {
     if "kind" not in known and (not card.ai_generated or "kind" in card.guessed) {
+        if card.category == "service" and card.ai_generated {
+            return FollowUp(
+                question="Are you offering this (a ride or help), or looking for it?",
+                choices=choice_list(SERVICE_KIND_CHOICES)
+            );
+        }
         return FollowUp(
             question="Are you selling something, or looking for it?",
             choices=choice_list(KIND_CHOICES)

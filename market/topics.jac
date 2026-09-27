@@ -48,7 +48,7 @@ import from market.translation { reader_of }
 import from market.lifecycle { publish, view_of, own_post, finish, PostView }
 import from market.messages { blocking_question, fields_from, parse_answers, FollowUp }
 import from market.matching { place, money }
-import from market.items { standard_item }
+import from market.items { standard_item, category_for }
 
 glob MONTH_NAMES: list[str] = [
          "Jan",
@@ -113,6 +113,9 @@ glob MAX_GROUP_MESSAGE_CHARS: int = 1000,
          "roommate",
          "lease",
          "ride",
+         "uber",
+         "lyft",
+         "carpool",
          "$"
      ];
 
@@ -425,7 +428,8 @@ def file_market(
     unsure = card.ai_generated
         and "kind" in card.guessed
         and "category" in card.guessed
-        and len(text.split()) > 3;
+        and len(text.split()) > 3
+        and not looks_like_market(text);
     if (not about or unsure) and not known {
         return GroupPostResult(ok=True, message_id=message_id);
     }
@@ -448,6 +452,15 @@ def file_market(
             text
         ) for (i, c) in enumerate(drafted.drafts or [card])
     ];
+    for fields in items {
+        # The drafter sometimes puts an item in a neighbouring category (a mattress as
+        # essentials). If the item list clearly knows it under another goods category, file it
+        # there. Only for messages the assistant files, never a form the student reviewed.
+        fixed = category_for(fields["title"], fields["category"]);
+        if fixed {
+            fields["category"] = fixed;
+        }
+    }
     over = drafted.dropped;
     filed: list[tuple[Post, ChatGroup, int, bool]] = [];
     failed: list[str] = [];

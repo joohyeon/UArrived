@@ -1192,3 +1192,44 @@ test "clear market words beat the model's no" {
         client.close();
     }
 }
+
+test "a drafted item in the wrong goods category files where the list knows it, and ride questions count" {
+    client = served();
+    try {
+        cohort = student(client, "kai@umich.edu");
+        ai_says([moving_sale([item_draft("Twin mattress", Category.ESSENTIALS, "")])]);
+        call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "selling bike $50 and a twin mattress"}
+        );
+        mattress = [
+            p
+            for p in call(client, "list_my_posts", {})
+            if p["title"] == "Twin mattress"
+        ][0];
+        assert mattress["category"] == "furniture" and mattress["item"] == "mattress";
+        ai_says(
+            [
+                PostDraft(
+                    kind=PostKind.REQUEST,
+                    category=Category.SERVICE,
+                    title="Ride from DTW",
+                    description="Sharing a ride.",
+                    route_from="DTW",
+                    route_to="Ann Arbor",
+                    available_from="2099-10-03",
+                    guessed=["kind", "category"]
+                )
+            ]
+        );
+        ride = call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Anyone sharing an uber from DTW Oct 3?"}
+        );
+        assert "offering this (a ride or help)" in ride["follow_up"]["question"];
+    } finally {
+        client.close();
+    }
+}
