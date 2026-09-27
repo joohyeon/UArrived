@@ -1,13 +1,21 @@
-"""Served-app tests for mutual opt-in and per-post chat (U6)."""
+"""Served-app tests for mutual opt-in and per-post chat (U6), and chat translation per reader
+(native-language U7). No test calls a real model: the translator is an empty MockLLM (every call
+fails, so post translations keep the original) unless a test installs replies."""
 
 import os;
 import tempfile;
+import ai.translate;
 import from datetime { date, timedelta }
+import from jaclang.byllm.lib { MockLLM, MockError, AuthenticationError }
 import from jaclang.testing.testing { JacTestClient }
+import from ai.translate { Translation }
+import from market.connect { message_view, translation_for }
+import from market.graph { Message }
 
 def served -> JacTestClient {
     os.environ["UARRIVED_DEV_MODE"] = "1";
     os.environ["ANTHROPIC_API_KEY"] = "";
+    ai.translate.translator = MockLLM(outputs=[]);
     return JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp());
 }
 
@@ -217,4 +225,158 @@ test "empty and overlong messages are refused" {
     } finally {
         client.close();
     }
+}
+
+"""Make the next chat translations return `outputs`, in order."""
+def mock_translator(outputs: list[any]) -> MockLLM {
+    fake = MockLLM(outputs=outputs);
+    ai.translate.translator = fake;
+    return fake;
+}
+
+def set_language(client: JacTestClient, lang: str) {
+    assert call(client, "update_my_profile", {"changes": {"preferred_language": lang}})[
+        "ok"
+    ];
+}
+
+"""Jae (`jae_lang`) and Mina (`mina_lang`) both connect, each with their language set first;
+returns the chat id, acting as Mina."""
+def chat_in(client: JacTestClient, jae_lang: str, mina_lang: str) -> str {
+    (post_id, sid) = matched_pair(client);
+    set_language(client, jae_lang);
+    call(client, "connect", {"suggestion_id": sid});
+    act_as(client, "mina@umich.edu");
+    set_language(client, mina_lang);
+    return call(client, "connect", {"suggestion_id": sid})["chat_id"];
+}
+
+glob VIDEO_CALL: str = "Can you do a video call Thursday 7pm EST?";
+
+test "the reader sees the translation with the original; the sender sees their words (AE10)" {
+    client = served();
+    try {
+        chat_id = chat_in(client, "ko", "en");
+        fake = mock_translator([Translation(text="목요일 저녁 7시 EST에 영상 통화 가능할까요?")]);
+        assert call(client, "send_message", {"chat_id": chat_id, "text": VIDEO_CALL})[
+            "ok"
+        ];
+        assert len(fake.sent("messages")) == 1;
+        mine = call(client, "read_chat", {"chat_id": chat_id})["messages"][0];
+        assert mine["mine"] and mine["text"] == VIDEO_CALL;
+        assert not mine["ai_translated"] and mine["original"] == "";
+        assert mine["language"] == "en";
+        act_as(client, "jae@umich.edu");
+        thread = call(client, "read_chat", {"chat_id": chat_id});
+        seen = thread["messages"][0];
+        assert not seen["mine"] and seen["ai_translated"];
+        assert seen["text"] == "목요일 저녁 7시 EST에 영상 통화 가능할까요?";
+        assert seen["original"] == VIDEO_CALL and seen["language"] == "ko";
+        assert thread["chat"]["last_message"] == seen["text"];
+        assert call(client, "list_my_chats", {})[0]["last_message"] == seen["text"];
+        act_as(client, "mina@umich.edu");
+        assert call(client, "list_my_chats", {})[0]["last_message"] == VIDEO_CALL;
+    } finally {
+        client.close();
+    }
+}
+
+test "two English students chat with no model call" {
+    client = served();
+    try {
+        chat_id = chat_in(client, "en", "en");
+        fake = mock_translator([Translation(text="should not be used")]);
+        assert call(client, "send_message", {"chat_id": chat_id, "text": VIDEO_CALL})[
+            "ok"
+        ];
+        act_as(client, "jae@umich.edu");
+        seen = call(client, "read_chat", {"chat_id": chat_id})["messages"][0];
+        assert seen["text"] == VIDEO_CALL and not seen["ai_translated"];
+        assert len(fake.sent("messages")) == 0;
+    } finally {
+        client.close();
+    }
+}
+
+test "a translation that drops a number is not stored; the reader sees the original" {
+    client = served();
+    try {
+        chat_id = chat_in(client, "ko", "en");
+        mock_translator([Translation(text="목요일 저녁에 영상 통화 가능할까요?")]);
+        assert call(client, "send_message", {"chat_id": chat_id, "text": VIDEO_CALL})[
+            "ok"
+        ];
+        act_as(client, "jae@umich.edu");
+        seen = call(client, "read_chat", {"chat_id": chat_id})["messages"][0];
+        assert seen["text"] == VIDEO_CALL and not seen["ai_translated"];
+        assert seen["original"] == "" and seen["language"] == "en";
+    } finally {
+        client.close();
+    }
+}
+
+test "a translator outage still sends; the reader sees the original" {
+    client = served();
+    try {
+        chat_id = chat_in(client, "ko", "en");
+        mock_translator([MockError(error=AuthenticationError("no API key"))]);
+        assert call(client, "send_message", {"chat_id": chat_id, "text": VIDEO_CALL})[
+            "ok"
+        ];
+        act_as(client, "jae@umich.edu");
+        seen = call(client, "read_chat", {"chat_id": chat_id})["messages"][0];
+        assert seen["text"] == VIDEO_CALL and not seen["ai_translated"];
+    } finally {
+        client.close();
+    }
+}
+
+test "a language changed after connecting: messages use the languages recorded at connect" {
+    client = served();
+    try {
+        chat_id = chat_in(client, "ko", "en");
+        act_as(client, "jae@umich.edu");
+        set_language(client, "zh");
+        act_as(client, "mina@umich.edu");
+        set_language(client, "ko");
+        fake = mock_translator([Translation(text="목요일 저녁 7시 EST에 영상 통화 가능할까요?")]);
+        call(client, "send_message", {"chat_id": chat_id, "text": VIDEO_CALL});
+        assert len(fake.sent("messages")) == 1;
+        act_as(client, "jae@umich.edu");
+        seen = call(client, "read_chat", {"chat_id": chat_id})["messages"][0];
+        assert seen["language"] == "ko" and seen["ai_translated"];
+        assert seen["original"] == VIDEO_CALL;
+    } finally {
+        client.close();
+    }
+}
+
+test "a chat connected before translation (no recorded language) makes no model call" {
+    fake = mock_translator([Translation(text="should not be used")]);
+    assert translation_for(VIDEO_CALL, "en", "") is None;
+    assert translation_for(VIDEO_CALL, "", "") is None;
+    assert len(fake.sent("messages")) == 0;
+    old = Message(
+        author_root="someone", text=VIDEO_CALL, sent_at="2026-08-01T10:00:00"
+    );
+    for me in ["someone", "reader"] {
+        view = message_view(old, me);
+        assert view.text == VIDEO_CALL and not view.ai_translated;
+        assert view.original == "" and view.mine == (me == "someone");
+    }
+}
+
+test "a stored translation is shown only to the reader" {
+    m = Message(
+        author_root="priya",
+        text=VIDEO_CALL,
+        sent_at="2026-08-01T10:00:00",
+        language="en",
+        translated_text="목요일 저녁 7시 EST에 영상 통화 가능할까요?",
+        translated_language="ko",
+        ai_translated=True
+    );
+    assert message_view(m, "priya").text == VIDEO_CALL;
+    view = message_view(m, "jiwoo");
+    assert view.text.startswith("목요일") and view.original == VIDEO_CALL;
 }

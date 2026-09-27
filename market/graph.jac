@@ -89,6 +89,8 @@ def all_posts(commons: any = None) -> list[Post] {
 other. Acceptance is per side (U6). `withdrawn` means matching replaced or stopped it.
 `reasons` is the English text; `reason_codes` holds one {"code", "values"} entry per reason so
 readers see them in their language (suggestions made before that have none and show English).
+`language_a`/`language_b` is each side's language, recorded when that side taps Connect; empty
+for sides that connected before chat translation, whose chat is not translated.
 """
 node Suggestion {
     has post_a: str,
@@ -107,7 +109,9 @@ node Suggestion {
         seen_b: bool = False,
         emailed_a: bool = False,
         emailed_b: bool = False,
-        open_token: str = "";
+        open_token: str = "",
+        language_a: str = "",
+        language_b: str = "";
 }
 
 """The private chat for one connected suggestion. Shared WRITE with exactly its two students;
@@ -119,11 +123,17 @@ node Chat {
         created_on: str;
 }
 
-"""One chat message, attached to its Chat and readable by both students."""
+"""One chat message, attached to its Chat and readable by both students. `text` is what the
+author wrote in `language`; `translated_text` is the stored AI translation into
+`translated_language` for the other student, empty when none was made or it failed the guard."""
 node Message {
     has author_root: str,
         text: str,
-        sent_at: str;
+        sent_at: str,
+        language: str = "",
+        translated_text: str = "",
+        translated_language: str = "",
+        ai_translated: bool = False;
 }
 
 def all_chats -> list[Chat] {
