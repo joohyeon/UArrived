@@ -1,5 +1,9 @@
-"""Shared pieces of the journey screens: the Tasks / Events tab strip, URL helpers, the status
-badge and the task map. journey/ never imports market/, so the small URL helpers live here too."""
+"""Shared pieces of the journey screens: the Tasks tab strip, URL helpers, the status badge and the
+task map. journey/ never imports market/, so the small URL helpers live here too.
+
+Events used to be a second tab here, but it's its own bottom-nav tab now (U4, plan
+2026-09-27-003), so the strip is just Tasks -- kept as a strip (not a bare heading) in case a
+Journey sub-page is added later."""
 
 import from ui.tokens { color, space, text_style, SIZE }
 import from ui.components.base { Badge }
@@ -7,10 +11,7 @@ import from ui.components.map { MapCanvas }
 import from journey.constants { STATUS_LABELS, ANN_ARBOR_BOUNDS, CAMPUS_CENTER }
 import from journey.walkers { TaskView }
 
-glob JOURNEY_TABS: list[tuple[str, str]] = [
-         ("/journey", "Tasks"),
-         ("/journey/events", "Events")
-     ];
+glob JOURNEY_TABS: list[tuple[str, str]] = [("/journey", "Tasks")];
 
 """A query-string parameter from the current URL, or ""."""
 def:pub query_param(name: str) -> str {

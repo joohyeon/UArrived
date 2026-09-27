@@ -115,7 +115,7 @@ def:pub app -> JsxElement {
     if (
         path.startswith("/market")
         or path.startswith("/journey")
-        or path in ["/today", "/profile", "/onboarding", "/interests"]
+        or path in ["/today", "/profile", "/onboarding", "/interests", "/events"]
     )
         and not jacIsLoggedIn() {
         return <Welcome/>;
@@ -147,7 +147,7 @@ def:pub app -> JsxElement {
     if path == "/journey/ask" {
         return <AskGuide/>;
     }
-    if path == "/journey/events" {
+    if path == "/events" {
         return <Events/>;
     }
     if path == "/market" {

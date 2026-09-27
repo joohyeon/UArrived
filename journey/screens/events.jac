@@ -1,6 +1,7 @@
-"""/journey/events: upcoming U-M events for new students, as a list or on the map, filtered by
-category and cost. Each event links to its official U-M Happening page. Tapping a map pin lists
-that venue's events (`?venue=`)."""
+"""/events: upcoming U-M events for new students, as a list or on the map, filtered by category
+and cost. Each event links to its official U-M Happening page. Tapping a map pin lists that
+venue's events (`?venue=`). Its own bottom-nav tab (U4, plan 2026-09-27-003) -- no longer nested
+under Journey, so it doesn't render Journey's Tasks/Events sub-tab strip."""
 
 import from ui.tokens { color, space, text_style }
 import from ui.components.base { AppShell, Card, Badge, ResponsiveGrid }
@@ -9,7 +10,7 @@ import from ui.components.map { MapCanvas }
 import from journey.constants { EVENT_CATEGORIES, ANN_ARBOR_BOUNDS, CAMPUS_CENTER }
 import from journey.events { upcoming_events, EventView }
 import from journey.guide { translate_journey_texts }
-import from journey.screens.common { JourneyTabs, query_param }
+import from journey.screens.common { query_param }
 
 def:pub event_when(e: EventView) -> str {
     when = e.date + (" " + e.time if e.time else "");
@@ -134,15 +135,14 @@ def:pub Events -> JsxElement {
                 "wx": e.wx,
                 "wy": e.wy,
                 "label": e.venue,
-                "href": "/journey/events?venue=" + encodeURIComponent(e.venue),  # jac:ignore[W2001]
+                "href": "/events?venue=" + encodeURIComponent(e.venue),  # jac:ignore[W2001]
                 "state": "event",
                 "count": 1
             }
         );
     }
 
-    <AppShell title="Events" active="journey" wide={True}>
-        <JourneyTabs active="/journey/events"/>
+    <AppShell title="Events" active="events" wide={True}>
         <div
             role="group"
             aria-label="Category"
@@ -189,7 +189,7 @@ def:pub Events -> JsxElement {
                 }}
             >
                 <SectionLabel label={"At " + venue}/>
-                <a href="/journey/events" style={text_style("meta")}>Show all venues</a>
+                <a href="/events" style={text_style("meta")}>Show all venues</a>
             </div>
         )
             if venue

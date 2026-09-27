@@ -345,7 +345,7 @@ def:pub HelpButton -> JsxElement {
 glob NAV_ITEMS: list[tuple[str, str]] = [
          ("today", "Today"),
          ("journey", "Journey"),
-         ("housing", "Housing"),
+         ("events", "Events"),
          ("market", "Market"),
          ("profile", "Profile")
      ];
