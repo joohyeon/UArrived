@@ -26,11 +26,60 @@ def reader_language(lang: str | None) -> str {
     return code if code in PILOT_LANGUAGES else DEFAULT_LANGUAGE;
 }
 
+glob MONTHS: list[str] = [
+         "jan",
+         "feb",
+         "mar",
+         "apr",
+         "may",
+         "jun",
+         "jul",
+         "aug",
+         "sep",
+         "oct",
+         "nov",
+         "dec"
+     ],
+     MONTH_WORDS: set[str] = {
+         "jan",
+         "january",
+         "feb",
+         "february",
+         "mar",
+         "march",
+         "apr",
+         "april",
+         "may",
+         "jun",
+         "june",
+         "jul",
+         "july",
+         "aug",
+         "august",
+         "sep",
+         "sept",
+         "september",
+         "oct",
+         "october",
+         "nov",
+         "november",
+         "dec",
+         "december"
+     };
+
 """Digit groups in `text` as plain numbers: thousands commas are dropped ("1,200" -> "1200"),
-full-width digits and leading zeros normalise ("８" and "08" -> "8")."""
+full-width digits and leading zeros normalise ("８" and "08" -> "8"). An English month name
+counts as its number, so "10월 25일" is preserved by "October 25"."""
 def digit_groups(text: str) -> set[str] {
     joined = re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", text);
-    return {str(int(g)) for g in re.findall(r"\d+", joined)};
+    groups = {str(int(g)) for g in re.findall(r"\d+", joined)};
+    for word in re.findall(r"[A-Za-z]+", text) {
+        w = word.lower();
+        if w in MONTH_WORDS {
+            groups.add(str(MONTHS.index(w[:3]) + 1));
+        }
+    }
+    return groups;
 }
 
 """Whether every digit group in `source` also appears in `translated`. No AI."""

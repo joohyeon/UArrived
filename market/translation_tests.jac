@@ -37,10 +37,10 @@ test "same language and empty text make no model call and return the original" {
     assert len(fake.sent("messages")) == 0;
 }
 
-test "a translation that drops a number fails the guard and returns the original (AE9)" {
+test "a translation that changes a number fails the guard and returns the original (AE9)" {
     source = "책상 $40, 8월 21–25일";
-    mock([Translation(text="Desk $40, Aug 21–25")]);
-    assert not digits_preserved(source, "Desk $40, Aug 21–25");
+    mock([Translation(text="Desk $40, Sep 21–25")]);
+    assert not digits_preserved(source, "Desk $40, Sep 21–25");
     r = translate_text(source, "ko", "en");
     assert not r.ok and not r.ai_translated;
     assert r.text == source and r.language == "ko";
@@ -58,6 +58,14 @@ test "the guard ignores thousands commas, full-width digits and leading zeros" {
     assert digits_preserved("８月 ０８:30", "Aug 8, 8:30");
     assert not digits_preserved("18시", "8 pm");
     assert digits_preserved("no numbers", "");
+}
+
+test "an English month name counts as its number" {
+    assert digits_preserved("10월 25일 오후 3시", "October 25 at 3 PM");
+    assert digits_preserved("8月21–25日自取", "Pick up Aug 21–25");
+    assert digits_preserved("책상 $40, 8월 21–25일", "Desk $40, Aug 21–25");
+    assert not digits_preserved("10월 25일", "November 25");
+    assert not digits_preserved("10월 25일", "the 25th");
 }
 
 test "an AI outage returns the original with ok false, without raising" {
@@ -115,7 +123,7 @@ test "a post target that fails the guard is left out" {
                     PostText(
                         language="en",
                         title="Desk, chair, lamp",
-                        description="$40, pick up Aug 21-25"
+                        description="$40, pick up Sep 21-25"
                     ),
                     PostText(
                         language="ko",
