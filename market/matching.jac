@@ -68,11 +68,21 @@ def place(text: str) -> str {
     return t;
 }
 
-"""(start, end) dates of a post's window, or None when it gives no dates."""
+"""(start, end) dates of a post's window, or None when it gives no dates. For items a missing end
+is open-ended; for services a single date is that one day."""
 def window(p: Post) -> tuple[str, str] | None {
-    start = p.available_from or p.available_until;
-    end = p.available_until or p.available_from;
-    return (start, end) if start else None;
+    if not (p.available_from or p.available_until) {
+        return None;
+    }
+    if p.category == "service" {
+        # Rides and time-bound help: a single date means that day.
+        return (
+            p.available_from or p.available_until,
+            p.available_until or p.available_from
+        );
+    }
+    # Items and housing: "until X" means from now until X; "from X" means X onward.
+    return (p.available_from or "0000-01-01", p.available_until or "9999-12-31");
 }
 
 def minutes(t: str) -> int {
@@ -567,4 +577,34 @@ test "only DTW names count as DTW; other airports stay distinct" {
     assert place("O'Hare airport") != "dtw";
     assert place("the airport") != "dtw";
     assert place("Ann Arbor") == "ann arbor";
+}
+
+test "an item available until a date overlaps a need earlier than that date" {
+    desk = Post(
+        owner_root="jae",
+        kind="offer",
+        category="furniture",
+        title="Wooden desk",
+        price=30.0,
+        available_until="2026-10-03"
+    );
+    weekend = Post(
+        owner_root="mina",
+        kind="request",
+        category="furniture",
+        title="Desk",
+        price=40.0,
+        available_from="2026-09-27",
+        available_until="2026-09-28"
+    );
+    m = match_pair(desk, weekend, "2026-09-26");
+    assert m is not None and "Dates overlap" in m.reasons;
+    late = Post(
+        owner_root="mina",
+        kind="request",
+        category="furniture",
+        title="Desk",
+        available_from="2026-10-10"
+    );
+    assert match_pair(desk, late, "2026-09-26") is None;
 }

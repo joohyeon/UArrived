@@ -220,8 +220,12 @@ def chat_view(c: Chat, s: Suggestion, posts: dict[str, Post]) -> ChatView {
     return ChatView(
         id=jid(c),
         open=suggestion_status(s, a, b, today_iso()) == "connected",
-        my_post_title=(a if mine_is_a else b).title if a and b else "",
-        other_post_title=(b if mine_is_a else a).title if a and b else "",
+        my_post_title=(a if mine_is_a else b).title
+            if a and b
+            else (a.title if a and mine_is_a else ""),
+        other_post_title=(b if mine_is_a else a).title
+            if a and b
+            else (a.title if a and not mine_is_a else "Your reply"),
         last_message=message_view(msgs[-1], jid(root)).text if msgs else "",
         last_at=msgs[-1].sent_at if msgs else c.created_on
     );

@@ -44,15 +44,18 @@ obj PostDraft {
         route_from: str = "",
         route_to: str = "",
         arrangement: str = "",
+        constraints: list[str] = [],
         guessed: list[str] = [],
         suggested_price: float | None = None,
         price_reason: str = "",
+        about_market: bool = True,
         title_en: str = "",
         description_en: str = "";
 }
 
-sem PostDraft.title = "Short title, at most 8 words, in the student's own language.";
-sem PostDraft.description = "One or two plain sentences in the student's own language, restating only what the student said about this one need. Never invent condition, brand or features. Keep every number as digits.";
+sem PostDraft.about_market = "True only if the student says they want to buy, sell, give away, rent, find or offer housing, share a ride, or get moving help. False for greetings, introductions, asking who else is arriving or on a flight, and questions about campus life.";
+sem PostDraft.title = "The item or need itself in a few words, like 'Bike', 'Wooden desk' or 'Ride from DTW', in the student's own language. Never start with 'Selling', 'Looking for' or 'Need'; the post type already says that. At most 8 words.";
+sem PostDraft.description = "One or two plain sentences in the student's own voice (first person, e.g. 'I need a desk near campus this weekend.') in the student's own language, restating only what they said. Never invent condition, brand or features. Keep every number as digits.";
 sem PostDraft.title_en = "The title in English. Keep every number as digits exactly as written.";
 sem PostDraft.description_en = "The description in English, adding and removing nothing. Keep every number as digits exactly as written.";
 sem PostDraft.price = "For an offer: the asking price in US dollars. For a request: the maximum budget. None if not stated.";
@@ -65,6 +68,7 @@ sem PostDraft.area = "Ann Arbor area as the student wrote it, for example 'north
 sem PostDraft.route_from = "For rides only: where the ride starts, for example 'DTW'. Empty otherwise.";
 sem PostDraft.route_to = "For rides only: where the ride ends, for example 'Ann Arbor'. Empty otherwise.";
 sem PostDraft.arrangement = "For housing only: one of 'roommate opening', 'sublet', 'lease assignment', 'new lease', or empty if the student did not say.";
+sem PostDraft.constraints = "Conditions the student stated, as short phrases, e.g. 'Pickup only', 'Cash only', 'Must go by 2026-09-10', 'Can deliver'. Empty if none. Never invent one.";
 sem PostDraft.guessed = "Names of the fields above that you inferred rather than read directly from the message.";
 sem PostDraft.suggested_price = "For offers of items only: a fair secondhand price in US dollars for Ann Arbor students. None for requests, housing and services.";
 sem PostDraft.price_reason = "One short sentence explaining suggested_price. Empty if suggested_price is None.";

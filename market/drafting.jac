@@ -48,7 +48,9 @@ obj DraftCard {
         ai_generated: bool = True,
         language: str = "en",
         title_en: str = "",
-        description_en: str = "";
+        description_en: str = "",
+        constraints: list[str] = [],
+        about_market: bool = True;
 }
 
 """`language` is the detected (or, for non-AI cards, the poster's profile) language; `draft`
@@ -205,7 +207,13 @@ def normalize(d: PostDraft) -> DraftCard {
         guessed=guessed,
         missing=missing,
         suggested_price=suggested,
-        price_reason=d.price_reason.strip() if suggested is not None else ""
+        price_reason=d.price_reason.strip() if suggested is not None else "",
+        constraints=[
+            c.strip()[:60]
+            for c in d.constraints
+            if c.strip()
+        ][:5],
+        about_market=d.about_market
     );
 }
 
