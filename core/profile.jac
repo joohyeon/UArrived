@@ -67,13 +67,20 @@ def sync_mailbox(profile: Profile, commons: any = None) -> None {
 }
 
 """Set `profile`'s language to `lang` (already validated) and keep its Mailbox in step.
-`chosen` records an explicit choice, which a first-message default never overwrites."""
-def set_language(profile: Profile, lang: str, chosen: bool, commons: any = None) {
+`chosen` records an explicit choice, which a first-message default never overwrites. Nothing
+is written when neither the language nor the chosen flag changes; returns whether it synced."""
+def set_language(
+    profile: Profile, lang: str, chosen: bool, commons: any = None
+) -> bool {
+    if profile.preferred_language == lang and (profile.language_chosen or not chosen) {
+        return False;
+    }
     profile.preferred_language = lang;
     if chosen {
         profile.language_chosen = True;
     }
     sync_mailbox(profile, commons);
+    return True;
 }
 
 """Make `lang` the default language of `profile` (the caller's, if None) unless the student
@@ -84,7 +91,9 @@ def default_language_from(
 ) -> bool {
     code = lang.strip().lower();
     p = profile if profile is not None else my_profile();
-    if p.language_chosen or code not in PILOT_LANGUAGES {
+    if p.language_chosen
+        or code not in PILOT_LANGUAGES
+        or p.preferred_language == code {
         return False;
     }
     set_language(p, code, False, commons);
@@ -358,11 +367,10 @@ def:protect update_my_profile(changes: dict[str, any]) -> ProfileUpdateResult {
     if "email_notifications" in changes {
         p.email_notifications = changes["email_notifications"];
     }
-    if "email_notifications" in changes {
+    synced = "preferred_language" in text
+        and set_language(p, text["preferred_language"].lower(), True);
+    if "email_notifications" in changes and not synced {
         sync_mailbox(p);
-    }
-    if "preferred_language" in text {
-        set_language(p, text["preferred_language"].lower(), True);
     }
     return ProfileUpdateResult(ok=True, profile=view_of(p));
 }
