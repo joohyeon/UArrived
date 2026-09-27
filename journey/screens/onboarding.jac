@@ -259,9 +259,7 @@ def:pub Onboarding -> JsxElement {
                             onToggle={lambda { toggleTask(
                                 v.task.tid, v.status == "done"
                             ); }}
-                            reward={("+" + str(v.task.xp) + " XP")
-                                if v.task.required
-                                else ""}
+                            reward={("+" + str(v.task.xp) + " XP")}
                         /> for v in tasks
                     ]
                         if loaded
