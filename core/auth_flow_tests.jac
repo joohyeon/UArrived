@@ -97,3 +97,27 @@ test "without dev mode and without SMTP the server says email is not configured"
         client.close();
     }
 }
+
+test "a umich address is accepted at sign-up without an emailed link; others are refused" {
+    client = served();
+    try {
+        client.register_user("kat@umich.edu", "password123");
+        bad = call(
+            client,
+            "claim_umich_account",
+            {"email": "kat@gmail.com", "display_name": "Kat"}
+        );
+        assert not bad["ok"] and "umich.edu" in bad["error"];
+        assert not call(client, "my_verification", {})["verified"];
+        good = call(
+            client,
+            "claim_umich_account",
+            {"email": " Kat@UMich.edu ", "display_name": "Katty Wolverine"}
+        );
+        assert good["ok"] and good["email"] == "kat@umich.edu";
+        assert call(client, "my_verification", {})["verified"];
+        assert call(client, "get_my_profile", {})["display_name"] == "Katty Wolverine";
+    } finally {
+        client.close();
+    }
+}
