@@ -2,7 +2,8 @@
 
 The default theme, `campus`, comes from the UMadeIt Figma file
 (https://www.figma.com/design/jw2I3dqHMAnZGqKBvDlmyl/UArrived): stone neutrals, indigo action,
-Outfit headings over Manrope text. `harbor`, `arboretum` and `nightfall` are the earlier UMadeIt
+Outfit headings over Manrope text. `canvas` (warm off-white) and `coral` / `coral-ink` are the
+welcome pages' ground and accent. `harbor`, `arboretum` and `nightfall` are the earlier UMadeIt
 Design System artifact themes (https://claude.ai/artifact/JkrWSa8iv9NXiRKsj9s2Wh), kept as
 alternates. Every theme defines the same color names.
 """
@@ -37,7 +38,10 @@ glob DEFAULT_THEME: str = "campus",
              "border-strong": "#D6D3D1",
              "focus-ring": "#3730A3",
              "shadow": "rgba(0,0,0,.04)",
-             "scrim": "rgba(28,25,23,.48)"
+             "scrim": "rgba(28,25,23,.48)",
+             "canvas": "#FBF7F1",
+             "coral": "#F26B4F",
+             "coral-ink": "#B3361F"
          },
          "harbor": {
              "ground": "#F6F3EC",
@@ -67,7 +71,10 @@ glob DEFAULT_THEME: str = "campus",
              "border-strong": "rgba(27,36,48,.32)",
              "focus-ring": "#1F4E79",
              "shadow": "rgba(27,36,48,.06)",
-             "scrim": "rgba(27,36,48,.48)"
+             "scrim": "rgba(27,36,48,.48)",
+             "canvas": "#FAF6EE",
+             "coral": "#E8674E",
+             "coral-ink": "#A8321C"
          },
          "arboretum": {
              "ground": "#F3F1E7",
@@ -97,7 +104,10 @@ glob DEFAULT_THEME: str = "campus",
              "border-strong": "rgba(30,42,34,.32)",
              "focus-ring": "#2F5D46",
              "shadow": "rgba(30,42,34,.06)",
-             "scrim": "rgba(30,42,34,.48)"
+             "scrim": "rgba(30,42,34,.48)",
+             "canvas": "#F8F4EA",
+             "coral": "#E07A55",
+             "coral-ink": "#9A3F1F"
          },
          "nightfall": {
              "ground": "#10141C",
@@ -127,7 +137,10 @@ glob DEFAULT_THEME: str = "campus",
              "border-strong": "rgba(238,241,245,.28)",
              "focus-ring": "#8FB4E3",
              "shadow": "rgba(0,0,0,.4)",
-             "scrim": "rgba(0,0,0,.6)"
+             "scrim": "rgba(0,0,0,.6)",
+             "canvas": "#151A23",
+             "coral": "#FF8A6B",
+             "coral-ink": "#FFA58C"
          }
      },
      FONTS: dict[str, str] = {
@@ -252,7 +265,11 @@ test "reading text meets WCAG AA 4.5 to 1 in every theme" {
         ("on-urgent", "urgent"),
         ("warning", "card"),
         ("warning", "warning-bg"),
-        ("danger", "card")
+        ("danger", "card"),
+        ("text", "canvas"),
+        ("sub", "canvas"),
+        ("coral-ink", "canvas"),
+        ("coral-ink", "card")
     ];
     for theme in THEMES {
         for (fg, bg) in pairs {
