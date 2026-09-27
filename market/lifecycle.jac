@@ -4,7 +4,7 @@ Every write re-validates what the client sent: the draft card is editable, so no
 is trusted. Only the poster's calls may change a post (owner check here, plus Jac ownership).
 """
 
-import from core.clock { today_iso as clock_today }
+import from core.clock { today_iso as clock_today, now_iso }
 import from datetime { date, timedelta }
 import from core.auth { verified_profile }
 import from core.constants { ANN_ARBOR_AREAS }
@@ -17,6 +17,8 @@ import from market.graph {
     post_status,
     all_posts,
     visible_to,
+    availability,
+    limitations,
     suspended_roots
 }
 import from market.matching { run_matching }
@@ -26,7 +28,9 @@ glob ITEM_DAYS: int = 14,
      HOUSING_DAYS: int = 30,
      SERVICE_DAYS: int = 7,
      MAX_PRICE: float = 100000.0,
+     CLOSE_REASONS: list[str] = ["sold", "found", "withdrawn"],
      EDITABLE: list[str] = [
+         "constraints",
          "kind",
          "category",
          "title",
@@ -64,7 +68,12 @@ obj PostView {
         route_to: str,
         arrangement: str,
         ai_generated: bool,
-        expires_on: str;
+        expires_on: str,
+        availability: str = "active",
+        confirmed_on: str = "",
+        constraints: list[str] = [],
+        limitations: list[str] = [],
+        closed_reason: str = "";
 }
 
 obj PostResult {
@@ -102,6 +111,15 @@ def expiry_for(fields: dict[str, any], start: str) -> str {
 
 """The first reason `fields` is not a publishable post, or "". Normalizes `fields` in place."""
 def post_error(fields: dict[str, any], today: str = "") -> str {
+    limits = fields.get("constraints", []);
+    if not isinstance(limits, list) or not all([isinstance(c, str) for c in limits]) {
+        return "Conditions must be a list of short phrases.";
+    }
+    fields["constraints"] = [
+        c.strip()[:60]
+        for c in limits
+        if c.strip()
+    ][:5];
     for name in [
         "kind",
         "category",
@@ -182,12 +200,6 @@ def post_error(fields: dict[str, any], today: str = "") -> str {
         fields["route_from"] = "";
         fields["route_to"] = "";
     }
-    if fields["kind"] == "offer"
-        and fields["category"] != "service"
-        and price is None
-        and not free {
-        return "Add a price, or mark it free.";
-    }
     return "";
 }
 
@@ -212,7 +224,12 @@ def view_of(post: Post, today: str) -> PostView {
         route_to=post.route_to,
         arrangement=post.arrangement,
         ai_generated=post.ai_generated,
-        expires_on=post.expires_on
+        expires_on=post.expires_on,
+        availability=availability(post, today),
+        confirmed_on=post.confirmed_on,
+        constraints=post.constraints,
+        limitations=limitations(post, today),
+        closed_reason=post.closed_reason
     );
 }
 
@@ -231,6 +248,7 @@ def apply_fields(post: Post, fields: dict[str, any]) {
     post.route_from = fields["route_from"];
     post.route_to = fields["route_to"];
     post.arrangement = fields["arrangement"];
+    post.constraints = fields.get("constraints", []);
 }
 
 def fields_of(post: Post) -> dict[str, any] {
@@ -248,7 +266,8 @@ def fields_of(post: Post) -> dict[str, any] {
         "area": post.area,
         "route_from": post.route_from,
         "route_to": post.route_to,
-        "arrangement": post.arrangement
+        "arrangement": post.arrangement,
+        "constraints": post.constraints
     };
 }
 
@@ -294,6 +313,8 @@ def publish(
         title=clean["title"],
         ai_generated=ai_generated,
         published_on=today,
+        published_at=now_iso(),
+        confirmed_on=today,
         expires_on=expiry_for(clean, today)
     );
     apply_fields(post, clean);
@@ -326,6 +347,7 @@ def edit(post_id: str, changes: dict[str, any], today: str) -> PostResult {
     }
     apply_fields(post, merged);
     post.ai_generated = False;
+    post.confirmed_on = today;
     if not post.done {
         post.expires_on = expiry_for(merged, post.published_on or today);
     }
@@ -333,7 +355,7 @@ def edit(post_id: str, changes: dict[str, any], today: str) -> PostResult {
     return PostResult(ok=True, post=view_of(post, today));
 }
 
-def finish(post_id: str, today: str) -> PostResult {
+def finish(post_id: str, today: str, reason: str = "sold") -> PostResult {
     if verified_profile() is None {
         return PostResult(
             ok=False, error="Verify your UMich email to use the marketplace."
@@ -344,6 +366,7 @@ def finish(post_id: str, today: str) -> PostResult {
         return PostResult(ok=False, error="You can only change your own posts.");
     }
     post.done = True;
+    post.closed_reason = reason if reason in CLOSE_REASONS else "sold";
     return PostResult(ok=True, post=view_of(post, today));
 }
 
@@ -364,6 +387,7 @@ def renew(post_id: str, today: str) -> PostResult {
         );
     }
     post.published_on = today;
+    post.confirmed_on = today;
     post.expires_on = max(expiry_for(fields_of(post), today), plus_days(today, 1));
     run_matching(post, today);
     return PostResult(ok=True, post=view_of(post, today));
@@ -465,10 +489,8 @@ test "publishable fields are validated and normalized" {
         "price": 25
     };
     assert post_error(ok) == "" and ok["title"] == "Desk" and ok["price"] == 25.0;
-    assert "price"
-        in post_error(
-            {"kind": "offer", "category": "furniture", "title": "Desk"}
-        ).lower();
+    assert post_error({"kind": "offer", "category": "furniture", "title": "Desk"})
+        == "";
     assert post_error(
         {"kind": "offer", "category": "furniture", "title": "Desk", "free": True}
     )

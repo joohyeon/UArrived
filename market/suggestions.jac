@@ -33,7 +33,11 @@ def suggestion_status(
     if s.declined {
         return "declined";
     }
-    if a is None
+    if s.origin == "reply" {
+        if a is None or post_status(a, today) != "live" {
+            return "closed";
+        }
+    } elif a is None
         or b is None
         or post_status(a, today) != "live"
         or post_status(b, today) != "live" {
@@ -53,6 +57,9 @@ def my_suggestions(today: str) -> list[SuggestionView] {
             continue;
         }
         (a, b) = (posts.get(s.post_a), posts.get(s.post_b));
+        if s.origin == "reply" {
+            continue;
+        }
         status = suggestion_status(s, a, b, today);
         connected = s.accepted_a and s.accepted_b;
         if status in ["withdrawn", "declined"]

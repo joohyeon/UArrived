@@ -36,6 +36,7 @@ obj PostDraft {
         route_from: str = "",
         route_to: str = "",
         arrangement: str = "",
+        constraints: list[str] = [],
         guessed: list[str] = [],
         suggested_price: float | None = None,
         price_reason: str = "";
@@ -53,6 +54,7 @@ sem PostDraft.area = "Ann Arbor area as the student wrote it, for example 'north
 sem PostDraft.route_from = "For rides only: where the ride starts, for example 'DTW'. Empty otherwise.";
 sem PostDraft.route_to = "For rides only: where the ride ends, for example 'Ann Arbor'. Empty otherwise.";
 sem PostDraft.arrangement = "For housing only: one of 'roommate opening', 'sublet', 'lease assignment', 'new lease', or empty if the student did not say.";
+sem PostDraft.constraints = "Conditions the student stated, as short phrases, e.g. 'Pickup only', 'Cash only', 'Must go by 2026-09-10', 'Can deliver'. Empty if none. Never invent one.";
 sem PostDraft.guessed = "Names of the fields above that you inferred rather than read directly from the message.";
 sem PostDraft.suggested_price = "For offers of items only: a fair secondhand price in US dollars for Ann Arbor students. None for requests, housing and services.";
 sem PostDraft.price_reason = "One short sentence explaining suggested_price. Empty if suggested_price is None.";

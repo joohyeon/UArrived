@@ -35,7 +35,8 @@ obj DraftCard {
         missing: list[str],
         suggested_price: float | None,
         price_reason: str,
-        ai_generated: bool = True;
+        ai_generated: bool = True,
+        constraints: list[str] = [];
 }
 
 obj DraftResult {
@@ -168,7 +169,12 @@ def normalize(d: PostDraft) -> DraftCard {
         guessed=guessed,
         missing=missing,
         suggested_price=suggested,
-        price_reason=d.price_reason.strip() if suggested is not None else ""
+        price_reason=d.price_reason.strip() if suggested is not None else "",
+        constraints=[
+            c.strip()[:60]
+            for c in d.constraints
+            if c.strip()
+        ][:5]
     );
 }
 
