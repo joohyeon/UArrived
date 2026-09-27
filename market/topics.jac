@@ -47,7 +47,7 @@ import from market.drafting { make_draft }
 import from market.lifecycle { publish, view_of, own_post, finish, PostView }
 import from market.messages { blocking_question, fields_from, parse_answers, FollowUp }
 import from market.matching { place, money }
-import from market.items { standard_item }
+import from market.items { standard_item, category_for }
 
 glob MONTH_NAMES: list[str] = [
          "Jan",
@@ -417,7 +417,10 @@ def file_market(
     }
     card = drafted.draft;
     known = parse_answers(answers);
-    about = card.about_market if card.ai_generated else looks_like_market(text);
+    # Clear market words ("selling", "looking for", "$40") count even when the model says chat;
+    # a greeting it can't place is still caught below.
+    about = (card.about_market if card.ai_generated else False)
+        or looks_like_market(text);
     # In a group, a sentence whose kind and category are both guesses is chat, not a question;
     # a bare item name ("desk") still gets the question.
     unsure = card.ai_generated
@@ -448,9 +451,11 @@ def file_market(
                 "arrangement": ""
             }
         );
-        if x.category {
-            one["category"] = x.category;
-        }
+        # The AI sometimes leaves an extra's category empty; the item list knows a mattress is
+        # furniture even when the first item was a bike.
+        one["category"] = x.category
+            or category_for(x.item, x.title)
+            or one["category"];
         items.append(one);
     }
     if len(items) > 1 {

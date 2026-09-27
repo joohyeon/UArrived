@@ -1143,3 +1143,43 @@ test "one item that can't be filed doesn't stop the others, and only the sender 
         client.close();
     }
 }
+
+test "an extra item without a category files by its item, and clear market words beat the model's no" {
+    client = served();
+    try {
+        cohort = student(client, "kai@umich.edu");
+        ai_says([moving_sale([ExtraItem(title="Twin mattress", item="mattress")])]);
+        call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "selling bike $50 and a twin mattress"}
+        );
+        mattress = [
+            p
+            for p in call(client, "list_my_posts", {})
+            if p["title"] == "Twin mattress"
+        ][0];
+        assert mattress["category"] == "furniture" and mattress["item"] == "mattress";
+        ai_says(
+            [
+                PostDraft(
+                    about_market=False,
+                    kind=PostKind.REQUEST,
+                    category=Category.FURNITURE,
+                    title="Study table",
+                    description="I need a study table.",
+                    price=40.0,
+                    item="desk"
+                )
+            ]
+        );
+        asked = call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Looking for a study table, budget $40"}
+        );
+        assert asked["filed"];
+    } finally {
+        client.close();
+    }
+}

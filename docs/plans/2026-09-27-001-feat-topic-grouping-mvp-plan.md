@@ -1,7 +1,7 @@
 ---
 title: "feat: Topic grouping MVP — standard items, multi-item split, ride weeks, tidy list"
 type: feat
-status: active
+status: completed
 date: 2026-09-27
 origin: docs/brainstorms/2026-09-27-003-topic-grouping-mvp-requirements.md
 ---
