@@ -324,6 +324,25 @@ test "a translator outage still sends; the reader sees the original" {
     }
 }
 
+test "a provider timeout or dropped connection still sends; the reader sees the original" {
+    client = served();
+    try {
+        chat_id = chat_in(client, "ko", "en");
+        for err in [TimeoutError("slow"), ConnectionError("reset")] {
+            mock_translator([MockError(error=err)]);
+            assert call(
+                client, "send_message", {"chat_id": chat_id, "text": VIDEO_CALL}
+            )["ok"];
+        }
+        act_as(client, "jae@umich.edu");
+        seen = call(client, "read_chat", {"chat_id": chat_id})["messages"];
+        assert len(seen) == 2;
+        assert all([m["text"] == VIDEO_CALL and not m["ai_translated"] for m in seen]);
+    } finally {
+        client.close();
+    }
+}
+
 test "a language changed after connecting: messages use the languages recorded at connect" {
     client = served();
     try {

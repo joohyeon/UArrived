@@ -1,6 +1,8 @@
 """Served-app tests for the code-review fixes on U1-U11 (each named for the failure it prevents)."""
 
 import os;
+import ai.translate;
+import from jaclang.byllm.lib { MockLLM, MockError }
 import from jaclang.testing.testing { JacTestClient }
 import from market.testkit { served as served_app }
 
@@ -253,6 +255,29 @@ test "an impossible date is a validation error, not a server crash" {
             }
         );
         assert not result["ok"] and "YYYY-MM-DD" in result["error"];
+    } finally {
+        client.close();
+    }
+}
+
+test "a translation outage while publishing or editing leaves a consistent post" {
+    client = served();
+    try {
+        student(client, "jae@umich.edu");
+        ai.translate.translator = MockLLM(
+            outputs=[MockError(error=ConnectionError("reset"))]
+        );
+        post_id = publish(client, desk(25));
+        mine = call(client, "list_my_posts", {});
+        assert len(mine) == 1 and mine[0]["title"] == "Desk";
+        ai.translate.translator = MockLLM(
+            outputs=[MockError(error=TimeoutError("slow"))]
+        );
+        edited = call(
+            client, "edit_post", {"post_id": post_id, "changes": {"title": "Big desk"}}
+        );
+        assert edited["ok"] and edited["post"]["title"] == "Big desk";
+        assert len(call(client, "list_my_posts", {})) == 1;
     } finally {
         client.close();
     }

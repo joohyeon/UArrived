@@ -400,6 +400,16 @@ test "a first draft sets an unchosen profile language, never a chosen one (R29)"
     assert other.preferred_language == "en";
 }
 
+test "only the first draft can default the language; a later draft in another language leaves it" {
+    fresh = Profile();
+    mock([jiwoo_set()]);
+    drafted_all(JIWOO, fresh);
+    assert fresh.preferred_language == "ko";
+    mock([DraftSet(language="zh", drafts=jiwoo_set().drafts[:1])]);
+    drafted_all(JIWOO, fresh);
+    assert fresh.preferred_language == "ko" and not fresh.language_chosen;
+}
+
 test "with AI switched off, drafting over the served endpoint gives a manual card in the profile's language" {
     client = served();
     try {

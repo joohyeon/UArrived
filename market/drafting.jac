@@ -9,13 +9,18 @@ only these checks decide.
 
 import from core.clock { today_iso as clock_today }
 import from datetime { date }
-import from jaclang.byllm.lib { ByLLMError, OutputConversionError }
+import from jaclang.byllm.lib { OutputConversionError }
 import from ai.draft { draft_posts, drafter_ready, PostDraft, PostKind, Category }
 import from core.auth { verified_profile }
 import from core.constants { ANN_ARBOR_AREAS }
 import from core.profile { Profile, valid_date, valid_time, default_language_from }
 import from market.constants { ARRANGEMENTS }
-import from market.translation { digit_groups, language_code, profile_language }
+import from market.translation {
+    digit_groups,
+    language_code,
+    profile_language,
+    note_ai_failure
+}
 
 glob MAX_MESSAGE_CHARS: int = 1000,
      MAX_DRAFTS: int = 3;
@@ -297,7 +302,8 @@ def make_draft(
         raw = draft_posts(text, today);
     } except OutputConversionError {
         return unreadable;
-    } except ByLLMError {
+    } except Exception as err {
+        note_ai_failure("draft_posts", err);
         return manual;
     }
     if not raw.drafts {

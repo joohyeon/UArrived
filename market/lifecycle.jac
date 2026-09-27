@@ -307,14 +307,10 @@ def post_language(fields: dict[str, any], profile: Profile) -> str {
     );
 }
 
-"""Store `post`'s language and its title and description in every pilot language."""
-def store_texts(post: Post, language: str) {
-    post.language = language;
-    post.texts = translate_post_texts(post.title, post.description, language);
-}
 
 """Publish the reviewed draft `fields` as a live post, as of `today`. The reviewed native
-title and description are translated here; any English copy the client sends is ignored."""
+title and description are translated here, before the post exists, so no failure can leave a
+half-published post; any English copy the client sends is ignored."""
 def publish(
     fields: dict[str, any], today: str, ai_generated: bool = True
 ) -> PostResult {
@@ -338,6 +334,8 @@ def publish(
     if error {
         return PostResult(ok=False, error=error);
     }
+    language = post_language(fields, profile);
+    texts = translate_post_texts(clean["title"], clean["description"], language);
     post = root.shared ++> Post(
         owner_root=jid(root),
         poster_name=profile.display_name,
@@ -349,7 +347,8 @@ def publish(
         expires_on=expiry_for(clean, today)
     );
     apply_fields(post, clean);
-    store_texts(post, post_language(fields, profile));
+    post.language = language;
+    post.texts = texts;
     grant(post, level=AccessLevel.READ);
     share_with_moderators(post);
     run_matching(post, today);
@@ -381,9 +380,14 @@ def edit(post_id: str, changes: dict[str, any], today: str) -> PostResult {
     }
     text_changed = merged["title"] != post.title
         or merged["description"] != post.description;
+    language = post.language or profile_language(profile);
+    texts = translate_post_texts(merged["title"], merged["description"], language)
+        if text_changed
+        else post.texts;
     apply_fields(post, merged);
     if text_changed {
-        store_texts(post, post.language or profile_language(profile));
+        post.language = language;
+        post.texts = texts;
     }
     post.ai_generated = False;
     if not post.done {

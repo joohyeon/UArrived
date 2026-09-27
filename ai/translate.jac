@@ -8,7 +8,10 @@ with a deterministic number guard and falls back to the original text. The model
 import from jaclang.byllm.lib { Model }
 import from ai.models { model_ready }
 
-glob translator: any = Model(model_name="claude-haiku-4-5-20251001");
+glob translator: any = Model(
+         model_name="claude-haiku-4-5-20251001",
+         call_params={"timeout": 20.0, "num_retries": 1}
+     );
 
 """Whether a translation call can be made (see ai/models.jac `model_ready`)."""
 def translator_ready -> bool {

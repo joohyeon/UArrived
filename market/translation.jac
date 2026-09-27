@@ -1,14 +1,16 @@
 """The one place the marketplace translates text (R24, R26, R27).
 
-Every AI translation passes a deterministic number guard: each digit group in the source must
-appear in the translation. A failed guard, an unreadable reply or an AI outage all return the
-original text with `ok` false, so readers see what the student wrote, never a wrong number.
-No model is called when the translator is off or can't run (no API key), and a translator
-failure (ByLLMError) degrades to the original: no endpoint fails because the AI is down.
+Every AI translation passes a deterministic guard, in both directions: each digit group in the
+source must appear in the translation, and the translation must not add digit groups, URLs,
+emails or @handles the source didn't have. A failed guard, an unreadable reply or an AI outage
+all return the original text with `ok` false, so readers see what the student wrote, never a
+wrong number or an injected contact. No model is called when the translator is off or can't run
+(no API key), and any translator failure (provider timeout, 5xx, connection error, bad output)
+degrades to the original and is logged once by type: no endpoint fails because the AI is down.
 """
 
 import re;
-import from jaclang.byllm.lib { ByLLMError }
+import sys;
 import from ai.translate {
     translate,
     translate_post,
@@ -105,12 +107,42 @@ def digits_preserved(source: str, translated: str) -> bool {
     return digit_groups(source).issubset(digit_groups(translated));
 }
 
-"""Whether `translated` is an acceptable translation of `source`."""
+"""Whether `translated` adds no digit group the `source` lacks. A lone "0" is ignored so a
+translation may write minutes ("3:00 PM" for "오후 3시"). No AI."""
+def no_new_digits(source: str, translated: str) -> bool {
+    return (digit_groups(translated) - digit_groups(source) - {"0"}) == set();
+}
+
+glob CONTACT_PATTERN: str = r"https?://\S+|www\.\S+|[\w.+-]+@[\w-]+(?:\.[\w-]+)+|(?<![\w.@])@\w{2,}|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|co|edu|kr|cn|me|ly|app|xyz|info|us)\b";
+
+"""URLs, emails and @handles in `text`, lower-cased, without trailing punctuation."""
+def contact_tokens(text: str) -> set[str] {
+    return {
+        h.group(0).lower().rstrip(".,;:!?)]}'\"")
+        for h in re.finditer(CONTACT_PATTERN, text, re.IGNORECASE)
+    };
+}
+
+"""Whether `translated` introduces no URL, email or @handle absent from `source`. No AI."""
+def no_new_contacts(source: str, translated: str) -> bool {
+    return contact_tokens(translated).issubset(contact_tokens(source));
+}
+
+"""Whether `translated` is an acceptable translation of `source`: not empty, every source number
+kept, and no number, URL, email or @handle added."""
 def acceptable(source: str, translated: str) -> bool {
     if source.strip() and not translated.strip() {
         return False;
     }
-    return digits_preserved(source, translated);
+    return digits_preserved(source, translated)
+        and no_new_digits(source, translated)
+        and no_new_contacts(source, translated);
+}
+
+"""Log that an AI call failed, by exception type only (never the student's text or a key); the
+caller then falls back to the original."""
+def note_ai_failure(where: str, err: Exception) {
+    print(f"AI call failed in {where}: {type(err).__name__}", file=sys.stderr);
 }
 
 """`text` (in `source`) for a `target` reader. Same language or empty text is returned as-is
@@ -128,7 +160,8 @@ def translate_text(text: str, source: str, target: str) -> TranslatedText {
     }
     try {
         out = translate(text, src, tgt).text.strip();
-    } except ByLLMError {
+    } except Exception as err {
+        note_ai_failure("translate_text", err);
         return failed;
     }
     if not acceptable(text, out) {
@@ -154,7 +187,8 @@ def translate_texts(
     }
     try {
         got = translate_batch(texts, src, tgt).texts;
-    } except ByLLMError {
+    } except Exception as err {
+        note_ai_failure("translate_texts", err);
         return failed;
     }
     out: list[TranslatedText] = [];
@@ -195,7 +229,8 @@ def translate_post_texts(
     }
     try {
         got = translate_post(title, description, src, targets);
-    } except ByLLMError {
+    } except Exception as err {
+        note_ai_failure("translate_post_texts", err);
         return texts;
     }
     for item in got.items {

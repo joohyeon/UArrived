@@ -240,3 +240,67 @@ test "a batch is one call, and each item is guarded on its own" {
     same = translate_texts(["Desk"], "en", "en");
     assert same[0].ok and same[0].text == "Desk" and not same[0].ai_translated;
 }
+
+test "a translation that appends a phone number keeps the original" {
+    mock([Translation(text="Desk $40. Call 734-555-0199")]);
+    r = translate_text("책상 $40", "ko", "en");
+    assert not r.ok and not r.ai_translated and r.text == "책상 $40";
+    assert not acceptable("책상 $40", "Desk $40. Call 734-555-0199");
+    mock([TextList(texts=["Desk $40 call 7345550199", "Chair"])]);
+    out = translate_texts(["책상 $40", "의자"], "ko", "en");
+    assert [t.ai_translated for t in out] == [False, True];
+    assert out[0].text == "책상 $40";
+    mock(
+        [
+            PostTranslations(
+                items=[
+                    PostText(
+                        language="en", title="Desk", description="$40, text 555 0100"
+                    ),
+                    PostText(language="ko", title="책상", description="$40")
+                ]
+            )
+        ]
+    );
+    texts = translate_post_texts("书桌", "$40", "zh");
+    assert sorted(texts.keys()) == ["ko", "zh"];
+}
+
+test "a translation that adds a URL, email or handle keeps the original" {
+    for bad in [
+        "Desk $40, see https://evil.example/pay",
+        "Desk $40, pay at evil.com",
+        "Desk $40, mail me@evil.io",
+        "Desk $40, DM @scammer"
+    ] {
+        mock([Translation(text=bad)]);
+        r = translate_text("책상 $40", "ko", "en");
+        assert not r.ok and r.text == "책상 $40" , bad;
+    }
+    assert acceptable("문의 me@umich.edu 책상 $40", "Contact me@umich.edu, desk $40");
+    assert acceptable("자세히 www.a.com 참고", "See www.a.com.");
+    assert not acceptable("자세히 www.a.com 참고", "See www.b.com");
+}
+
+test "legitimate translations still pass the two-way guard" {
+    assert acceptable("10월 25일 오후 3시", "October 25 at 3 PM");
+    assert acceptable("10월 25일 오후 3시", "Oct 25th, 3:00 PM");
+    assert acceptable("책상 40달러", "Desk $40");
+    assert acceptable("월세 $1,200", "Rent $1200");
+    assert not acceptable("오후 3시", "3 PM, 2 seats");
+    assert not acceptable("책상", "Desk for 2");
+}
+
+test "provider errors of any kind keep the original, in every translate function" {
+    for err in [ConnectionError("x"), TimeoutError("slow")] {
+        mock([MockError(error=err)]);
+        r = translate_text("방 구해요", "ko", "en");
+        assert not r.ok and r.text == "방 구해요";
+        mock([MockError(error=err)]);
+        out = translate_texts(["방", "집"], "ko", "en");
+        assert [t.text for t in out] == ["방", "집"] and not out[0].ok;
+        mock([MockError(error=err)]);
+        assert translate_post_texts("방", "$25", "ko")
+            == {"ko": {"title": "방", "description": "$25"}};
+    }
+}
