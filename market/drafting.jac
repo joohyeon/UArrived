@@ -208,3 +208,62 @@ def:protect draft_from_message(message: str) -> DraftResult {
     }
     return make_draft(message, date.today().isoformat());
 }
+
+"""A non-AI ride-request draft from the DTW prompt (U9): DTW to Ann Arbor on `day`, from `time`
+for two hours. Invalid values are dropped; the student reviews everything before publishing."""
+def ride_card(day: str, time: str) -> DraftCard {
+    day = day if day and valid_date(day) else "";
+    start = time if time and valid_time(time) else "";
+    end = "";
+    if start {
+        (h, m) = (int(start.split(":")[0]), start.split(":")[1]);
+        end = f"{min(h + 2, 23):02d}:{m}";
+    }
+    return DraftCard(
+        kind="request",
+        category="service",
+        title="Ride from DTW to Ann Arbor",
+        description="Arriving at DTW and looking for students to share a ride to Ann Arbor.",
+        price=None,
+        free=False,
+        available_from=day,
+        available_until=day,
+        time_from=start,
+        time_to=end,
+        area="",
+        route_from="DTW",
+        route_to="Ann Arbor",
+        arrangement="",
+        guessed=[],
+        missing=[] if day else ["available_from"],
+        suggested_price=None,
+        price_reason="",
+        ai_generated=False
+    );
+}
+
+"""The pre-filled ride draft for compose's `?prefill=ride&date=&time=` link. Nothing is stored."""
+def:protect ride_prefill(day: str, time: str) -> DraftResult {
+    if verified_profile() is None {
+        return DraftResult(
+            ok=False, error="Verify your UMich email to use the marketplace."
+        );
+    }
+    return DraftResult(ok=True, draft=ride_card(day, time));
+}
+
+test "the ride prefill is a non-AI DTW request on the arrival day, two hours from the time" {
+    card = ride_card("2026-08-20", "15:00");
+    assert card.kind == "request" and card.category == "service";
+    assert card.route_from == "DTW" and card.route_to == "Ann Arbor";
+    assert card.available_from == card.available_until == "2026-08-20";
+    assert card.time_from == "15:00" and card.time_to == "17:00";
+    assert not card.ai_generated and card.missing == [];
+}
+
+test "bad prefill values are dropped, and a missing date is flagged" {
+    card = ride_card("tomorrow", "3pm");
+    assert card.available_from == "" and card.time_from == "" and card.time_to == "";
+    assert card.missing == ["available_from"];
+    assert ride_card("2026-08-20", "23:30").time_to == "23:30";
+}

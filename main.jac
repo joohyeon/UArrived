@@ -9,6 +9,8 @@ import from core.profile { get_my_profile, update_my_profile }
 import from market.drafting { draft_from_message }
 import from market.suggestions { list_my_suggestions, stop_suggestions }
 import from market.feed { for_you_feed, heartbeat }
+import from journey.prompts { my_journey_prompts }
+import from market.drafting { ride_prefill }
 import from market.notify { unread_suggestions, mark_suggestions_seen, email_sweep }
 import from market.connect { connect, decline, list_my_chats, read_chat, send_message }
 import from market.lifecycle {
@@ -29,6 +31,7 @@ import from market.screens.compose { Compose }
 import from market.screens.chats { ChatList, ChatScreen }
 import from market.screens.mine { MyPosts, ForYou }
 import from market.screens.common { current_path }
+import from journey.screens.today { Today }
 
 """Path-based routing; every market page also works as a direct link (e.g. from an email)."""
 def:pub app -> JsxElement {
@@ -36,8 +39,11 @@ def:pub app -> JsxElement {
     if path == "/ui" {
         return <Gallery/>;
     }
-    if path.startswith("/market") and not jacIsLoggedIn() {
+    if (path.startswith("/market") or path == "/today") and not jacIsLoggedIn() {
         return <Welcome/>;
+    }
+    if path == "/today" {
+        return <Today/>;
     }
     if path == "/market" {
         return <MatchesInbox/>;

@@ -9,7 +9,7 @@ import from ui.tokens { color, space }
 import from ui.components.base { AppShell, Button, Card, Badge, Field }
 import from core.constants { ANN_ARBOR_AREAS }
 import from market.screens.common { MarketTabs, query_param, go }
-import from market.drafting { draft_from_message, DraftResult, DraftCard }
+import from market.drafting { draft_from_message, ride_prefill, DraftResult, DraftCard }
 import from market.constants { ARRANGEMENTS }
 import from market.lifecycle { publish_post, PostResult }
 
@@ -66,9 +66,14 @@ def:pub Compose -> JsxElement {
 
     can with entry {
         message = query_param("text");
+        if query_param("prefill") == "ride" {
+            loadRide();
+        }
     }
 
     async def makeDraft(e: MouseEvent) -> None;
+    async def loadRide -> None;
+    def useDraft(result: DraftResult) -> None;
     async def publish(e: MouseEvent) -> None;
 
     def setField(name: str, value: any) {
@@ -285,6 +290,18 @@ impl Compose.makeDraft(e: MouseEvent) -> None {
     error = "";
     result = await draft_from_message(message);
     busy = False;
+    useDraft(result);
+}
+
+"""Open the pre-filled ride request from the journey's DTW prompt (U9). Nothing is posted yet."""
+impl Compose.loadRide -> None {
+    result: DraftResult | None = None;
+    result = await ride_prefill(query_param("date"), query_param("time"));
+    message = "Ride from DTW to Ann Arbor";
+    useDraft(result);
+}
+
+impl Compose.useDraft(result: DraftResult) -> None {
     if not result.ok or result.draft is None {
         error = result.error;
         return;
