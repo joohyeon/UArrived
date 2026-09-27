@@ -50,6 +50,18 @@ Badge kinds also include `action` (NEXT ESSENTIAL, "20 min") and `neutral`.
 | `Avatar(initials)` | "UM" |
 | `InfoCard(label, variant, children)` | `plain` info, `advice` (older students, amber) |
 | `TimelineItem(title, meta, duration, status)` | Landing plan stops (`done` / `next`) |
+| `Chip(label, selected, onSelect)` | Document chips (static) or filter chips (with `onSelect`, 44px, ✓ when selected) |
+| `SegmentedControl(options, value, onChange, label)` | Map / List switch |
+| `KeyValueRow(label, value)` | Address, Hours, Cost rows |
+| `LevelBadge(level)` | "LVL 2" |
+| `TopBar(back_href, back_label)` | Back link above a detail screen |
+
+## Map (`ui/components/map.jac`)
+
+| Component | Use |
+|---|---|
+| `MapCanvas(pins, center, bounds, start_zoom, height)` | Pannable OpenStreetMap view (drag, +/−, back to campus). Pins come pre-projected to Web Mercator world pixels at zoom 18 (`wx`, `wy`), so the client needs no map library or key |
+| `MapPin(label, href, state, left, top, count)` | A labelled link pin: `done` (green, ✓), `active` (indigo), `optional` (stone), `event` (indigo with a count) |
 
 ## Figma inventory (`ui/components/catalog.jac`)
 
