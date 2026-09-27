@@ -132,8 +132,7 @@ node Message {
         sent_at: str,
         language: str = "",
         translated_text: str = "",
-        translated_language: str = "",
-        ai_translated: bool = False;
+        translated_language: str = "";
 }
 
 def all_chats -> list[Chat] {

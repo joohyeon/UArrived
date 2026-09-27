@@ -21,8 +21,12 @@ import from market.graph {
 }
 import from market.matching { run_matching }
 import from core.profile { Profile, share_with_moderators }
-import from market.drafting { language_code, profile_language }
-import from market.translation { translate_post_texts, reader_language }
+import from market.translation {
+    translate_post_texts,
+    reader_of,
+    language_code,
+    profile_language
+}
 
 glob ITEM_DAYS: int = 14,
      HOUSING_DAYS: int = 30,
@@ -203,12 +207,6 @@ def post_error(fields: dict[str, any], today: str = "") -> str {
     return "";
 }
 
-"""The language a student reads posts in: their profile language if it is a pilot language,
-else English."""
-def reader_of(profile: Profile | None) -> str {
-    return reader_language(profile.preferred_language if profile is not None else None);
-}
-
 """The (title, description, language) a `reader` sees: the stored `reader` translation when
 there is one, else the original. An empty `reader` always gets the original."""
 def shown_text(post: Post, reader: str) -> tuple[str, str, str] {
@@ -220,14 +218,10 @@ def shown_text(post: Post, reader: str) -> tuple[str, str, str] {
 }
 
 """`post` as seen by a `reader` (a pilot language code, "" for the original). The poster always
-sees their own words unless `own_original` is false (Help me decide's English summary)."""
-def view_of(
-    post: Post, today: str, reader: str = "", own_original: bool = True
-) -> PostView {
+sees their own words."""
+def view_of(post: Post, today: str, reader: str = "") -> PostView {
     mine = post.owner_root == jid(root);
-    (title, description, shown) = shown_text(
-        post, "" if mine and own_original else reader
-    );
+    (title, description, shown) = shown_text(post, "" if mine else reader);
     translated = shown != post.language;
     return PostView(
         id=jid(post),

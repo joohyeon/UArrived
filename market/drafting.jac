@@ -7,35 +7,18 @@ rule about what a valid post looks like lives here, not in the prompt: the AI ca
 only these checks decide.
 """
 
-import re;
 import from core.clock { today_iso as clock_today }
 import from datetime { date }
 import from jaclang.byllm.lib { ByLLMError, OutputConversionError }
-import from ai.draft { draft_posts, PostDraft, PostKind, Category }
+import from ai.draft { draft_posts, drafter_ready, PostDraft, PostKind, Category }
 import from core.auth { verified_profile }
-import from core.constants { ANN_ARBOR_AREAS, DEFAULT_LANGUAGE }
+import from core.constants { ANN_ARBOR_AREAS }
 import from core.profile { Profile, valid_date, valid_time, default_language_from }
 import from market.constants { ARRANGEMENTS }
-import from market.translation { digit_groups }
+import from market.translation { digit_groups, language_code, profile_language }
 
 glob MAX_MESSAGE_CHARS: int = 1000,
      MAX_DRAFTS: int = 3;
-
-"""English month words, by month number, that let "Aug 20" support 2026-08-20."""
-glob MONTH_WORDS: dict[int, list[str]] = {
-         1: ["jan", "january"],
-         2: ["feb", "february"],
-         3: ["mar", "march"],
-         4: ["apr", "april"],
-         5: ["may"],
-         6: ["jun", "june"],
-         7: ["jul", "july"],
-         8: ["aug", "august"],
-         9: ["sep", "sept", "september"],
-         10: ["oct", "october"],
-         11: ["nov", "november"],
-         12: ["dec", "december"]
-     };
 
 """A draft ready for the poster to review. Plain fields so the client can edit every one."""
 obj DraftCard {
@@ -81,20 +64,6 @@ def drafted_result(
     return DraftResult(
         ok=True, notice=notice, draft=cards[0], drafts=cards, language=language
     );
-}
-
-"""A well-formed language code (2-3 letters, lower-cased), or `fallback`."""
-def language_code(value: str, fallback: str) -> str {
-    code = value.strip().lower();
-    return code if re.fullmatch(r"[a-z]{2,3}", code) else fallback;
-}
-
-"""The language for non-AI cards: the poster's profile language, else English."""
-def profile_language(profile: Profile | None) -> str {
-    if profile is None {
-        return DEFAULT_LANGUAGE;
-    }
-    return language_code(profile.preferred_language, DEFAULT_LANGUAGE);
 }
 
 """Tag `card` with `language`; an English card's English copy is its own text."""
@@ -240,24 +209,12 @@ def price_groups(price: float) -> set[str] {
     return digit_groups(f"{price:.0f}" if price == int(price) else f"{price}");
 }
 
-"""Whether `message` supports the YYYY-MM-DD `value`: its day number appears, and so does its
-month, as a number ("8월 20일", "8/20", "8月20日") or an English month word ("Aug 20"). The year
-is not required."""
-def date_supported(value: str, message: str, groups: set[str]) -> bool {
+"""Whether the message digit `groups` support the YYYY-MM-DD `value`: its day number appears,
+and so does its month, as a number ("8월 20일", "8/20", "8月20日") or an English month word
+("Aug 20", which `digit_groups` maps to its number). The year is not required."""
+def date_supported(value: str, groups: set[str]) -> bool {
     (month, day) = (int(value[5:7]), int(value[8:10]));
-    if str(day) not in groups {
-        return False;
-    }
-    if str(month) in groups {
-        return True;
-    }
-    lower = message.lower();
-    for word in MONTH_WORDS[month] {
-        if re.search(rf"\b{word}\b", lower) {
-            return True;
-        }
-    }
-    return False;
+    return str(day) in groups and str(month) in groups;
 }
 
 """Whether `message` supports the HH:MM `value`: its hour appears on the 24- or 12-hour clock
@@ -281,7 +238,7 @@ def check_key_facts(card: DraftCard, message: str) -> DraftCard {
     }
     for field in ["available_from", "available_until"] {
         value = getattr(card, field);
-        if value and not date_supported(value, message, groups) {
+        if value and not date_supported(value, groups) {
             unsupported.append(field);
         }
     }
@@ -328,16 +285,20 @@ def make_draft(
         error="Couldn't read that. Try adding what it is, a price or budget, and dates."
     );
     fallback = profile_language(profile);
+    manual = drafted_result(
+        [manual_card(text, fallback)],
+        fallback,
+        notice="AI drafting isn't available right now, so fill in the details yourself."
+    );
+    if not drafter_ready() {
+        return manual;
+    }
     try {
         raw = draft_posts(text, today);
     } except OutputConversionError {
         return unreadable;
     } except ByLLMError {
-        return drafted_result(
-            [manual_card(text, fallback)],
-            fallback,
-            notice="AI drafting isn't available right now, so fill in the details yourself."
-        );
+        return manual;
     }
     if not raw.drafts {
         return unreadable;
@@ -372,13 +333,11 @@ def ride_card(day: str, time: str) -> DraftCard {
         (h, m) = (int(start.split(":")[0]), start.split(":")[1]);
         end = f"{min(h + 2, 23):02d}:{m}";
     }
-    title = "Ride from DTW to Ann Arbor";
-    description = "Arriving at DTW and looking for students to share a ride to Ann Arbor.";
-    return DraftCard(
+    card = DraftCard(
         kind="request",
         category="service",
-        title=title,
-        description=description,
+        title="Ride from DTW to Ann Arbor",
+        description="Arriving at DTW and looking for students to share a ride to Ann Arbor.",
         price=None,
         free=False,
         available_from=day,
@@ -393,11 +352,9 @@ def ride_card(day: str, time: str) -> DraftCard {
         missing=[] if day else ["available_from"],
         suggested_price=None,
         price_reason="",
-        ai_generated=False,
-        language="en",
-        title_en=title,
-        description_en=description
+        ai_generated=False
     );
+    return in_language(card, "en");
 }
 
 """The pre-filled ride draft for compose's `?prefill=ride&date=&time=` link. Nothing is stored.

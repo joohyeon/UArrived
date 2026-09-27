@@ -1,22 +1,16 @@
 """Served-app tests for the post lifecycle (U4) and stored post translations (native-language
-U5): verified students on one server. The translator is always MockLLM or skipped (no API key);
-no test calls a real provider."""
+U5): verified students on one server. The translator is always MockLLM or off
+(market/testkit.jac); no test calls a real provider."""
 
 import os;
-import tempfile;
 import ai.translate;
 import from datetime { date, timedelta }
 import from jaclang.byllm.lib { MockLLM }
 import from jaclang.testing.testing { JacTestClient }
+import from market.testkit { served }
 import from ai.translate { PostText, PostTranslations }
 import from market.graph { Post }
 import from market.lifecycle { view_of }
-
-def served -> JacTestClient {
-    os.environ["UARRIVED_DEV_MODE"] = "1";
-    os.environ["ANTHROPIC_API_KEY"] = "";
-    return JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp());
-}
 
 """Make the next post translations return `outputs`, in order (one per translated post)."""
 def mock_translator(outputs: list[any]) -> MockLLM {

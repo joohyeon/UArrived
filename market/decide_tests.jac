@@ -1,13 +1,12 @@
 """Tests for Help me decide (U10). The model is always MockLLM."""
 
-import os;
-import tempfile;
 import ai.decide;
 import ai.translate;
 import from jaclang.byllm.lib { MockLLM, MockError, AuthenticationError }
 import from jaclang.testing.testing { JacTestClient }
+import from market.testkit { served }
 import from ai.decide { DecideNotes }
-import from ai.translate { PostText, PostTranslations, Translation }
+import from ai.translate { PostText, PostTranslations, TextList }
 import from market.graph { Post }
 import from market.decide {
     missing_info,
@@ -126,7 +125,7 @@ test "a ko reader sees the deposit-before-viewing flag and missing lease dates i
 }
 
 test "English notes stay as they are; failed translations fall back to English" {
-    ai.translate.translator = MockLLM(outputs=[Translation(text="방을 먼저 볼 수 있나요?")]);
+    ai.translate.translator = MockLLM(outputs=[TextList(texts=["방을 먼저 볼 수 있나요?", ""])]);
     assert notes_for(["Can I see the room first?"], "en")
         == ["Can I see the room first?"];
     assert notes_for(["Can I see the room first?", "Ask for the lease."], "ko")
@@ -194,8 +193,7 @@ def two_sublets(client: JacTestClient) -> list[str] {
 }
 
 test "comparing two posts gives facts, missing info, flags and filtered AI notes" {
-    os.environ["UARRIVED_DEV_MODE"] = "1";
-    os.environ["ANTHROPIC_API_KEY"] = "";
+    client = served();
     ai.decide.advisor = MockLLM(
         outputs=[
             DecideNotes(
@@ -210,7 +208,6 @@ test "comparing two posts gives facts, missing info, flags and filtered AI notes
             )
         ]
     );
-    client = JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp());
     try {
         ids = two_sublets(client);
         r = call(client, "help_me_decide", {"post_ids": ids});
@@ -231,12 +228,10 @@ test "comparing two posts gives facts, missing info, flags and filtered AI notes
 }
 
 test "when AI fails the facts and flags still show, without AI notes" {
-    os.environ["UARRIVED_DEV_MODE"] = "1";
-    os.environ["ANTHROPIC_API_KEY"] = "";
+    client = served();
     ai.decide.advisor = MockLLM(
         outputs=[MockError(error=AuthenticationError("no key"))]
     );
-    client = JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp());
     try {
         ids = two_sublets(client);
         r = call(client, "help_me_decide", {"post_ids": ids});
@@ -249,9 +244,7 @@ test "when AI fails the facts and flags still show, without AI notes" {
 }
 
 test "one post, four posts, or a closed post cannot be compared" {
-    os.environ["UARRIVED_DEV_MODE"] = "1";
-    os.environ["ANTHROPIC_API_KEY"] = "";
-    client = JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp());
+    client = served();
     try {
         ids = two_sublets(client);
         assert not call(client, "help_me_decide", {"post_ids": [ids[0]]})["ok"];
@@ -266,8 +259,7 @@ test "one post, four posts, or a closed post cannot be compared" {
 }
 
 test "help me decide shows a ko sublet in the reader's language and advises on its English" {
-    os.environ["UARRIVED_DEV_MODE"] = "1";
-    os.environ["ANTHROPIC_API_KEY"] = "";
+    client = served();
     ai.translate.translator = MockLLM(
         outputs=[
             PostTranslations(
@@ -287,7 +279,6 @@ test "help me decide shows a ko sublet in the reader's language and advises on i
         outputs=[DecideNotes(questions=["Can I see the room before paying?"])]
     );
     ai.decide.advisor = advisor;
-    client = JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp());
     try {
         student(client, "jae@umich.edu");
         ko_room = call(
@@ -332,14 +323,12 @@ test "help me decide shows a ko sublet in the reader's language and advises on i
 }
 
 test "a ko reader comparing two sublets gets Korean labels and notes, filtered first (AE11)" {
-    os.environ["UARRIVED_DEV_MODE"] = "1";
-    os.environ["ANTHROPIC_API_KEY"] = "";
+    client = served();
     translator = MockLLM(
         outputs=[
             PostTranslations(items=[]),
             PostTranslations(items=[]),
-            Translation(text="임대 기간은 언제 시작하고 끝나나요?"),
-            Translation(text="B 방은 되돌리기 어려운 송금을 요구해요.")
+            TextList(texts=["임대 기간은 언제 시작하고 끝나나요?", "B 방은 되돌리기 어려운 송금을 요구해요."])
         ]
     );
     ai.translate.translator = translator;
@@ -354,7 +343,6 @@ test "a ko reader comparing two sublets gets Korean labels and notes, filtered f
             )
         ]
     );
-    client = JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp());
     try {
         ids = two_sublets(client);
         assert call(

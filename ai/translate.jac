@@ -2,20 +2,17 @@
 
 Knows nothing about the graph or the marketplace; `market/translation.jac` checks every result
 with a deterministic number guard and falls back to the original text. The model is
-`translator`, a module glob so tests can swap in MockLLM.
+`translator`, a module glob so tests can swap in MockLLM, or None to switch translation off.
 """
 
-import os;
 import from jaclang.byllm.lib { Model }
+import from ai.models { model_ready }
 
 glob translator: any = Model(model_name="claude-haiku-4-5-20251001");
 
-"""Whether a translation call can succeed: false for the real (Anthropic) model when
-ANTHROPIC_API_KEY is unset, so callers skip it at once instead of paying a failed network call.
-A test double (MockLLM) is always ready."""
+"""Whether a translation call can be made (see ai/models.jac `model_ready`)."""
 def translator_ready -> bool {
-    return not isinstance(translator, Model)
-        or bool(os.environ.get("ANTHROPIC_API_KEY", "").strip());
+    return model_ready(translator);
 }
 
 obj Translation {
@@ -56,3 +53,16 @@ sem translate_post.targets = "Language codes to translate into; return one entry
 def translate_post(
     title: str, description: str, source: str, targets: list[str]
 ) -> PostTranslations by translator();
+
+obj TextList {
+    has texts: list[str] = [];
+}
+
+sem TextList.texts = "The translations, exactly one per input text, in the same order as the input.";
+
+sem translate_batch = "Translate each of several short texts faithfully, independently of the others. Keep every numeral as digits exactly as written (never spell numbers out or convert them), keep currency symbols, prices, times and dates exactly as written, keep proper nouns, place names and addresses unchanged, and do not add, remove or soften any information.";
+sem translate_batch.texts = "The texts to translate, in order.";
+sem translate_batch.source = "Language code of the texts, for example 'ko', 'zh', 'en'.";
+sem translate_batch.target = "Language code to translate into.";
+
+def translate_batch(texts: list[str], source: str, target: str) -> TextList by translator();

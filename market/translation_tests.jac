@@ -5,10 +5,13 @@ import os;
 import time;
 import ai.translate;
 import from jaclang.byllm.lib { MockLLM, MockError, AuthenticationError, Model }
-import from ai.translate { Translation, PostText, PostTranslations }
+import from ai.translate { Translation, PostText, PostTranslations, TextList }
+import from market.testkit { ai_off }
+import from ai.models { model_ready }
 import from market.translation {
     digits_preserved,
     translate_text,
+    translate_texts,
     translate_post_texts,
     reader_language
 }
@@ -172,9 +175,28 @@ test "reader language maps anything outside the pilot set to English" {
     assert reader_language(None) == "en";
 }
 
-test "with no API key the real model is skipped at once, keeping the original" {
-    saved = os.environ.get("ANTHROPIC_API_KEY", "");
-    os.environ["ANTHROPIC_API_KEY"] = "";
+test "the real model is ready only with an API key and AI not switched off" {
+    saved = (
+        os.environ.get("ANTHROPIC_API_KEY", ""),
+        os.environ.get("UARRIVED_AI_OFF", "")
+    );
+    real = Model(model_name="claude-haiku-4-5-20251001");
+    try {
+        os.environ["UARRIVED_AI_OFF"] = "";
+        os.environ["ANTHROPIC_API_KEY"] = "";
+        assert not model_ready(real);
+        os.environ["ANTHROPIC_API_KEY"] = "test-key";
+        assert model_ready(real);
+        os.environ["UARRIVED_AI_OFF"] = "1";
+        assert not model_ready(real);
+        assert not model_ready(None) and model_ready(MockLLM(outputs=[]));
+    } finally {
+        (os.environ["ANTHROPIC_API_KEY"], os.environ["UARRIVED_AI_OFF"]) = saved;
+    }
+}
+
+test "with the real model switched off, translation keeps the original at once" {
+    ai_off();
     ai.translate.translator = Model(model_name="claude-haiku-4-5-20251001");
     try {
         started = time.monotonic();
@@ -184,14 +206,24 @@ test "with no API key the real model is skipped at once, keeping the original" {
         assert not one.ok and one.text == "책상" and not one.ai_translated;
         assert time.monotonic() - started < 1.0;
     } finally {
-        os.environ["ANTHROPIC_API_KEY"] = saved;
-        ai.translate.translator = MockLLM(outputs=[]);
+        ai_off();
     }
 }
 
-test "any translator failure, not only ByLLMError, degrades to the original" {
-    ai.translate.translator = MockLLM(outputs=[]);
+test "a switched-off translator keeps the original without a call" {
+    ai_off();
     assert translate_post_texts("Desk", "$25", "en")
         == {"en": {"title": "Desk", "description": "$25"}};
     assert not translate_text("Desk", "en", "ko").ok;
+    assert [t.text for t in translate_texts(["Desk $25"], "en", "ko")] == ["Desk $25"];
+}
+
+test "a batch is one call, and each item is guarded on its own" {
+    fake = mock([TextList(texts=["책상 $25", "의자 $30", ""])]);
+    out = translate_texts(["Desk $25", "Chair $10", "Lamp"], "en", "ko");
+    assert [t.text for t in out] == ["책상 $25", "Chair $10", "Lamp"];
+    assert [t.ai_translated for t in out] == [True, False, False];
+    assert len(fake.sent("messages")) == 1;
+    same = translate_texts(["Desk"], "en", "en");
+    assert same[0].ok and same[0].text == "Desk" and not same[0].ai_translated;
 }

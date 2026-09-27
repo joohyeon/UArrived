@@ -10,5 +10,7 @@ in the UI and never feeds eligibility, prerequisites or requirement decisions. R
 | `decide.jac` | `advisor` | Help me decide notes from rule-built facts |
 | `translate.jac` | `translator` | text and post title/description translation, numerals kept as digits |
 
-Each model is a module glob so tests swap in `MockLLM`. Feature code calls these through its own
+Each model is a module glob so tests swap in `MockLLM`, or set it to None to switch that AI off
+(`market/testkit.jac` does this for every served test); `ai/models.jac` `model_ready` is the one
+availability check, also false for the real model without `ANTHROPIC_API_KEY`. Feature code calls these through its own
 wrapper (for example `market/translation.jac`, which adds the number guard and fallbacks).

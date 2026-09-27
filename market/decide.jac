@@ -13,12 +13,12 @@ import from core.clock { today_iso as clock_today }
 import re;
 import from datetime { date }
 import from jaclang.byllm.lib { ByLLMError }
-import from ai.decide { advise, DecideNotes }
+import from ai.decide { advise, advisor_ready, DecideNotes }
 import from core.auth { verified_profile }
 import from market.constants { MISSING_INFO_PHRASES, RISK_FLAG_PHRASES, phrase }
 import from market.graph { Post, post_status, all_posts, visible_to }
-import from market.translation { translate_text }
-import from market.lifecycle { PostView, view_of, reader_of }
+import from market.lifecycle { PostView, view_of }
+import from market.translation { reader_of, translate_texts }
 
 glob MIN_COMPARE: int = 2,
      MAX_COMPARE: int = 3,
@@ -159,34 +159,43 @@ def clean_notes(lines: list[str]) -> list[str] {
     return out;
 }
 
-"""Already-filtered English AI notes for a `reader`: translated when the reader isn't English,
-each note falling back to its English text if its translation fails."""
+"""Already-filtered English AI notes for a `reader`, translated in one call when the reader isn't
+English; each note keeps its English text if its own translation fails."""
 def notes_for(notes: list[str], reader: str) -> list[str] {
-    if not reader or reader == "en" {
+    if not reader or reader == "en" or not notes {
         return notes;
     }
-    return [translate_text(n, "en", reader).text for n in notes];
+    return [t.text for t in translate_texts(notes, "en", reader)];
 }
 
-def summary_of(items: list[Compared]) -> str {
+"""The advisor's input: each post's facts, its English words (the stored English copy, else the
+original) and its missing info and flags rendered in English from `items`' codes."""
+def summary_of(posts: list[Post], items: list[Compared]) -> str {
     parts: list[str] = [];
     for (i, c) in enumerate(items) {
-        p = c.post;
+        p = posts[i];
+        english = p.texts.get("en") or {"title": p.title, "description": p.description};
+        missing = [
+            phrase(MISSING_INFO_PHRASES, code, "en") for code in c.missing_codes
+        ];
+        flags = [phrase(RISK_FLAG_PHRASES, code, "en") for code in c.flag_codes];
         parts.append(
-            f"Post {i + 1}: {p.title} ({p.kind}, {p.category}); price {p.price}; free {p.free}; "
+            f"Post {i + 1}: {english.get('title', '')} ({p.kind}, {p.category}); price {p.price}; free {p.free}; "
                 + f"dates {p.available_from}..{p.available_until}; area {p.area}; arrangement {p.arrangement}; "
-                + f"poster's words: {p.description!r}; missing: {', '.join(c.missing)
+                + f"poster's words: {english.get('description', '')!r}; missing: {', '.join(
+                    missing
+                )
                     or 'nothing'}; "
-                + f"flags: {'; '.join(c.flags) or 'none'}"
+                + f"flags: {'; '.join(flags) or 'none'}"
         );
     }
     return "\n".join(parts);
 }
 
 """Compare the posts with these ids, as of `today`, shown in the `reader` language. Only posts
-the caller can see count. The advisor always gets the English copy and English flags (the
-banned-claim filter is English); the reader gets missing info and flags from the phrase tables
-and the filtered notes translated."""
+the caller can see count. Missing info and flags are computed once per post as codes; the reader
+gets them from the phrase tables, and the advisor gets the English copy and English phrases (the
+banned-claim filter is English). The filtered notes are then translated for the reader."""
 def compare(post_ids: list[str], today: str, reader: str = "") -> DecideResult {
     wanted = list(dict.fromkeys(post_ids));
     if len(wanted) < MIN_COMPARE {
@@ -195,48 +204,49 @@ def compare(post_ids: list[str], today: str, reader: str = "") -> DecideResult {
     if len(wanted) > MAX_COMPARE {
         return DecideResult(ok=False, error="Compare up to three posts at a time.");
     }
-    posts: dict[str, Post] = {jid(p): p for p in visible_to(all_posts(), jid(root))};
+    visible: dict[str, Post] = {jid(p): p for p in visible_to(all_posts(), jid(root))};
+    posts: list[Post] = [];
     items: list[Compared] = [];
-    for_advisor: list[Compared] = [];
     for pid in wanted {
-        p = posts.get(pid);
+        p = visible.get(pid);
         if p is None or post_status(p, today) != "live" {
             return DecideResult(
                 ok=False, error="One of those posts isn't available any more."
             );
         }
         (missing, flags) = (missing_codes(p), risk_codes(p));
+        posts.append(p);
         items.append(
             Compared(
                 post=view_of(p, today, reader),
-                missing=missing_info(p, reader),
-                flags=risk_flags(p, reader),
+                missing=[phrase(MISSING_INFO_PHRASES, c, reader) for c in missing],
+                flags=[phrase(RISK_FLAG_PHRASES, c, reader) for c in flags],
                 missing_codes=missing,
                 flag_codes=flags
             )
         );
-        for_advisor.append(
-            Compared(
-                post=view_of(p, today, "en", own_original=False),
-                missing=missing_info(p),
-                flags=risk_flags(p)
-            )
-        );
+    }
+    no_notes = DecideResult(
+        ok=True,
+        posts=items,
+        ai_note="AI notes aren't available right now; the facts and flags above still apply."
+    );
+    if not advisor_ready() {
+        return no_notes;
     }
     try {
-        notes = advise(summary_of(for_advisor));
+        notes = advise(summary_of(posts, items));
     } except ByLLMError {
-        return DecideResult(
-            ok=True,
-            posts=items,
-            ai_note="AI notes aren't available right now; the facts and flags above still apply."
-        );
+        return no_notes;
     }
+    questions = clean_notes(notes.questions)[:5];
+    risk_notes = clean_notes(notes.risk_notes)[:3];
+    shown = notes_for(questions + risk_notes, reader);
     return DecideResult(
         ok=True,
         posts=items,
-        questions=notes_for(clean_notes(notes.questions)[:5], reader),
-        risk_notes=notes_for(clean_notes(notes.risk_notes)[:3], reader),
+        questions=shown[:len(questions)],
+        risk_notes=shown[len(questions):],
         ai_generated=True
     );
 }

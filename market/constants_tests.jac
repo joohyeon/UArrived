@@ -11,6 +11,7 @@ import from market.constants {
     RISK_FLAG_PHRASES,
     MISSING_INFO_PHRASES,
     labels_for,
+    localized,
     phrase
 }
 
@@ -124,4 +125,7 @@ test "a language outside the pilot set gets English labels and phrases" {
     assert labels_for("ko") == LABELS["ko"];
     assert phrase(REASON_PHRASES, "dates_overlap", "fr") == "Dates overlap";
     assert phrase(REASON_PHRASES, "no_such_code", "ko") == "";
+    assert localized(CATEGORY_NAMES, "housing", "ko") == "주거";
+    assert localized(CATEGORY_NAMES, "housing", "fr") == "Housing";
+    assert localized(ARRANGEMENT_NAMES, "a tent", "ko") == "a tent";
 }

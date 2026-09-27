@@ -21,7 +21,7 @@ import from uuid { UUID }
 import from jaclang { JacRuntime as Jac }
 import from jaclang.server.identity.app_tokens { token_consume }
 import from core.auth { verified_profile }
-import from core.profile { my_profile }
+import from core.profile { Profile }
 import from market.graph {
     Post,
     Suggestion,
@@ -33,7 +33,7 @@ import from market.graph {
 }
 import from market.matching { CHAT_OPEN_PURPOSE }
 import from market.suggestions { suggestion_status }
-import from market.translation { TranslatedText, translate_text, reader_language }
+import from market.translation { TranslatedText, translate_text, reader_of }
 
 glob MAX_MESSAGE_CHARS: int = 2000;
 
@@ -45,14 +45,16 @@ obj ConnectResult {
 }
 
 """A message for one reader. `text` is in `language`; when it is an AI translation,
-`ai_translated` is true and `original` holds the author's words (else `original` is empty)."""
+`ai_translated` is true and `original` holds the author's words in `original_language` (else
+both are empty)."""
 obj MessageView {
     has mine: bool,
         text: str,
         sent_at: str,
         language: str = "",
         ai_translated: bool = False,
-        original: str = "";
+        original: str = "",
+        original_language: str = "";
 }
 
 obj ChatView {
@@ -64,11 +66,14 @@ obj ChatView {
         last_at: str;
 }
 
+"""One chat for the caller. `language` is the caller's reader language, for the screen's own
+labels."""
 obj ChatThread {
     has ok: bool,
         error: str = "",
         chat: ChatView | None = None,
-        messages: list[MessageView] = [];
+        messages: list[MessageView] = [],
+        language: str = "en";
 }
 
 obj SendResult {
@@ -126,8 +131,9 @@ def ensure_chat(s: Suggestion) -> Chat | None {
     return chat;
 }
 
-"""Accept the caller's side of a suggestion; opens the chat once both sides have accepted."""
-def connect_to(suggestion_id: str) -> ConnectResult {
+"""Accept the caller's side of a suggestion for `profile` (the caller's, already verified);
+opens the chat once both sides have accepted."""
+def connect_to(suggestion_id: str, profile: Profile) -> ConnectResult {
     s = my_suggestion(suggestion_id);
     if s is None {
         return ConnectResult(ok=False, error="That suggestion isn't available.");
@@ -141,7 +147,7 @@ def connect_to(suggestion_id: str) -> ConnectResult {
             ok=False, error="That suggestion isn't available any more."
         );
     }
-    language = reader_language(my_profile().preferred_language);
+    language = reader_of(profile);
     if jid(root) == s.root_a {
         s.accepted_a = True;
         s.seen_a = True;
@@ -173,14 +179,15 @@ def decline_suggestion(suggestion_id: str) -> bool {
 translation (with the original) when there is one, else the original."""
 def message_view(m: Message, me: str) -> MessageView {
     mine = m.author_root == me;
-    if not mine and m.ai_translated and m.translated_text {
+    if not mine and m.translated_text {
         return MessageView(
             mine=False,
             text=m.translated_text,
             sent_at=m.sent_at,
             language=m.translated_language,
             ai_translated=True,
-            original=m.text
+            original=m.text,
+            original_language=m.language
         );
     }
     return MessageView(mine=mine, text=m.text, sent_at=m.sent_at, language=m.language);
@@ -260,7 +267,7 @@ def my_chat(chat_id: str) -> tuple[Chat, Suggestion] | None {
     return None;
 }
 
-def read_thread(chat_id: str) -> ChatThread {
+def read_thread(chat_id: str, profile: Profile) -> ChatThread {
     found = my_chat(chat_id);
     if found is None {
         return ChatThread(ok=False, error="That chat isn't available.");
@@ -270,11 +277,13 @@ def read_thread(chat_id: str) -> ChatThread {
     return ChatThread(
         ok=True,
         chat=chat_view(c, s, posts_by_id()),
-        messages=[message_view(m, me) for m in sorted_messages(c)]
+        messages=[message_view(m, me) for m in sorted_messages(c)],
+        language=reader_of(profile)
     );
 }
 
-def send(chat_id: str, text: str) -> SendResult {
+"""Send `text` to the caller's chat as `profile` (the caller's, already verified)."""
+def send(chat_id: str, text: str, profile: Profile) -> SendResult {
     found = my_chat(chat_id);
     if found is None {
         return SendResult(ok=False, error="That chat isn't available.");
@@ -295,7 +304,7 @@ def send(chat_id: str, text: str) -> SendResult {
         return SendResult(ok=False, error="This post is closed.");
     }
     (mine, other_language) = side_languages(s);
-    mine = mine or reader_language(my_profile().preferred_language);
+    mine = mine or reader_of(profile);
     translated = translation_for(body, mine, other_language);
     msg = c ++> Message(
         author_root=jid(root),
@@ -303,8 +312,7 @@ def send(chat_id: str, text: str) -> SendResult {
         sent_at=now_iso(),
         language=mine,
         translated_text=translated.text if translated is not None else "",
-        translated_language=translated.language if translated is not None else "",
-        ai_translated=translated is not None
+        translated_language=translated.language if translated is not None else ""
     );
     other = s.root_b if jid(root) == s.root_a else s.root_a;
     Jac.allow_root(msg, UUID(other), AccessLevel.READ);  # jac:ignore[E1053]
@@ -312,12 +320,13 @@ def send(chat_id: str, text: str) -> SendResult {
 }
 
 def:protect connect(suggestion_id: str) -> ConnectResult {
-    if verified_profile() is None {
+    profile = verified_profile();
+    if profile is None {
         return ConnectResult(
             ok=False, error="Verify your UMich email to use the marketplace."
         );
     }
-    return connect_to(suggestion_id);
+    return connect_to(suggestion_id, profile);
 }
 
 def:protect decline(suggestion_id: str) -> bool {
@@ -332,19 +341,21 @@ def:protect list_my_chats -> list[ChatView] {
 }
 
 def:protect read_chat(chat_id: str) -> ChatThread {
-    if verified_profile() is None {
+    profile = verified_profile();
+    if profile is None {
         return ChatThread(
             ok=False, error="Verify your UMich email to use the marketplace."
         );
     }
-    return read_thread(chat_id);
+    return read_thread(chat_id, profile);
 }
 
 def:protect send_message(chat_id: str, text: str) -> SendResult {
-    if verified_profile() is None {
+    profile = verified_profile();
+    if profile is None {
         return SendResult(
             ok=False, error="Verify your UMich email to use the marketplace."
         );
     }
-    return send(chat_id, text);
+    return send(chat_id, text, profile);
 }

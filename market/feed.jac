@@ -8,7 +8,8 @@ import from datetime { date, datetime, timezone }
 import from core.auth { verified_profile }
 import from core.profile { my_profile }
 import from market.graph { Post, post_status, all_posts, visible_to }
-import from market.lifecycle { PostView, view_of, reader_of }
+import from market.lifecycle { PostView, view_of }
+import from market.translation { reader_of }
 import from market.matching { match_pair }
 
 """Other students' live posts, best fit to `mine` first, then newest."""

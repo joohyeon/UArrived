@@ -3,13 +3,20 @@
 Every AI translation passes a deterministic number guard: each digit group in the source must
 appear in the translation. A failed guard, an unreadable reply or an AI outage all return the
 original text with `ok` false, so readers see what the student wrote, never a wrong number.
-No model is called when the translator can't run (no API key), and any translator failure
-(ByLLMError or otherwise) degrades to the original: no endpoint fails because the AI is down.
+No model is called when the translator is off or can't run (no API key), and a translator
+failure (ByLLMError) degrades to the original: no endpoint fails because the AI is down.
 """
 
 import re;
-import from ai.translate { translate, translate_post, translator_ready }
+import from jaclang.byllm.lib { ByLLMError }
+import from ai.translate {
+    translate,
+    translate_post,
+    translate_batch,
+    translator_ready
+}
 import from core.constants { PILOT_LANGUAGES, DEFAULT_LANGUAGE }
+import from core.profile { Profile }
 
 """A text for one reader. `ai_translated` is true only when `text` is an AI translation;
 `language` is the language `text` is written in."""
@@ -26,45 +33,54 @@ def reader_language(lang: str | None) -> str {
     return code if code in PILOT_LANGUAGES else DEFAULT_LANGUAGE;
 }
 
-glob MONTHS: list[str] = [
-         "jan",
-         "feb",
-         "mar",
-         "apr",
-         "may",
-         "jun",
-         "jul",
-         "aug",
-         "sep",
-         "oct",
-         "nov",
-         "dec"
-     ],
-     MONTH_WORDS: set[str] = {
-         "jan",
-         "january",
-         "feb",
-         "february",
-         "mar",
-         "march",
-         "apr",
-         "april",
-         "may",
-         "jun",
-         "june",
-         "jul",
-         "july",
-         "aug",
-         "august",
-         "sep",
-         "sept",
-         "september",
-         "oct",
-         "october",
-         "nov",
-         "november",
-         "dec",
-         "december"
+"""The language a student reads posts in: their profile language if it is a pilot language,
+else English."""
+def reader_of(profile: Profile | None) -> str {
+    return reader_language(profile.preferred_language if profile is not None else None);
+}
+
+"""A well-formed language code (2-3 letters, lower-cased), or `fallback`."""
+def language_code(value: str, fallback: str) -> str {
+    code = value.strip().lower();
+    return code if re.fullmatch(r"[a-z]{2,3}", code) else fallback;
+}
+
+"""The language a student writes in (non-AI draft cards, posts without a draft language): their
+profile language if well-formed, else English."""
+def profile_language(profile: Profile | None) -> str {
+    if profile is None {
+        return DEFAULT_LANGUAGE;
+    }
+    return language_code(profile.preferred_language, DEFAULT_LANGUAGE);
+}
+
+"""English month words, by month number: an English month name counts as its number in
+`digit_groups`, so a date written "Aug 20" matches "8월 20일"."""
+glob MONTH_NUMBERS: dict[str, int] = {
+         "jan": 1,
+         "january": 1,
+         "feb": 2,
+         "february": 2,
+         "mar": 3,
+         "march": 3,
+         "apr": 4,
+         "april": 4,
+         "may": 5,
+         "jun": 6,
+         "june": 6,
+         "jul": 7,
+         "july": 7,
+         "aug": 8,
+         "august": 8,
+         "sep": 9,
+         "sept": 9,
+         "september": 9,
+         "oct": 10,
+         "october": 10,
+         "nov": 11,
+         "november": 11,
+         "dec": 12,
+         "december": 12
      };
 
 """Digit groups in `text` as plain numbers: thousands commas are dropped ("1,200" -> "1200"),
@@ -74,9 +90,9 @@ def digit_groups(text: str) -> set[str] {
     joined = re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", text);
     groups = {str(int(g)) for g in re.findall(r"\d+", joined)};
     for word in re.findall(r"[A-Za-z]+", text) {
-        w = word.lower();
-        if w in MONTH_WORDS {
-            groups.add(str(MONTHS.index(w[:3]) + 1));
+        month = MONTH_NUMBERS.get(word.lower());
+        if month is not None {
+            groups.add(str(month));
         }
     }
     return groups;
@@ -110,13 +126,49 @@ def translate_text(text: str, source: str, target: str) -> TranslatedText {
     }
     try {
         out = translate(text, src, tgt).text.strip();
-    } except Exception {
+    } except ByLLMError {
         return failed;
     }
     if not acceptable(text, out) {
         return failed;
     }
     return TranslatedText(text=out, ok=True, ai_translated=True, language=tgt);
+}
+
+"""Several `texts` (in `source`) for a `target` reader, in one model call. Each item is guarded
+on its own, exactly like `translate_text`: an item whose translation is missing, empty or fails
+the number guard keeps its original text with `ok` false."""
+def translate_texts(
+    texts: list[str], source: str, target: str
+) -> list[TranslatedText] {
+    src = source.strip().lower();
+    tgt = target.strip().lower();
+    if src == tgt or all([t.strip() == "" for t in texts]) {
+        return [TranslatedText(text=t, ok=True, language=src) for t in texts];
+    }
+    failed = [TranslatedText(text=t, ok=t.strip() == "", language=src) for t in texts];
+    if not translator_ready() {
+        return failed;
+    }
+    try {
+        got = translate_batch(texts, src, tgt).texts;
+    } except ByLLMError {
+        return failed;
+    }
+    out: list[TranslatedText] = [];
+    for (i, text) in enumerate(texts) {
+        candidate = got[i].strip() if i < len(got) else "";
+        if text.strip() and acceptable(text, candidate) {
+            out.append(
+                TranslatedText(
+                    text=candidate, ok=True, ai_translated=True, language=tgt
+                )
+            );
+        } else {
+            out.append(failed[i]);
+        }
+    }
+    return out;
 }
 
 """A post's title and description in every pilot language: language -> {"title",
@@ -141,7 +193,7 @@ def translate_post_texts(
     }
     try {
         got = translate_post(title, description, src, targets);
-    } except Exception {
+    } except ByLLMError {
         return texts;
     }
     for item in got.items {

@@ -4,7 +4,14 @@ message. Closed chats are read-only."""
 
 import from ui.tokens { color, space }
 import from ui.components.base { AppShell, Button, Card, Badge, Field }
-import from market.screens.common { MarketTabs, query_param, go, ReportBox, ui_labels }
+import from market.screens.common {
+    MarketTabs,
+    query_param,
+    go,
+    ReportBox,
+    TranslatedNote
+}
+import from market.constants { labels_for }
 import from market.moderation { report_chat, block_in_chat }
 import from market.connect {
     list_my_chats,
@@ -16,7 +23,6 @@ import from market.connect {
     SendResult
 }
 import from market.feed { heartbeat }
-import from core.profile { get_my_profile, ProfileView }
 
 glob THREAD_POLL_MS: int = 4000;
 
@@ -79,12 +85,9 @@ impl ChatList.load -> None {
 }
 
 """One chat bubble. A message shown in the reader's language by AI translation carries the
-AI-translated label and a See original toggle (local state only); `lang` is set to the language
+AI-translated label and a See original toggle (TranslatedNote); `lang` is set to the language
 actually shown."""
 def:pub MessageBubble(m: MessageView) -> JsxElement {
-    has show_original: bool = False;
-
-    L = ui_labels(m.language);
     <div
         style={{
             "alignSelf": "flex-end" if m.mine else "flex-start",
@@ -100,36 +103,12 @@ def:pub MessageBubble(m: MessageView) -> JsxElement {
         }}
     >
         <span lang={m.language or None}>{m.text}</span>
-        {(
-            <div
-                style={{
-                    "display": "flex",
-                    "gap": space("2"),
-                    "alignItems": "center",
-                    "flexWrap": "wrap"
-                }}
-            >
-                <Badge kind="ai" label={L["ai_translated"]}/>
-                <Button
-                    label={L["hide_original"] if show_original else L["see_original"]}
-                    variant="text"
-                    onClick={lambda (e: MouseEvent) { show_original = not show_original; }}
-                />
-            </div>
-        )
+        {<TranslatedNote
+            lang={m.language}
+            source_language={m.original_language}
+            text={m.original}
+        />
             if m.ai_translated
-            else None}
-        {(
-            <span
-                style={{
-                    "paddingLeft": space("2"),
-                    "borderLeft": "3px solid " + color("border-strong")
-                }}
-            >
-                {m.original}
-            </span>
-        )
-            if m.ai_translated and show_original
             else None}
     </div>
 }
@@ -139,18 +118,14 @@ def:pub ChatScreen -> JsxElement {
         thread: ChatThread | None = None,
         draft: str = "",
         error: str = "",
-        sending: bool = False,
-        lang: str = "en";
+        sending: bool = False;
 
     async def load -> None;
     async def sendIt(e: MouseEvent) -> None;
     async def blockThem -> None;
 
-    async def loadLanguage -> None;
-
     can with entry {
         chat_id = query_param("id");
-        loadLanguage();
         load();
         timer = setInterval(lambda { load(); }, THREAD_POLL_MS);  # jac:ignore[W2001]
         return lambda { clearInterval(timer); };  # jac:ignore[W2001]
@@ -187,7 +162,9 @@ def:pub ChatScreen -> JsxElement {
                     onChange={lambda (v: str) { draft = v; }}
                 />
                 <Button
-                    label={ui_labels(lang)["translating"] if sending else "Send"}
+                    label={labels_for(thread.language)["translating"]
+                        if sending
+                        else "Send"}
                     disabled={sending or not draft.strip()}
                     onClick={sendIt}
                 />
@@ -232,13 +209,6 @@ impl ChatScreen.load -> None {
     await heartbeat();
     fresh = await read_chat(chat_id);
     thread = fresh;
-}
-
-"""The reader's language, for the Send button's "Translating…" label."""
-impl ChatScreen.loadLanguage -> None {
-    me: ProfileView | None = None;
-    me = await get_my_profile();
-    lang = me.preferred_language or "en";
 }
 
 """Send the draft. The button shows "Translating…" and stays disabled until the server answers,

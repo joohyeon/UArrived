@@ -9,7 +9,8 @@ import from datetime { date }
 import from core.auth { verified_profile }
 import from market.constants { reasons_for }
 import from market.graph { Post, Suggestion, post_status, all_posts, all_suggestions }
-import from market.lifecycle { PostView, view_of, own_post, reader_of }
+import from market.lifecycle { PostView, view_of, own_post }
+import from market.translation { reader_of }
 import from market.matching { withdraw_pending }
 
 """A suggestion as one of its two students sees it."""

@@ -1,10 +1,8 @@
 """Tests for AI drafting (U3). The model is always MockLLM; no test calls a real provider."""
 
-import os;
-import tempfile;
 import ai.draft;
 import from jaclang.byllm.lib { MockLLM, MockError, AuthenticationError }
-import from jaclang.testing.testing { JacTestClient }
+import from market.testkit { served }
 import from ai.draft { PostDraft, PostKind, Category, DraftSet }
 import from core.profile { Profile }
 import from market.drafting {
@@ -364,15 +362,11 @@ test "a price, date or time missing from the message is marked guessed (R24)" {
 
 test "dates and times are checked by their numbers, not their spelling" {
     groups = digit_groups("8월 20일 오후 3시");
-    assert date_supported("2026-08-20", "8월 20일 오후 3시", groups);
-    assert not date_supported("2026-08-21", "8월 20일 오후 3시", groups);
-    zh = "书桌 8月21–25日";
-    assert date_supported("2026-08-25", zh, digit_groups(zh));
-    assert date_supported(
-        "2026-08-20", "move in Aug 20", digit_groups("move in Aug 20")
-    );
-    market = "market on the 20th";
-    assert not date_supported("2026-03-20", market, digit_groups(market));
+    assert date_supported("2026-08-20", groups);
+    assert not date_supported("2026-08-21", groups);
+    assert date_supported("2026-08-25", digit_groups("书桌 8月21–25日"));
+    assert date_supported("2026-08-20", digit_groups("move in Aug 20"));
+    assert not date_supported("2026-03-20", digit_groups("market on the 20th"));
     assert time_supported("15:00", groups) and not time_supported("15:30", groups);
     assert time_supported("15:00", digit_groups("arriving 3pm"));
     assert time_supported("00:00", digit_groups("at 12 midnight"));
@@ -407,8 +401,7 @@ test "a first draft sets an unchosen profile language, never a chosen one (R29)"
 }
 
 test "an unverified student cannot draft" {
-    os.environ["UARRIVED_DEV_MODE"] = "1";
-    client = JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp());
+    client = served();
     try {
         client.register_user("mina@umich.edu", "password123");
         resp = client.post(
@@ -422,8 +415,7 @@ test "an unverified student cannot draft" {
 }
 
 test "the ride prefill needs a verified student and returns a reviewable draft (AE4)" {
-    os.environ["UARRIVED_DEV_MODE"] = "1";
-    client = JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp());
+    client = served();
     try {
         client.register_user("mina@umich.edu", "password123");
         denied = client.post(

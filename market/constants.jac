@@ -160,8 +160,20 @@ glob MISSING_INFO_PHRASES: dict[str, dict[str, str]] = {
          "time": {"en": "time", "ko": "시간", "zh": "时间"}
      };
 
-"""The label table for `lang`; any language outside the pilot set gets English."""
-def labels_for(lang: str) -> dict[str, str] {
+"""`table[key]` in `lang`, else in English, else `key` itself. The one lookup for every
+language-keyed table here (CATEGORY_NAMES, ARRANGEMENT_NAMES, the phrase tables). `def:pub` so
+client screens can call it (this module is import-free, so it joins the bundle)."""
+def:pub localized(table: dict[str, dict[str, str]], key: str, lang: str) -> str {
+    if key not in table {
+        return key;
+    }
+    texts = table[key];
+    return texts[lang] if lang in texts else texts.get("en", key);
+}
+
+"""The label table for `lang`; any language outside the pilot set gets English. `def:pub` for
+the client screens, like `localized`."""
+def:pub labels_for(lang: str) -> dict[str, str] {
     return LABELS[lang] if lang in LABELS else LABELS["en"];
 }
 
@@ -176,8 +188,7 @@ def phrase(
     if code not in table {
         return "";
     }
-    texts = table[code];
-    text = texts[lang] if lang in texts else texts["en"];
+    text = localized(table, code, lang);
     if values is None {
         return text;
     }
@@ -201,10 +212,10 @@ def reasons_for(
     out: list[str] = [];
     for (i, item) in enumerate(codes) {
         values: dict[str, str] = dict(item.get("values", {}) or {});
-        chosen = values.get("arrangement", "");
-        if chosen in ARRANGEMENT_NAMES {
-            names = ARRANGEMENT_NAMES[chosen];
-            values["arrangement"] = names[lang] if lang in names else chosen;
+        if "arrangement" in values {
+            values["arrangement"] = localized(
+                ARRANGEMENT_NAMES, values["arrangement"], lang
+            );
         }
         text = phrase(REASON_PHRASES, item.get("code", ""), lang, values);
         out.append(text or reasons[i]);

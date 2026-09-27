@@ -1,14 +1,12 @@
 """Served-app tests for the code-review fixes on U1-U11 (each named for the failure it prevents)."""
 
 import os;
-import tempfile;
 import from jaclang.testing.testing { JacTestClient }
+import from market.testkit { served as served_app }
 
 def served -> JacTestClient {
-    os.environ["UARRIVED_DEV_MODE"] = "1";
-    os.environ["ANTHROPIC_API_KEY"] = "";
     os.environ["UARRIVED_MODERATORS"] = "";
-    return JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp());
+    return served_app();
 }
 
 def call(client: JacTestClient, name: str, body: dict[str, any]) -> any {

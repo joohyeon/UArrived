@@ -12,35 +12,20 @@ disabled so a slow translation cannot produce a duplicate post. `?text=` pre-fil
 import from ui.tokens { color, space }
 import from ui.components.base { AppShell, Button, Card, Badge, Field }
 import from core.constants { ANN_ARBOR_AREAS }
-import from market.screens.common { MarketTabs, query_param, go, Choice, ui_labels }
+import from market.screens.common { MarketTabs, query_param, go, Choice }
 import from market.drafting { draft_from_message, ride_prefill, DraftResult, DraftCard }
 import from market.constants {
     ARRANGEMENTS,
     SAFETY_TIPS,
     CATEGORY_NAMES,
-    ARRANGEMENT_NAMES
+    ARRANGEMENT_NAMES,
+    labels_for,
+    localized
 }
 import from market.lifecycle { publish_post, PostResult }
 
-glob CATEGORIES: list[str] = [
-         "furniture",
-         "essentials",
-         "housing",
-         "vehicle",
-         "service"
-     ];
-
 def num_text(x: float | None) -> str {
     return "" if x is None else (f"{x:.0f}" if x == int(x) else f"{x}");
-}
-
-"""`names[value]` in `lang`, else English, else the value itself."""
-def:pub name_in(names: dict[str, dict[str, str]], value: str, lang: str) -> str {
-    if value not in names {
-        return value;
-    }
-    by_lang = names[value];
-    return by_lang[lang] if lang in by_lang else by_lang.get("en", value);
 }
 
 """The editable fields for one draft card."""
@@ -80,7 +65,7 @@ def:pub DraftForm(
     count: int = 1
 ) -> JsxElement {
     lang = card.language or "en";
-    L = ui_labels(lang);
+    L = labels_for(lang);
 
     def guessNote(name: str) -> str {
         return L["guessed"] if name in card.guessed else "";
@@ -119,7 +104,10 @@ def:pub DraftForm(
             <Choice
                 label={L["category"]}
                 value={fields.get("category", "furniture")}
-                options={[(c, name_in(CATEGORY_NAMES, c, lang)) for c in CATEGORIES]}
+                options={[
+                    (c, localized(CATEGORY_NAMES, c, lang))
+                    for c in CATEGORY_NAMES.keys()
+                ]}
                 onChange={lambda (v: str) { onField("category", v); }}
             />
             <Field
@@ -227,7 +215,7 @@ def:pub DraftForm(
                     value={fields.get("arrangement", "")}
                     options={[("", "—")]
                         + [
-                            (a, name_in(ARRANGEMENT_NAMES, a, lang))
+                            (a, localized(ARRANGEMENT_NAMES, a, lang))
                             for a in ARRANGEMENTS
                         ]}
                     note={missingNote("arrangement")}

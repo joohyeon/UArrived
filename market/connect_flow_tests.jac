@@ -1,23 +1,16 @@
 """Served-app tests for mutual opt-in and per-post chat (U6), and chat translation per reader
-(native-language U7). No test calls a real model: the translator is an empty MockLLM (every call
-fails, so post translations keep the original) unless a test installs replies."""
+(native-language U7). No test calls a real model: AI is off (market/testkit.jac), so post
+translations keep the original, unless a test installs MockLLM replies."""
 
 import os;
-import tempfile;
 import ai.translate;
 import from datetime { date, timedelta }
 import from jaclang.byllm.lib { MockLLM, MockError, AuthenticationError }
 import from jaclang.testing.testing { JacTestClient }
+import from market.testkit { served }
 import from ai.translate { Translation }
 import from market.connect { message_view, translation_for }
 import from market.graph { Message }
-
-def served -> JacTestClient {
-    os.environ["UARRIVED_DEV_MODE"] = "1";
-    os.environ["ANTHROPIC_API_KEY"] = "";
-    ai.translate.translator = MockLLM(outputs=[]);
-    return JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp());
-}
 
 def call(client: JacTestClient, name: str, body: dict[str, any]) -> any {
     return client.post(f"/function/{name}", json=body).json()["data"]["result"];
@@ -373,8 +366,7 @@ test "a stored translation is shown only to the reader" {
         sent_at="2026-08-01T10:00:00",
         language="en",
         translated_text="목요일 저녁 7시 EST에 영상 통화 가능할까요?",
-        translated_language="ko",
-        ai_translated=True
+        translated_language="ko"
     );
     assert message_view(m, "priya").text == VIDEO_CALL;
     view = message_view(m, "jiwoo");

@@ -1,22 +1,12 @@
 """Served-app tests for two-way matching and suggestions (U5), with several real students, and
-match reasons in the reader's language (native-language U6). No test calls a real model: the
-translator is an empty MockLLM, so post translations fall back to the original."""
+match reasons in the reader's language (native-language U6). No test calls a real model: AI is
+off (market/testkit.jac), so post translations fall back to the original."""
 
-import os;
-import tempfile;
-import ai.translate;
-import from jaclang.byllm.lib { MockLLM }
 import from jaclang.testing.testing { JacTestClient }
+import from market.testkit { served }
 import from market.constants { reasons_for }
 import from market.graph { Post, Suggestion }
 import from market.matching { Match, match_pair }
-
-def served -> JacTestClient {
-    os.environ["UARRIVED_DEV_MODE"] = "1";
-    os.environ["ANTHROPIC_API_KEY"] = "";
-    ai.translate.translator = MockLLM(outputs=[]);
-    return JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp());
-}
 
 """The match between `a` and `b` on 2026-08-01; fails the test if they don't match."""
 def matched(a: Post, b: Post) -> Match {

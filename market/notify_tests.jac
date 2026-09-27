@@ -10,6 +10,7 @@ import json;
 import tempfile;
 import uuid;
 import from jaclang.testing.testing { JacTestClient }
+import from market.testkit { served }
 import from core.profile { Mailbox, Profile, sync_mailbox, set_language }
 import from market.graph { Post, Suggestion }
 import from market.notify { sweep, pending_by_student, digest_body }
@@ -285,9 +286,7 @@ def student(client: JacTestClient, email: str) {
 }
 
 test "the inbox badge counts only matches the student hasn't opened" {
-    os.environ["UARRIVED_DEV_MODE"] = "1";
-    os.environ["ANTHROPIC_API_KEY"] = "";
-    client = JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp());
+    client = served();
     try {
         student(client, "mina@umich.edu");
         call(

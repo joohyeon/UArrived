@@ -2,12 +2,19 @@
 structured post drafts, each with an English copy (R1, R2, R5, R19, R22, R25).
 
 Knows nothing about the graph or the marketplace rules; `market/drafting.jac` validates and
-normalizes what comes back. The model is `drafter`, a module glob so tests can swap in MockLLM.
+normalizes what comes back. The model is `drafter`, a module glob so tests can swap in MockLLM,
+or None to switch drafting off.
 """
 
 import from jaclang.byllm.lib { Model }
+import from ai.models { model_ready }
 
 glob drafter: any = Model(model_name="claude-haiku-4-5-20251001");
+
+"""Whether a drafting call can be made (see ai/models.jac `model_ready`)."""
+def drafter_ready -> bool {
+    return model_ready(drafter);
+}
 
 enum PostKind { OFFER, REQUEST }
 
