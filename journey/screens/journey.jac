@@ -97,7 +97,8 @@ def:pub TaskListCard(
 def:pub JourneyHome -> JsxElement {
     has summary: JourneySummary | None = None,
         view: str = "list",
-        words: dict[str, str] = {};
+        words: dict[str, str] = {},
+        error: str = "";
 
     async def load -> None;
 
@@ -142,7 +143,9 @@ def:pub JourneyHome -> JsxElement {
             </Card>
         )
             if summary is not None
-            else <p style={{"color": color("sub")}}>Loading your tasks…</p>}
+            else <p style={{"color": color("danger") if error else color("sub")}}>
+                {error or "Loading your tasks…"}
+            </p>}
         {(
             <div
                 style={{
@@ -189,7 +192,17 @@ def:pub JourneyHome -> JsxElement {
 
 impl JourneyHome.load -> None {
     fresh: JourneySummary | None = None;
-    fresh = await my_journey();
+    try {
+        fresh = await my_journey();
+    } except Exception as err {
+        print("JourneyHome.load failed: " + str(err));
+        error = "We couldn't load your tasks. Refresh to try again.";
+        return;
+    }
+    if fresh is None {
+        return;
+    }
+    error = "";
     summary = fresh;
     sources: list[str] = [];
     for v in fresh.tasks {

@@ -13,11 +13,9 @@ import os;
 import re;
 import from datetime { datetime }
 import from core.clock { today_iso }
-import from journey.task_data { world_px }
+import from journey.task_data { world_px, data_path }
 
-glob EVENT_FILE: str = os.path.join(
-         os.path.dirname(os.path.abspath(__file__)), "umich_event_data"
-     ),
+glob EVENT_FILE: str = data_path("umich_event_data"),
      # The map's Ann Arbor bounds (south, north, west, east); events outside are list-only.
      AA_BOUNDS: tuple[float, float, float, float] = (
          42.2220,
@@ -262,6 +260,10 @@ def parse_events(doc: dict[str, any], today: str) -> list[EventView] {
 }
 
 def all_events(today: str) -> list[EventView] {
+    if not os.path.isfile(EVENT_FILE) {
+        print(f"all_events: event file missing at {EVENT_FILE} (cwd {os.getcwd()})");
+        return _cache["events"];
+    }
     mtime = os.path.getmtime(EVENT_FILE);
     if _cache["mtime"] != mtime or _cache.get("today") != today {
         with open(EVENT_FILE, encoding="utf-8") as f {

@@ -16,10 +16,27 @@ import json;
 import math;
 import os;
 
-glob TASK_FILE: str = os.path.join(
-         os.path.dirname(os.path.abspath(__file__)),
-         "umich_ann_arbor_new_student_tasks_2026.json"
-     ),
+"""Absolute path of a data file shipped in journey/. A deployed build may run the compiled module
+from a cache directory, so f"__file__" alone is not enough: also try the working directory and the
+env override UARRIVED_DATA_DIR. Returns the first path that exists (else the module-relative one)."""
+def data_path(name: str) -> str {
+    here = os.path.dirname(os.path.abspath(__file__));
+    candidates = [
+        os.path.join(os.environ.get("UARRIVED_DATA_DIR", ""), name),
+        os.path.join(here, name),
+        os.path.join(os.getcwd(), "journey", name),
+        os.path.join(os.getcwd(), name)
+    ];
+    for c in candidates {
+        if os.path.isfile(c) {
+            return c;
+        }
+    }
+    print(f"data_path: {name} not found in {candidates}");
+    return candidates[1];
+}
+
+glob TASK_FILE: str = data_path("umich_ann_arbor_new_student_tasks_2026.json"),
      # Web Mercator world pixels are stored at this zoom; the client divides by 2^(18 - zoom).
      MAP_BASE_ZOOM: int = 18,
      DEFAULT_LAT: float = 42.2770,
@@ -495,6 +512,10 @@ def parse_tasks(doc: dict[str, any]) -> list[JourneyTask] {
 
 """Every task in the task file, re-read only when the file changes."""
 def all_tasks -> list[JourneyTask] {
+    if not os.path.isfile(TASK_FILE) {
+        print(f"all_tasks: task file missing at {TASK_FILE} (cwd {os.getcwd()})");
+        return _cache["tasks"];
+    }
     mtime = os.path.getmtime(TASK_FILE);
     if _cache["mtime"] != mtime {
         with open(TASK_FILE, encoding="utf-8") as f {

@@ -382,7 +382,13 @@ def:pub Events -> JsxElement {
 
 impl Events.load(cat: str, free: bool) -> None {
     fresh: list[EventView] = [];
-    fresh = await upcoming_events(cat, free);
+    try {
+        fresh = await upcoming_events(cat, free);
+    } except Exception as err {
+        print("Events.load failed: " + str(err));
+        loaded = True;
+        return;
+    }
     events = fresh;
     # Every call's own fetch result -- never a later read of the shared `events` state -- feeds
     # all_upcoming, and only when this call's own filters are the unfiltered default. A category

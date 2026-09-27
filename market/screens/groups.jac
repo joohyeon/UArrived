@@ -137,11 +137,19 @@ def:pub GroupList -> JsxElement {
 impl GroupList.load -> None {
     fresh: list[GroupSummary] = [];
     count: int = 0;
-    await heartbeat();
-    fresh = await list_groups_for_me();
-    count = await unread_suggestions();
-    groups = fresh;
-    unread = count;
+    try {
+        await heartbeat();
+    } except Exception as err {
+        print("GroupList heartbeat failed: " + str(err));
+    }
+    try {
+        fresh = await list_groups_for_me();
+        groups = fresh;
+        count = await unread_suggestions();
+        unread = count;
+    } except Exception as err {
+        print("GroupList.load failed: " + str(err));
+    }
     loaded = True;
 }
 
