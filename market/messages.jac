@@ -183,7 +183,10 @@ def fields_from(card: DraftCard, known: dict[str, str], text: str) -> dict[str, 
         "kind": known.get("kind", card.kind),
         "category": known.get("category", card.category),
         "title": card.title or text[:60],
-        "description": card.description if card.ai_generated else text[:500],
+        # The model's words assume its own guess; if the student corrected the kind, use theirs.
+        "description": card.description
+            if card.ai_generated and known.get("kind", card.kind) == card.kind
+            else text[:500],
         "price": card.price,
         "free": card.free,
         "available_from": card.available_from,

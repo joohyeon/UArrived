@@ -221,7 +221,8 @@ def topic_key(p: Post) -> str {
 
 def topic_name(p: Post) -> str {
     if p.category == "service" and p.route_from {
-        return f"Rides {p.route_from} to {p.route_to}"
+        return f"Rides from {p.route_from}"
+            + (f" to {p.route_to}" if p.route_to else "")
             + (f" · {p.available_from}" if p.available_from else "");
     }
     if p.category == "housing" {
@@ -306,8 +307,22 @@ def invite_matches(post: Post, topic: ChatGroup, today: str) -> int {
             or invited_already(jid(topic), other.owner_root) {
             continue;
         }
+        # Only invite on facts: the same item, or (housing and rides, whose groups are narrower
+        # than a match) a match with stated reasons. "Dates overlap" alone never links a desk to
+        # a mattress.
+        same_item = topic_key(other) == topic_key(post);
+        loose = post.category in ["housing", "service"] and len(s.reasons) > 0;
+        if not same_item and not loose {
+            continue;
+        }
         reason = f"Your post \"{other.title}\" fits: "
-            + ("; ".join(s.reasons) if s.reasons else "same kind of thing");
+            + (
+                "; ".join(s.reasons)
+                    if s.reasons
+                    else f"it's about {plural(
+                        item_word(post.title) or post.category
+                    )} too"
+            );
         inv = root.shared ++> Invite(
             group_id=jid(topic),
             invitee_root=other.owner_root,
@@ -334,8 +349,12 @@ def file_market(
     card = drafted.draft;
     known = parse_answers(answers);
     about = card.about_market if card.ai_generated else looks_like_market(text);
-    # In a group, a message whose kind and category are both guesses is chat, not a question.
-    unsure = card.ai_generated and "kind" in card.guessed and "category" in card.guessed;
+    # In a group, a sentence whose kind and category are both guesses is chat, not a question;
+    # a bare item name ("desk") still gets the question.
+    unsure = card.ai_generated
+        and "kind" in card.guessed
+        and "category" in card.guessed
+        and len(text.split()) > 3;
     if (not about or unsure) and not known {
         return GroupPostResult(ok=True, message_id=message_id);
     }
@@ -366,15 +385,21 @@ def file_market(
     join(topic);
     post.topic_group_id = jid(topic);
     add_message(
-        topic, "New in this group. " + facts_line(post), ai=True, post_id=jid(post)
+        topic,
+        f"New from {my_profile().display_name or 'a student'} · " + facts_line(post),
+        ai=True,
+        post_id=jid(post)
     );
     invited = invite_matches(post, topic, today);
-    where = f"I added this to \"{topic.name}\"" if reused else f"I started a group for this, \"{topic.name}\"";
-    reply = (
-        f"{where} and invited {invited} student{'s' if invited != 1 else ''} whose posts fit."
-            if invited > 0
-            else f"{where}. Nobody else's posts fit yet; I'll invite people as matching posts come in."
-    );
+    people = f"invited {invited} student{'s' if invited != 1 else ''} whose posts fit.";
+    nobody = "Nobody else's posts fit yet; I'll invite people as matching posts come in.";
+    if reused {
+        reply = f"I added this to \"{topic.name}\""
+            + (f" and {people}" if invited > 0 else f". {nobody}");
+    } else {
+        reply = f"I started a group for this, \"{topic.name}\""
+            + (f", and {people}" if invited > 0 else f". {nobody}");
+    }
     add_message(cohort, reply, ai=True, post_id=jid(post));
     return GroupPostResult(
         ok=True,
@@ -632,6 +657,8 @@ test "item words and topic keys group similar posts together" {
     b = Post(owner_root="y", kind="request", category="furniture", title="Need a desk");
     assert topic_key(a) == topic_key(b) == "furniture:desk";
     assert topic_name(a) == "Desks near campus";
+    assert plural("mattress") == "mattresses" and plural("lamp") == "lamps";
+    assert plural("battery") == "batteries" and plural("key") == "keys";
     ride = Post(
         owner_root="x",
         kind="request",
