@@ -21,7 +21,12 @@ import from journey.walkers {
     mark_task_done,
     reopen_task
 }
-import from journey.events { upcoming_events, preview_events }
+import from journey.events {
+    upcoming_events,
+    preview_events,
+    interest_counts,
+    mark_interested
+}
 import from journey.events_refresh { scheduled_events_refresh }
 import from journey.interests { my_interests, has_interests, set_interests }
 import from journey.guide { ask_about_task, translate_journey_texts }

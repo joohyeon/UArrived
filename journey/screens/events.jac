@@ -4,14 +4,30 @@ venue's events (`?venue=`). Its own bottom-nav tab (U4, plan 2026-09-27-003) -- 
 under Journey, so it doesn't render Journey's Tasks/Events sub-tab strip."""
 
 import from ui.tokens { color, space, text_style }
-import from ui.components.base { AppShell, Card, Badge, ResponsiveGrid }
+import from ui.components.base { AppShell, Card, Badge, Button, ResponsiveGrid }
 import from ui.components.blocks { Chip, SegmentedControl, SectionLabel }
 import from ui.components.map { MapCanvas }
 import from journey.constants { EVENT_CATEGORIES, ANN_ARBOR_BOUNDS, CAMPUS_CENTER }
-import from journey.events { upcoming_events, EventView }
+import from journey.events {
+    upcoming_events,
+    interest_counts,
+    mark_interested,
+    EventView
+}
 import from journey.interests { my_interests }
 import from journey.guide { translate_journey_texts }
 import from journey.screens.common { query_param }
+
+"""Renders the interest count as words, e.g. "N students interested," never a bare 0."""
+def:pub interest_line(count: int) -> str {
+    return "Be the first student interested"
+        if count == 0
+        else (
+            f"{count} student interested"
+                if count == 1
+                else f"{count} students interested"
+        );
+}
 
 def:pub event_when(e: EventView) -> str {
     when = e.date + (" " + e.time if e.time else "");
@@ -34,9 +50,15 @@ def:pub best_match(events: list[EventView], interests: list[str]) -> EventView |
 
 """The soonest matching pick for the student, shown above the list. `is_match` is False when
 nothing matched their interests and this is just the soonest event overall -- no "For you" badge
-in that case (AE2)."""
+in that case (AE2). `count` is the current interest tally; `tapped` disables the button for this
+page load once the caller has already marked interest (U6)."""
 def:pub EventHero(
-    e: EventView, tx: Callable[[str], str], is_match: bool
+    e: EventView,
+    tx: Callable[[str], str],
+    is_match: bool,
+    count: int,
+    tapped: bool,
+    onInterested: Callable[[], None]
 ) -> JsxElement {
     small = text_style("small");
     <Card>
@@ -50,6 +72,13 @@ def:pub EventHero(
         <span style={{** small, "color": color("sub")}}>
             {"Online" if e.virtual else e.location}
         </span>
+        <span style={{** small, "color": color("sub")}}>{interest_line(count)}</span>
+        <Button
+            label={"You're interested" if tapped else "I'm interested"}
+            variant="secondary"
+            disabled={tapped}
+            onClick={lambda (ev: MouseEvent) { onInterested(); }}
+        />
         {(
             <details>
                 <summary
@@ -96,7 +125,7 @@ def:pub EventHero(
 }
 
 def:pub EventCard(
-    e: EventView, tx: Callable[[str], str], interests: list[str]
+    e: EventView, tx: Callable[[str], str], interests: list[str], count: int
 ) -> JsxElement {
     small = text_style("small");
     <Card>
@@ -112,6 +141,7 @@ def:pub EventCard(
         <span style={{** small, "color": color("sub")}}>
             {"Online" if e.virtual else e.location}
         </span>
+        <span style={{** small, "color": color("sub")}}>{interest_line(count)}</span>
         {(
             <details>
                 <summary
@@ -161,6 +191,8 @@ def:pub Events -> JsxElement {
     has events: list[EventView] = [],
         all_upcoming: list[EventView] = [],
         interests: list[str] = [],
+        counts: dict[str, int] = {},
+        tapped: list[str] = [],
         loaded: bool = False,
         category: str = "All",
         free_only: bool = False,
@@ -170,6 +202,7 @@ def:pub Events -> JsxElement {
 
     async def load(cat: str, free: bool) -> None;
     async def load_personalization -> None;
+    async def markInterested(eid: str) -> None;
 
     can with entry {
         venue = query_param("venue");
@@ -200,6 +233,8 @@ def:pub Events -> JsxElement {
         hero = all_upcoming[0];
     }
     hero_is_match = hero is not None and hero.category in interests;
+    # Bound outside the lambda below: narrowing `hero is not None` doesn't carry into a closure.
+    hero_eid = hero.eid if hero is not None else "";
 
     shown = [
         e
@@ -238,7 +273,16 @@ def:pub Events -> JsxElement {
     }
 
     <AppShell title="Events" active="events" wide={True}>
-        {<EventHero e={hero} tx={tx} is_match={hero_is_match}/>
+        {(
+            <EventHero
+                e={hero}
+                tx={tx}
+                is_match={hero_is_match}
+                count={counts.get(hero_eid, 0)}
+                tapped={hero_eid in tapped}
+                onInterested={lambda { markInterested(hero_eid); }}
+            />
+        )
             if hero is not None
             else None}
         <div
@@ -320,8 +364,13 @@ def:pub Events -> JsxElement {
         {(
             <ResponsiveGrid min="300px">
                 {[
-                    <EventCard key={e.eid} e={e} tx={tx} interests={interests}/>
-                    for e in shown
+                    <EventCard
+                        key={e.eid}
+                        e={e}
+                        tx={tx}
+                        interests={interests}
+                        count={counts.get(e.eid, 0)}
+                    /> for e in shown
                 ]}
             </ResponsiveGrid>
         )
@@ -357,4 +406,17 @@ impl Events.load_personalization -> None {
     upcoming: list[EventView] = [];
     upcoming = await upcoming_events("All", False);
     all_upcoming = upcoming;
+    fetched: dict[str, int] = {};
+    fetched = await interest_counts([e.eid for e in upcoming]);
+    counts = fetched;
+}
+
+impl Events.markInterested(eid: str) -> None {
+    if eid in tapped {
+        return;
+    }
+    new_count: int = 0;
+    new_count = await mark_interested(eid);
+    counts = {** counts, eid: new_count};
+    tapped = tapped + [eid];
 }

@@ -234,3 +234,20 @@ test "a new student has no interests until they pick some, and a second pick ove
         client.close();
     }
 }
+
+test "marking interest through the served app is a public, repeatable tally" {
+    client = served();
+    try {
+        client.register_user("priya@umich.edu", "password123");
+        before = call(client, "interest_counts", {"eids": ["evt-1", "evt-2"]});
+        assert before == {"evt-1": 0, "evt-2": 0};
+        first = call(client, "mark_interested", {"eid": "evt-1"});
+        assert first == 1;
+        again = call(client, "mark_interested", {"eid": "evt-1"});
+        assert again == 2;
+        after = call(client, "interest_counts", {"eids": ["evt-1", "evt-2"]});
+        assert after == {"evt-1": 2, "evt-2": 0};
+    } finally {
+        client.close();
+    }
+}

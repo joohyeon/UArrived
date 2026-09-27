@@ -282,6 +282,54 @@ def best_match(events: list[EventView], interests: list[str]) -> EventView | Non
     return None;
 }
 
+"""A public, content-free record that some student marked interest in event `eid` -- the
+market/graph.jac ReplyTick shape: no identity, no dedup, a pure fire-and-forget tally (U6, plan
+2026-09-27-003 R11: "no memory of which student clicked")."""
+node EventInterest {
+    has eid: str;
+
+    def __jac_access__ -> AccessLevel | None {
+        return AccessLevel.READ;
+    }
+}
+
+def commons_or_shared(commons: any = None) -> any {
+    return commons if commons is not None else root.shared;
+}
+
+"""How many students have marked interest in event `eid`."""
+def interest_count(eid: str, commons: any = None) -> int {
+    return len(
+        [
+            t
+            for t in [commons_or_shared(commons)-->][?:EventInterest]
+            if t.eid == eid
+        ]
+    );
+}
+
+"""Interest counts for several events in one call, so the events screen doesn't pay one round
+trip per card. Every id in `eids` is present in the result, 0 if nobody has marked it yet."""
+def:protect interest_counts(eids: list[str]) -> dict[str, int] {
+    wanted = set(eids);
+    counts: dict[str, int] = {eid: 0 for eid in eids};
+    for t in [root.shared-->][?:EventInterest] {
+        if t.eid in wanted {
+            counts[t.eid] = counts.get(t.eid, 0) + 1;
+        }
+    }
+    return counts;
+}
+
+"""Record that the caller is interested in event `eid`. Fire-and-forget: no de-dup, no identity
+kept, so a repeat tap simply adds to the count -- an accepted trade-off for keeping this a
+throwaway tally instead of a tracked RSVP (see the plan's Key Technical Decisions). Returns the
+new count."""
+def:protect mark_interested(eid: str) -> int {
+    root.shared ++> EventInterest(eid=eid);
+    return interest_count(eid);
+}
+
 test "events file parses into upcoming, deduplicated events in date order" {
     events = all_events("2026-09-27");
     assert len(events) > 20;
@@ -383,4 +431,19 @@ test "best_match picks the soonest event in an interest category, or None if non
     assert arts_match is not None and arts_match.title == "Film night";
     assert careers_match is not None and careers_match.title == "Career Fair";
     assert best_match(events, ["Sports"]) is None;
+}
+
+test "marking interest is a fire-and-forget tally with no dedup" {
+    assert interest_count("e1") == 0;
+    n1 = mark_interested("e1");
+    assert n1 == 1 and interest_count("e1") == 1;
+    n2 = mark_interested("e1");
+    assert n2 == 2 , "a repeat tap adds to the count instead of being deduped";
+    assert interest_count("e2") == 0;
+}
+
+test "interest_counts batches several events in one call, defaulting unmarked ones to 0" {
+    mark_interested("only-marked");
+    counts = interest_counts(["only-marked", "never-marked"]);
+    assert counts == {"only-marked": 1, "never-marked": 0};
 }
