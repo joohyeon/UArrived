@@ -4,7 +4,12 @@ Serves every endpoint module imported here, plus the client app. A server module
 imported here is not served.
 """
 
-import from core.auth { start_verification, confirm_verification, my_verification }
+import from core.auth {
+    start_verification,
+    confirm_verification,
+    my_verification,
+    claim_umich_account
+}
 import from core.profile { get_my_profile, update_my_profile }
 import from market.drafting { draft_from_message }
 import from market.suggestions { list_my_suggestions, stop_suggestions }
@@ -69,6 +74,7 @@ import from market.lifecycle {
 # Client-side UI
 import from "@jac/runtime" { jacIsLoggedIn }
 import from core.screens.welcome { Welcome }
+import from core.screens.account { Account }
 import from ui.components.gallery { Gallery }
 import from market.screens.preview { MarketPreview }
 import from market.screens.inbox { MatchesInbox }
@@ -94,9 +100,16 @@ def:pub app -> JsxElement {
     if path == "/market/preview" {
         return <MarketPreview/>;
     }
-    if (path.startswith("/market") or path.startswith("/journey") or path == "/today")
+    if (
+        path.startswith("/market")
+        or path.startswith("/journey")
+        or path in ["/today", "/profile"]
+    )
         and not jacIsLoggedIn() {
         return <Welcome/>;
+    }
+    if path == "/profile" {
+        return <Account/>;
     }
     if path == "/today" {
         return <Today/>;
