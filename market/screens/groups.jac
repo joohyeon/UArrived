@@ -22,6 +22,7 @@ import from market.topics {
     join_topic_group,
     dismiss_topic_invite,
     close_group_post,
+    leave_topic_group,
     GroupSummary,
     InviteView,
     GroupView,
@@ -200,7 +201,8 @@ def:pub GroupChat -> JsxElement {
         asked: FollowUp | None = None,
         asked_message: str = "",
         notice: str = "",
-        answers: str = "";
+        answers: str = "",
+        confirm_leave: bool = False;
 
     async def load -> None;
     async def sendIt(e: MouseEvent) -> None;
@@ -208,6 +210,7 @@ def:pub GroupChat -> JsxElement {
     async def settle(result: GroupPostResult) -> None;
     async def answerInvite(accept: bool) -> None;
     async def closePost(post_id: str, reason: str) -> None;
+    async def leaveIt(e: MouseEvent) -> None;
 
     can with entry {
         group_id = query_param("id");
@@ -370,6 +373,35 @@ def:pub GroupChat -> JsxElement {
         )
             if group and group.ok and group.member
             else None}
+        {(
+            <Card>
+                {(
+                    <div
+                        style={{
+                            "display": "flex",
+                            "gap": space("2"),
+                            "alignItems": "center"
+                        }}
+                    >
+                        <span>Leave this group? You'll stop seeing its messages.</span>
+                        <Button label="Leave" variant="secondary" onClick={leaveIt}/>
+                        <Button
+                            label="Cancel"
+                            variant="text"
+                            onClick={lambda (e: MouseEvent) { confirm_leave = False; }}
+                        />
+                    </div>
+                )
+                    if confirm_leave
+                    else <Button
+                        label="Leave group"
+                        variant="text"
+                        onClick={lambda (e: MouseEvent) { confirm_leave = True; }}
+                    />}
+            </Card>
+        )
+            if group and group.ok and group.member and group.kind == "topic"
+            else None}
     </AppShell>
 }
 
@@ -429,4 +461,15 @@ impl GroupChat.answerInvite(accept: bool) -> None {
 impl GroupChat.closePost(post_id: str, reason: str) -> None {
     await close_group_post(post_id, reason);
     await load();
+}
+
+impl GroupChat.leaveIt(e: MouseEvent) -> None {
+    result: ActionOutcome | None = None;
+    result = await leave_topic_group(group_id);
+    if not result.ok {
+        error = result.error;
+        confirm_leave = False;
+        return;
+    }
+    go("/market");
 }

@@ -13,7 +13,7 @@ import from datetime { date, timedelta }
 import from uuid { UUID }
 import from jaclang { JacRuntime as Jac }
 import from core.auth { verified_profile }
-import from core.clock { today_iso, now_iso }
+import from core.clock { today_iso, now_iso, now_precise }
 import from core.profile { my_profile }
 import from core.groups {
     ChatGroup,
@@ -29,7 +29,9 @@ import from core.groups {
     member_count,
     member_ids,
     my_group_ids,
-    sync_cohort
+    sync_cohort,
+    leave,
+    last_left
 }
 import from market.graph {
     Post,
@@ -127,7 +129,8 @@ node Invite {
 next matching post can see it (the Invite itself is visible only to its sender and invitee)."""
 node InviteMark {
     has group_id: str,
-        invitee_root: str;
+        invitee_root: str,
+        created_at: str = "";
 
     def __jac_access__ -> AccessLevel | None {
         return AccessLevel.READ;
@@ -322,9 +325,14 @@ def looks_like_market(text: str) -> bool {
     return any([w in t for w in MARKET_WORDS]);
 }
 
+"""Whether `invitee` already has an invite to `group_id` since they last left it, so a student
+who leaves can be invited back once by the next matching post."""
 def invited_already(group_id: str, invitee: str) -> bool {
+    left = last_left(group_id, invitee);
     for i in [root.shared-->][?:InviteMark] {
-        if i.group_id == group_id and i.invitee_root == invitee {
+        if i.group_id == group_id
+            and i.invitee_root == invitee
+            and i.created_at > left {
             return True;
         }
     }
@@ -379,7 +387,9 @@ def invite_matches(post: Post, topic: ChatGroup, today: str) -> int {
             created_at=now_iso()
         );
         Jac.allow_root(inv, UUID(other.owner_root), AccessLevel.WRITE);  # jac:ignore[E1053]
-        root.shared ++> InviteMark(group_id=jid(topic), invitee_root=other.owner_root);
+        root.shared ++> InviteMark(
+            group_id=jid(topic), invitee_root=other.owner_root, created_at=now_precise()
+        );
         count += 1;
     }
     return count;
@@ -587,11 +597,10 @@ def groups_of_mine -> list[GroupSummary] {
             )
         );
     }
+    # Cohort first, then the most recently active topic groups.
+    out.sort(key=lambda (s: GroupSummary) -> str { return s.last_at; }, reverse=True);
     out.sort(
-        key=lambda (s: GroupSummary) -> tuple[int, str] { return (
-            0 if s.kind == "cohort" else 1,
-            s.last_at
-        ); }
+        key=lambda (s: GroupSummary) -> int { return 0 if s.kind == "cohort" else 1; }
     );
     return out;
 }
@@ -692,6 +701,27 @@ def:protect dismiss_topic_invite(invite_id: str) -> ActionOutcome {
     return ActionOutcome(ok=False, error=denied())
         if denied()
         else respond_invite(invite_id, False);
+}
+
+def leave_topic(group_id: str) -> ActionOutcome {
+    g = group_by_id(group_id);
+    if g is None or not is_member(g) {
+        return ActionOutcome(ok=False, error="You're not in that group.");
+    }
+    if g.kind == "cohort" {
+        return ActionOutcome(
+            ok=False,
+            error="Your arrival group follows your profile, so you can't leave it."
+        );
+    }
+    leave(g);
+    return ActionOutcome(ok=True, group_id=group_id);
+}
+
+def:protect leave_topic_group(group_id: str) -> ActionOutcome {
+    return ActionOutcome(ok=False, error=denied())
+        if denied()
+        else leave_topic(group_id);
 }
 
 def:protect close_group_post(post_id: str, reason: str) -> ActionOutcome {

@@ -9,7 +9,7 @@ each join also leaves a public `Membership` record: that is how anyone counts a 
 
 import from uuid { UUID }
 import from jaclang { JacRuntime as Jac }
-import from core.clock { now_iso }
+import from core.clock { now_iso, now_precise }
 import from core.profile { Profile, my_profile }
 
 glob MONTHS: list[str] = [
@@ -47,6 +47,18 @@ edge MemberOf: Root --> ChatGroup {}
 node Membership {
     has group_id: str,
         member_root: str;
+
+    def __jac_access__ -> AccessLevel | None {
+        return AccessLevel.READ;
+    }
+}
+
+"""Public, content-free record that `member_root` left `group_id` at `left_at`. Lets the next
+matching post invite them back once (market/topics.jac)."""
+node LeftGroup {
+    has group_id: str,
+        member_root: str,
+        left_at: str;
 
     def __jac_access__ -> AccessLevel | None {
         return AccessLevel.READ;
@@ -136,6 +148,17 @@ def leave(g: ChatGroup) {
             del m;
         }
     }
+    root.shared ++> LeftGroup(group_id=jid(g), member_root=me, left_at=now_precise());
+}
+
+"""When `member_root` last left `group_id` ("" if never)."""
+def last_left(group_id: str, member_root: str) -> str {
+    times = [
+        l.left_at
+        for l in [root.shared-->][?:LeftGroup]
+        if l.group_id == group_id and l.member_root == member_root
+    ];
+    return max(times) if times else "";
 }
 
 """Root ids of the group's members."""
@@ -181,7 +204,7 @@ def add_message(
         author_root=jid(root),
         author_name=name,
         text=text,
-        created_at=now_iso(),
+        created_at=now_precise(),
         ai=ai,
         post_id=post_id
     );

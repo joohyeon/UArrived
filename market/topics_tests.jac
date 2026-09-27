@@ -824,3 +824,130 @@ test "DTW riders two days apart share a ride group, listed soonest first" {
         client.close();
     }
 }
+
+test "the group list shows the cohort first, then the most recently active topic group" {
+    client = served();
+    try {
+        cohort = student(client, "mina@umich.edu");
+        ai_says([sell_desk()]);
+        desks = call(
+            client, "post_in_group", {"group_id": cohort, "text": "Selling my desk"}
+        )["topic_group_id"];
+        ai_says(
+            [
+                PostDraft(
+                    kind=PostKind.OFFER,
+                    category=Category.ESSENTIALS,
+                    title="Floor lamp",
+                    description="Selling.",
+                    price=10.0,
+                    item="lamp"
+                )
+            ]
+        );
+        lamps = call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Selling a floor lamp $10"}
+        )["topic_group_id"];
+        assert [g["id"] for g in call(client, "my_groups", {})]
+            == [cohort, lamps, desks];
+        call(client, "post_in_group", {"group_id": desks, "text": "Still available"});
+        assert [g["id"] for g in call(client, "my_groups", {})]
+            == [cohort, desks, lamps];
+    } finally {
+        client.close();
+    }
+}
+
+test "a student can leave a topic group but not their cohort" {
+    client = served();
+    try {
+        cohort = student(client, "mina@umich.edu");
+        ai_says([sell_desk()]);
+        desks = call(
+            client, "post_in_group", {"group_id": cohort, "text": "Selling my desk"}
+        )["topic_group_id"];
+        student(client, "jae@umich.edu");
+        assert not call(client, "leave_topic_group", {"group_id": desks})["ok"];
+        act_as(client, "mina@umich.edu");
+        assert not call(client, "leave_topic_group", {"group_id": cohort})["ok"];
+        assert call(client, "leave_topic_group", {"group_id": desks})["ok"];
+        assert desks not in [g["id"] for g in call(client, "my_groups", {})];
+        assert not call(client, "group_view", {"group_id": desks})["ok"];
+    } finally {
+        client.close();
+    }
+}
+
+test "after leaving, the next matching post invites the student back once" {
+    client = served();
+    try {
+        cohort = student(client, "mina@umich.edu");
+        call(
+            client,
+            "publish_post",
+            {
+                "fields": {
+                    "kind": "request",
+                    "category": "furniture",
+                    "title": "Desk",
+                    "price": 40
+                }
+            }
+        );
+        student(client, "jae@umich.edu");
+        ai_says([sell_desk()]);
+        desks = call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Selling my wooden desk $30"}
+        )["topic_group_id"];
+        act_as(client, "mina@umich.edu");
+        invite = call(client, "my_group_invites", {})[0]["id"];
+        assert call(client, "join_topic_group", {"invite_id": invite})["ok"];
+        assert call(client, "leave_topic_group", {"group_id": desks})["ok"];
+        student(client, "kai@umich.edu");
+        ai_says(
+            [
+                PostDraft(
+                    kind=PostKind.OFFER,
+                    category=Category.FURNITURE,
+                    title="Oak desk",
+                    description="Selling.",
+                    price=35.0,
+                    item="desk"
+                )
+            ]
+        );
+        assert call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Selling an oak desk $35"}
+        )["invited"]
+            == 1;
+        student(client, "lee@umich.edu");
+        ai_says(
+            [
+                PostDraft(
+                    kind=PostKind.OFFER,
+                    category=Category.FURNITURE,
+                    title="Pine desk",
+                    description="Selling.",
+                    price=25.0,
+                    item="desk"
+                )
+            ]
+        );
+        assert call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Selling a pine desk $25"}
+        )["invited"]
+            == 0;
+        act_as(client, "mina@umich.edu");
+        assert len(call(client, "my_group_invites", {})) == 1;
+    } finally {
+        client.close();
+    }
+}
