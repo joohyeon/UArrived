@@ -10,6 +10,7 @@ import from market.drafting { draft_from_message }
 import from market.suggestions { list_my_suggestions, stop_suggestions }
 import from market.feed { for_you_feed, heartbeat }
 import from journey.prompts { my_journey_prompts }
+import from market.decide { help_me_decide }
 import from market.drafting { ride_prefill }
 import from market.notify { unread_suggestions, mark_suggestions_seen, email_sweep }
 import from market.connect { connect, decline, list_my_chats, read_chat, send_message }
@@ -30,6 +31,7 @@ import from market.screens.inbox { MatchesInbox }
 import from market.screens.compose { Compose }
 import from market.screens.chats { ChatList, ChatScreen }
 import from market.screens.mine { MyPosts, ForYou }
+import from market.screens.decide { Compare }
 import from market.screens.common { current_path }
 import from journey.screens.today { Today }
 
@@ -62,6 +64,9 @@ def:pub app -> JsxElement {
     }
     if path == "/market/feed" {
         return <ForYou/>;
+    }
+    if path == "/market/compare" {
+        return <Compare/>;
     }
     return <Welcome/>;
 }
