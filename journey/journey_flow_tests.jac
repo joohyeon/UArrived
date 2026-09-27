@@ -186,7 +186,8 @@ test "the arrival wizard's calls round-trip: fill some steps, self-report a task
         );
         assert finish["ok"] and finish["profile"]["onboarding_done"];
         mine = call(client, "get_my_profile", {});
-        assert mine["arrival_date"] == "2026-08-28" and mine["area"] == "Central Campus";
+        assert mine["arrival_date"] == "2026-08-28"
+            and mine["area"] == "Central Campus";
         after = call(client, "my_journey", {});
         assert task_of(after, "mcard")["status"] == "done";
     } finally {
