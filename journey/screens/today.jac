@@ -99,22 +99,33 @@ one-time interest pick (has_interests) once that's done. Running both checks con
 its own fire-and-forget async call) would race two navigations against each other for a brand new
 student who needs both."""
 impl Today.load -> None {
-    profile: ProfileView | None = None;
-    profile = await get_my_profile();
-    if not profile.onboarding_done {
-        go("/onboarding");
-        return;
-    }
-    got_interests: bool = await has_interests();
-    if not got_interests {
-        go("/interests?next=/today");
-        return;
+    try {
+        profile: ProfileView | None = None;
+        profile = await get_my_profile();
+        if not profile.onboarding_done {
+            go("/onboarding");
+            return;
+        }
+        got_interests: bool = await has_interests();
+        if not got_interests {
+            go("/interests?next=/today");
+            return;
+        }
+    } except Exception as err {
+        # A failed gate check must not leave the screen permanently blank with no signal --
+        # log it and fall through to loading the journey content anyway (fail open, matching
+        # translate_journey_texts's degrade-rather-than-block convention in journey/guide.jac).
+        print("Today.load gate check failed: " + str(err));
     }
     fresh: list[JourneyPrompt] = [];
-    fresh = await my_journey_prompts();
-    prompts = fresh;
-    journey: JourneySummary | None = None;
-    journey = await my_journey();
-    summary = journey;
+    try {
+        fresh = await my_journey_prompts();
+        prompts = fresh;
+        journey: JourneySummary | None = None;
+        journey = await my_journey();
+        summary = journey;
+    } except Exception as err {
+        print("Today.load failed: " + str(err));
+    }
     loaded = True;
 }

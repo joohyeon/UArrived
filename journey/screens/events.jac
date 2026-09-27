@@ -35,10 +35,11 @@ def:pub event_when(e: EventView) -> str {
 }
 
 """The soonest event in `events` whose category is in `interests`, or None if none match. Mirrors
-journey.events.best_match() exactly, but is defined here (not imported) because that module also
-carries server-private globals (EVENT_FILE's clock/venue-map imports); importing any plain value
-from it into client code would pull the whole module into the browser bundle and fail to build
-(the E5082 client-bundle rule -- see CLAUDE.md)."""
+journey.events.best_match() exactly, but is defined here (not imported): that copy is a plain
+(non-`:pub`) function, so it can't bridge to client code, and journey.events also imports
+server-private values (`core.clock.today_iso`, `journey.task_data.world_px`) that fail to resolve
+for the client bundle the moment anything from that module is imported here -- confirmed by trying
+the import and hitting E5082 on those two names, not on best_match itself."""
 def:pub best_match(events: list[EventView], interests: list[str]) -> EventView | None {
     for e in events {
         if e.category in interests {
@@ -284,6 +285,9 @@ def:pub Events -> JsxElement {
         )
             if hero is not None
             else None}
+        <a href="/interests?next=/events" style={text_style("meta")}>
+            Edit your interests
+        </a>
         <div
             role="group"
             aria-label="Category"
@@ -385,6 +389,14 @@ impl Events.load(cat: str, free: bool) -> None {
     fresh: list[EventView] = [];
     fresh = await upcoming_events(cat, free);
     events = fresh;
+    # Every call's own fetch result -- never a later read of the shared `events` state -- feeds
+    # all_upcoming, and only when this call's own filters are the unfiltered default. A category
+    # chip tapped while this call is still in flight starts its own, separate load(); each call
+    # only ever writes all_upcoming from data it fetched itself, so the two can't race and stomp
+    # each other's result into the wrong (filtered) list.
+    if cat == "All" and not free {
+        all_upcoming = fresh;
+    }
     loaded = True;
     sources: list[str] = [c for c in EVENT_CATEGORIES] + [e.title for e in fresh[:60]];
     outs: list[str] = [];
@@ -398,19 +410,32 @@ impl Events.load(cat: str, free: bool) -> None {
     words = found;
 }
 
-"""Fetches interests, then the default (All / not-free-only) event list once and reuses it for
-both the filtered list and the personalization spotlight -- load(cat, free) below re-fetches only
-when the student actually changes a filter, so the initial page load makes one events call, not
-two."""
+"""Fetches interests, then the default (All / not-free-only) event list once -- load(cat, free)
+above sets all_upcoming from that same call when its filters are the default, so this makes one
+events call on initial page load, not two, without reading back the (possibly since-changed)
+shared `events` state."""
 impl Events.init -> None {
-    picks: list[str] = [];
-    picks = await my_interests();
-    interests = picks;
+    try {
+        picks: list[str] = [];
+        picks = await my_interests();
+        interests = picks;
+    } except Exception as err {
+        # Fail open (no personalization, not a stuck screen) and make sure load() below still
+        # runs -- a rejected my_interests() call must not leave the screen on "Loading events…"
+        # forever with no diagnostic trail.
+        print("Events.init interests fetch failed: " + str(err));
+    }
     await load("All", False);
-    all_upcoming = events;
-    fetched: dict[str, int] = {};
-    fetched = await interest_counts([e.eid for e in all_upcoming]);
-    counts = fetched;
+    try {
+        fetched: dict[str, int] = {};
+        fetched = await interest_counts([e.eid for e in all_upcoming]);
+        counts = fetched;
+    } except Exception as err {
+        # Counts fall back to 0 (each card reads "Be the first student interested") rather than
+        # blocking the rest of the screen -- logged so a persistent failure is diagnosable
+        # instead of looking like nobody's ever interested in anything.
+        print("Events.init interest_counts fetch failed: " + str(err));
+    }
 }
 
 impl Events.markInterested(eid: str) -> None {

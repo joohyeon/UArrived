@@ -1,27 +1,24 @@
 """/interests: the one-time post-signup pick of interest categories that personalizes the Events
 tab (U3, plan 2026-09-27-003). Shown once right after signup; a student who already has interests
-set skips straight past it (checked in core/screens/welcome.jac's `route_after_auth`).
+set skips straight past it (checked in journey/screens/today.jac's `Today.load`).
 """
 
 import from ui.tokens { color, space }
 import from ui.components.base { BaseStyles, Button }
 import from ui.components.blocks { QuestionBlock, Chip }
-import from journey.constants { EVENT_CATEGORIES }
-import from journey.interests { set_interests }
+import from journey.constants { INTEREST_CATEGORIES }
+import from journey.interests { set_interests, my_interests }
 import from journey.screens.common { query_param }
-
-# EVENT_CATEGORIES also carries "All" (the events screen's "no filter" chip) and "Other" (its
-# catch-all fallback) -- neither is a real interest a student can match on, and R5's taxonomy
-# names exactly these eight. Picking "All" would silently never match any event's category.
-glob PICKABLE_CATEGORIES: list[str] = [
-         c
-         for c in EVENT_CATEGORIES
-         if c not in ["All", "Other"]
-     ];
 
 def:pub InterestsGate -> JsxElement {
     has picked: list[str] = [],
         busy: bool = False;
+
+    async def load -> None;
+
+    can with entry {
+        load();
+    }
 
     def toggle(cat: str) {
         picked = [
@@ -61,7 +58,7 @@ def:pub InterestsGate -> JsxElement {
                         label={cat}
                         selected={cat in picked}
                         onSelect={lambda { toggle(cat); }}
-                    /> for cat in PICKABLE_CATEGORIES
+                    /> for cat in INTEREST_CATEGORIES
                 ]}
             </div>
             <Button
@@ -72,7 +69,7 @@ def:pub InterestsGate -> JsxElement {
             />
             <button
                 type="button"
-                onClick={lambda (e: MouseEvent) { go([]); }}
+                onClick={lambda (e: MouseEvent) { go(picked); }}
                 disabled={busy}
                 style={{
                     "background": "none",
@@ -89,9 +86,26 @@ def:pub InterestsGate -> JsxElement {
     </div>
 }
 
+"""Only a same-origin path is a safe redirect target. `?next=` is student-supplied input read
+straight from the URL, so a bare "/today" default plus rejecting anything that isn't a genuine
+relative path (no "//host" protocol-relative URL, no "javascript:" or other scheme) stops it being
+used to send a logged-in student to an external site or run script in their session."""
+def:pub safe_next(raw: str) -> str {
+    return raw if raw.startswith("/") and not raw.startswith("//") else "/today";
+}
+
+"""Pre-fills the picker with whatever the student already has -- a no-op empty list for a
+first-time visitor, but this screen is also reachable later to change a previous pick (the Events
+screen's "Edit your interests" link), so a returning visitor should see their current picks
+checked, not a blank slate they'd overwrite by accident."""
+impl InterestsGate.load -> None {
+    existing: list[str] = [];
+    existing = await my_interests();
+    picked = existing;
+}
+
 impl InterestsGate.go(categories: list[str]) -> None {
     busy = True;
     await set_interests(categories);
-    next = query_param("next") or "/today";
-    window.location.assign(next);  # jac:ignore[E1032,W2001]
+    window.location.assign(safe_next(query_param("next")));  # jac:ignore[E1032,W2001]
 }

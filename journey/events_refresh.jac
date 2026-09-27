@@ -14,7 +14,6 @@ corruption.
 import json;
 import os;
 import urllib.request;
-import urllib.error;
 import from journey.events { EVENT_FILE }
 
 glob EVENTS_FEED_URL: str = os.environ.get(
@@ -48,7 +47,12 @@ def fetch_events_doc(url: str) -> dict[str, any] | None {
         with urllib.request.urlopen(req, timeout=EVENTS_FETCH_TIMEOUT) as resp {
             return json.loads(resp.read().decode("utf-8"));
         }
-    } except (urllib.error.URLError, ValueError, TimeoutError) {
+    } except Exception as err {
+        # Broad on purpose: a dropped connection mid-read (http.client.IncompleteRead /
+        # RemoteDisconnected, a bare ConnectionResetError) isn't a URLError/ValueError/TimeoutError,
+        # and this function's whole contract -- and the scheduled job built on it -- is that a
+        # network hiccup degrades to "keep the old file," never an uncaught exception.
+        print("fetch_events_doc failed: " + str(err));
         return None;
     }
 }
@@ -70,14 +74,28 @@ def refresh_events(event_file: str, url: str = "") -> bool {
     if doc is None or not looks_like_events_doc(doc) {
         return False;
     }
-    write_events_doc(event_file, doc);
+    try {
+        write_events_doc(event_file, doc);
+    } except Exception as err {
+        print("write_events_doc failed: " + str(err));
+        return False;
+    }
     return True;
 }
 
 # Daily at 09:17 UTC -- any coarse daily-ish cadence satisfies R1; this is not a load-bearing time.
+# `cron=` on a STATIC schedule is documented and confirmed working (`jac guide
+# reference/plugins/jac-scale-scheduler`); the other two @schedule call sites in this repo
+# (market/notify.jac, market/messages.jac) use `interval=` instead only because their use case
+# is a fixed-interval sweep, not a once-a-day time.
 @schedule(trigger=ScheduleTrigger.STATIC, cron="17 9 * * *")
 def scheduled_events_refresh {
-    refresh_events(EVENT_FILE);
+    ok = refresh_events(EVENT_FILE);
+    if not ok {
+        print(
+            "scheduled_events_refresh: feed fetch failed or looked invalid, kept existing file"
+        );
+    }
 }
 
 test "a well-formed feed response is written and round-trips through parse_events" {
@@ -113,6 +131,18 @@ test "a well-formed feed response is written and round-trips through parse_event
     }
 }
 
+test "looks_like_events_doc checks each sampled record's shape, not just non-emptiness" {
+    assert looks_like_events_doc({}) is False;
+    assert looks_like_events_doc({"1": "not a dict"}) is False;
+    assert looks_like_events_doc({"1": {"event_title": "Missing a date"}}) is False;
+    assert looks_like_events_doc({"1": {"date_start": "2026-01-01"}}) is False , (
+        "a record with no title (event_title or combined_title) is not a usable event"
+    );
+    assert looks_like_events_doc(
+        {"1": {"event_title": "Real Event", "date_start": "2026-01-01"}}
+    );
+}
+
 test "an empty or malformed feed response leaves the existing file untouched" {
     import tempfile;
 
@@ -127,6 +157,18 @@ test "an empty or malformed feed response leaves the existing file untouched" {
             json.dump({}, f);
         }
         ok = refresh_events(target, "file://" + empty_path);
+        assert not ok;
+        with open(target, encoding="utf-8") as f {
+            after = json.load(f);
+        }
+        assert after == original;
+        # Non-empty but not event-shaped -- exercises looks_like_events_doc's per-record check,
+        # not just its early-return on an empty dict.
+        junk_path = os.path.join(d, "junk.json");
+        with open(junk_path, "w", encoding="utf-8") as f {
+            json.dump({"1": {"not": "an event"}}, f);
+        }
+        ok = refresh_events(target, "file://" + junk_path);
         assert not ok;
         with open(target, encoding="utf-8") as f {
             after = json.load(f);

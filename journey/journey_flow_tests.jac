@@ -239,14 +239,18 @@ test "marking interest through the served app is a public, repeatable tally" {
     client = served();
     try {
         client.register_user("priya@umich.edu", "password123");
-        before = call(client, "interest_counts", {"eids": ["evt-1", "evt-2"]});
-        assert before == {"evt-1": 0, "evt-2": 0};
-        first = call(client, "mark_interested", {"eid": "evt-1"});
+        upcoming = call(client, "upcoming_events", {});
+        (real, other) = (upcoming[0]["eid"], upcoming[1]["eid"]);
+        before = call(client, "interest_counts", {"eids": [real, other]});
+        assert before == {real: 0, other: 0};
+        first = call(client, "mark_interested", {"eid": real});
         assert first == 1;
-        again = call(client, "mark_interested", {"eid": "evt-1"});
+        again = call(client, "mark_interested", {"eid": real});
         assert again == 2;
-        after = call(client, "interest_counts", {"eids": ["evt-1", "evt-2"]});
-        assert after == {"evt-1": 2, "evt-2": 0};
+        after = call(client, "interest_counts", {"eids": [real, other]});
+        assert after == {real: 2, other: 0};
+        fake = call(client, "mark_interested", {"eid": "not-a-real-event"});
+        assert fake == 0 , "an unrecognized eid must be a no-op, not recorded";
     } finally {
         client.close();
     }

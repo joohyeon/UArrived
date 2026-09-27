@@ -323,9 +323,14 @@ def:protect interest_counts(eids: list[str]) -> dict[str, int] {
 
 """Record that the caller is interested in event `eid`. Fire-and-forget: no de-dup, no identity
 kept, so a repeat tap simply adds to the count -- an accepted trade-off for keeping this a
-throwaway tally instead of a tracked RSVP (see the plan's Key Technical Decisions). Returns the
-new count."""
+throwaway tally instead of a tracked RSVP (see the plan's Key Technical Decisions). `eid` must
+belong to a real upcoming event, so the endpoint can't be used to grow the graph with tallies for
+made-up ids -- unlike a fire-and-forget count, that growth would be unbounded and unrelated to any
+real event. Returns the new count (unchanged if `eid` isn't real)."""
 def:protect mark_interested(eid: str) -> int {
+    if eid not in [e.eid for e in all_events(today_iso())] {
+        return interest_count(eid);
+    }
     root.shared ++> EventInterest(eid=eid);
     return interest_count(eid);
 }
@@ -434,16 +439,26 @@ test "best_match picks the soonest event in an interest category, or None if non
 }
 
 test "marking interest is a fire-and-forget tally with no dedup" {
-    assert interest_count("e1") == 0;
-    n1 = mark_interested("e1");
-    assert n1 == 1 and interest_count("e1") == 1;
-    n2 = mark_interested("e1");
+    real = all_events(today_iso())[0].eid;
+    assert interest_count(real) == 0;
+    n1 = mark_interested(real);
+    assert n1 == 1 and interest_count(real) == 1;
+    n2 = mark_interested(real);
     assert n2 == 2 , "a repeat tap adds to the count instead of being deduped";
     assert interest_count("e2") == 0;
 }
 
+test "marking interest in a made-up event id is a no-op, not a recorded tally" {
+    assert interest_count("not-a-real-event") == 0;
+    n = mark_interested("not-a-real-event");
+    assert n == 0 , "an unrecognized eid must not create an EventInterest node";
+    assert interest_count("not-a-real-event") == 0;
+}
+
 test "interest_counts batches several events in one call, defaulting unmarked ones to 0" {
-    mark_interested("only-marked");
-    counts = interest_counts(["only-marked", "never-marked"]);
-    assert counts == {"only-marked": 1, "never-marked": 0};
+    upcoming = all_events(today_iso());
+    (marked, never_marked) = (upcoming[0].eid, upcoming[1].eid);
+    mark_interested(marked);
+    counts = interest_counts([marked, never_marked]);
+    assert counts == {marked: 1, never_marked: 0};
 }
