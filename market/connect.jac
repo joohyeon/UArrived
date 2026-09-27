@@ -300,7 +300,9 @@ def read_thread(chat_id: str, profile: Profile) -> ChatThread {
 }
 
 """Send `text` to the caller's chat as `profile` (the caller's, already verified)."""
-def send(chat_id: str, text: str, profile: Profile) -> SendResult {
+def send(
+    chat_id: str, text: str, profile: Profile, allow_closed: bool = False
+) -> SendResult {
     found = my_chat(chat_id);
     if found is None {
         return SendResult(ok=False, error="That chat isn't available.");
@@ -316,8 +318,9 @@ def send(chat_id: str, text: str, profile: Profile) -> SendResult {
         );
     }
     posts = posts_by_id();
-    if suggestion_status(s, posts.get(s.post_a), posts.get(s.post_b), today_iso())
-        != "connected" {
+    if not allow_closed
+        and suggestion_status(s, posts.get(s.post_a), posts.get(s.post_b), today_iso())
+            != "connected" {
         return SendResult(ok=False, error="This post is closed.");
     }
     (mine, other_language) = side_languages(s);

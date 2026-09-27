@@ -1,7 +1,7 @@
 [project]
 name = "uarrived"
 version = "0.1.0"
-description = "UArrived: first-week journey and student marketplace for Ann Arbor"
+description = "UMadeIt: first-week journey and student marketplace for Ann Arbor"
 entry-point = "main"
 kind = "web-app"
 jac-version = "==0.37.23"
@@ -26,6 +26,10 @@ typescript = "^5.3.3"
 watchdog = ">=3.0.0"
 
 [client]
+
+[client.assets]
+# public/ (images, icons, fonts) is served at /static/assets/<path>
+dir = "public"
 
 [byllm.model]
 # ai/draft.jac pins its own model; this is the project default. Needs ANTHROPIC_API_KEY.

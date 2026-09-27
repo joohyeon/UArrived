@@ -1,4 +1,4 @@
-"""UArrived - entry point.
+"""UMadeIt - entry point.
 
 Serves every endpoint module imported here, plus the client app. A server module that is not
 imported here is not served.
@@ -21,7 +21,7 @@ import from journey.walkers {
     mark_task_done,
     reopen_task
 }
-import from journey.events { upcoming_events }
+import from journey.events { upcoming_events, preview_events }
 import from journey.guide { ask_about_task, translate_journey_texts }
 import from market.decide { help_me_decide }
 import from market.themes {
@@ -33,7 +33,14 @@ import from market.themes {
     leave_group,
     untag_group_message,
     close_group_post,
-    message_poster
+    answer_detail
+}
+import from market.threads {
+    start_thread,
+    get_thread,
+    list_threads,
+    thread_send,
+    thread_action
 }
 import from market.messages {
     send_market_message,
@@ -74,6 +81,7 @@ import from market.lifecycle {
 # Client-side UI
 import from "@jac/runtime" { jacIsLoggedIn }
 import from core.screens.welcome { Welcome }
+import from core.screens.landing { Landing }
 import from core.screens.account { Account }
 import from ui.components.gallery { Gallery }
 import from market.screens.preview { MarketPreview }
@@ -107,6 +115,12 @@ def:pub app -> JsxElement {
         or path in ["/today", "/profile", "/onboarding"]
     )
         and not jacIsLoggedIn() {
+        return <Welcome/>;
+    }
+    if path == "/" {
+        return <Landing/>;
+    }
+    if path in ["/login", "/signup"] {
         return <Welcome/>;
     }
     if path == "/profile" {

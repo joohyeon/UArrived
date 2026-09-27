@@ -1,6 +1,6 @@
 # Engineering rules (hard rules — enforced by `scripts/check_rules.sh` in CI)
 
-UArrived is a **web app first** (mobile-first responsive, runs in any phone or desktop browser),
+UMadeIt is a **web app first** (mobile-first responsive, runs in any phone or desktop browser),
 built with **Jac** end to end: the graph, the walkers *and* the UI (`.jac` JSX). A native mobile app
 is out of scope for the MVP.
 

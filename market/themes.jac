@@ -9,9 +9,6 @@ get one labelled assistant note under the message; matches anywhere are notified
 never invents people, items or counts.
 """
 
-import from uuid { UUID }
-import from jaclang { JacRuntime as Jac }
-import from jaclang.server.identity.app_tokens { token_create }
 import from core.auth { verified_profile }
 import from core.clock { today_iso }
 import from core.profile { Profile, my_profile }
@@ -25,12 +22,14 @@ import from core.groups {
     ensure_group,
     add_message,
     messages_in,
+    message_by_id,
     member_count
 }
 import from market.constants { THEMES }
 import from market.graph {
     Post,
     Suggestion,
+    Chat,
     all_posts,
     all_suggestions,
     post_status,
@@ -42,12 +41,21 @@ import from market.graph {
 import from market.drafting { make_draft }
 import from market.lifecycle { publish, own_post, finish }
 import from market.messages { blocking_question, fields_from, parse_answers, FollowUp }
-import from market.matching { money, CHAT_OPEN_PURPOSE, CHAT_OPEN_TTL_SECONDS }
-import from market.connect { ensure_chat }
+import from market.matching { money, run_matching }
+import from market.connect { chat_for }
 import from market.items { category_for }
+import from market.details {
+    DetailQuestion,
+    facts_split,
+    unknowns,
+    detail_questions,
+    apply_detail,
+    label_guessed
+}
+import from market.threads { thread_state, release_if_closed }
 
 glob MAX_GROUP_MESSAGE_CHARS: int = 1000,
-     MAX_NOTE_MATCHES: int = 3,
+     MAX_MATCHES: int = 5,
      MAX_SUGGESTED: int = 3,
      MARKET_WORDS: list[str] = [
          "sell",
@@ -108,16 +116,48 @@ obj GroupPostResult {
         follow_up: FollowUp | None = None;
 }
 
-"""One Buying/Selling tag on a message: one post filed from it."""
+"""A compatible post shown only to the owner (M-R3): why it fits (confirmed facts), what's still
+unknown, and the thread with its poster if one exists."""
+obj MatchCard {
+    has post_id: str,
+        label: str,
+        title: str,
+        poster: str,
+        confirmed: str,
+        guesses: str,
+        reasons: list[str],
+        unknown: list[str],
+        chat_id: str = "",
+        thread_label: str = "";
+}
+
+"""A private thread about the owner's post, listed only for the owner."""
+obj ThreadLink {
+    has chat_id: str,
+        other_name: str,
+        state_label: str;
+}
+
+"""One Buying/Selling tag on a message: one post filed from it. Everyone sees the public part;
+`questions`, `matches`, `threads` and `owner_state` are filled only for the post's owner, and
+`my_chat` only for a viewer who already has a thread about it."""
 obj TagView {
     has post_id: str,
         kind: str,
         label: str,
         title: str,
-        facts: str,
+        confirmed: str,
+        guesses: str,
+        unknown: list[str],
         status: str,
         status_label: str,
-        mine: bool;
+        mine: bool,
+        interest_label: str = "",
+        owner_state: str = "",
+        questions: list[DetailQuestion] = [],
+        matches: list[MatchCard] = [],
+        threads: list[ThreadLink] = [],
+        my_chat: str = "";
 }
 
 obj GroupMessageView {
@@ -290,75 +330,154 @@ def looks_like_market(text: str) -> bool {
     return any([w in t for w in MARKET_WORDS]);
 }
 
-def message_by_id(message_id: str) -> GroupMessage | None {
-    for m in [root.shared-->][?:GroupMessage] {
-        if jid(m) == message_id {
-            return m;
-        }
-    }
-    return None;
-}
-
-"""The status of a post as its tag shows it: live, sold, found, withdrawn, expired or hidden."""
+"""The public status of a post (M-R9): available, reserved, sold, found, withdrawn, expired or
+hidden. Never says who is interested or how many."""
 def tag_status(p: Post, today: str) -> str {
     status = post_status(p, today);
     if status == "done" {
         return p.closed_reason or "sold";
     }
+    if status == "live" {
+        return "reserved" if p.reserved_chat else "available";
+    }
     return status;
 }
 
-def tag_view(p: Post, today: str, me: str) -> TagView {
-    status = tag_status(p, today);
-    return TagView(
-        post_id=jid(p),
-        kind="selling" if p.kind == "offer" else "buying",
-        label="Selling" if p.kind == "offer" else "Buying",
-        title=p.title,
-        facts=facts_line(p),
-        status=status,
-        status_label=STATUS_LABELS.get(status, ""),
-        mine=p.owner_root == me
-    );
+"""The caller's threads about post `pid`, as (suggestion, chat) pairs."""
+def threads_about(pid: str) -> list[tuple[Suggestion, Chat]] {
+    me = jid(root);
+    out: list[tuple[Suggestion, Chat]] = [];
+    for s in all_suggestions() {
+        if s.origin != "direct"
+            or s.declined
+            or me not in [s.root_a, s.root_b]
+            or pid not in [s.post_a, s.post_b] {
+            continue;
+        }
+        c = chat_for(jid(s));
+        if c is not None {
+            out.append((s, c));
+        }
+    }
+    return out;
 }
 
-"""The assistant's note for newly filed posts (R11): up to MAX_NOTE_MATCHES live posts in the same
-group that the matcher paired with them, each with its reason. "" and no posts when none fit."""
-def note_for(filed: list[Post], g: ChatGroup, today: str) -> tuple[str, list[str]] {
+"""Compatible live posts for the owner's post `p` (M-R3), best first, at most MAX_MATCHES."""
+def matches_for(p: Post, posts: dict[str, Post], today: str) -> list[MatchCard] {
     me = jid(root);
-    posts: dict[str, Post] = {jid(p): p for p in visible_to(all_posts(), me)};
-    ids = [jid(p) for p in filed];
+    pid = jid(p);
     blocked = blocked_keys();
-    lines: list[str] = [];
-    matched: list[str] = [];
+    mine_threads = threads_about(pid);
+    found: list[tuple[int, MatchCard]] = [];
     for s in all_suggestions() {
-        if s.origin != "match" or s.withdrawn or s.declined {
+        if s.origin != "match"
+            or s.withdrawn
+            or s.declined
+            or pid not in [s.post_a, s.post_b] {
             continue;
         }
-        if s.post_a not in ids and s.post_b not in ids {
-            continue;
-        }
-        other = posts.get(s.post_b if s.post_a in ids else s.post_a);
+        other = posts.get(s.post_b if s.post_a == pid else s.post_a);
         if other is None
-            or jid(other) in matched
             or other.owner_root == me
-            or other.topic_group_id != jid(g)
             or post_status(other, today) != "live"
             or pair_key(me, other.owner_root) in blocked {
             continue;
         }
-        who = other.poster_name or "A student";
-        doing = "is looking for" if other.kind == "request" else "is selling";
-        lines.append(
-            f"{who} {doing} \"{other.title}\""
-                + (": " + "; ".join(s.reasons) if s.reasons else "")
+        (sure, guessed) = facts_split(other);
+        card = MatchCard(
+            post_id=jid(other),
+            label="Selling" if other.kind == "offer" else "Buying",
+            title=other.title,
+            poster=other.poster_name or "A student",
+            confirmed=sure,
+            guesses=guessed,
+            reasons=label_guessed(s.reasons, s.reason_codes, p, other),
+            unknown=unknowns(other)
         );
-        matched.append(jid(other));
-        if len(matched) >= MAX_NOTE_MATCHES {
-            break;
+        for (ts, tc) in mine_threads {
+            if jid(other) in [ts.post_a, ts.post_b] {
+                card.chat_id = jid(tc);
+                card.thread_label = thread_state(tc, ts, posts, today)[1];
+            }
+        }
+        found.append((s.score, card));
+    }
+    found.sort(key=lambda (f: tuple[int, MatchCard]) -> int { return -f[0]; });
+    return [c for (_, c) in found][:MAX_MATCHES];
+}
+
+"""What the owner sees about their post's progress (M-R9)."""
+def owner_state(
+    p: Post, matches: list[MatchCard], links: list[ThreadLink], today: str
+) -> str {
+    status = post_status(p, today);
+    if status == "done" {
+        if p.sold_chat {
+            return "Completed";
+        }
+        return STATUS_LABELS.get(p.closed_reason or "sold", "Closed");
+    }
+    if status != "live" {
+        return STATUS_LABELS.get(status, "Closed");
+    }
+    if p.reserved_chat {
+        who = [
+            l.other_name
+            for l in links
+            if l.chat_id == p.reserved_chat
+        ];
+        return "Reserved for " + (who[0] if who else "a student");
+    }
+    if links {
+        return f"{len(links)} interested";
+    }
+    if matches {
+        return f"Match found ({len(matches)})";
+    }
+    return "Finding matches — nothing fits yet. You'll get a notification when something does.";
+}
+
+def tag_view(p: Post, today: str, me: str, posts: dict[str, Post]) -> TagView {
+    release_if_closed(p);
+    status = tag_status(p, today);
+    (sure, guessed) = facts_split(p);
+    view = TagView(
+        post_id=jid(p),
+        kind="selling" if p.kind == "offer" else "buying",
+        label="Selling" if p.kind == "offer" else "Buying",
+        title=p.title,
+        confirmed=sure,
+        guesses=guessed,
+        unknown=unknowns(p),
+        status=status,
+        status_label={"available": "Available", "reserved": "Reserved"}.get(
+            status, STATUS_LABELS.get(status, "")
+        ),
+        mine=p.owner_root == me,
+        interest_label="I'm interested" if p.kind == "offer" else "I have one"
+    );
+    if p.owner_root == me {
+        links = [
+            ThreadLink(
+                chat_id=jid(c),
+                other_name=s.from_name or "A student",
+                state_label=thread_state(c, s, posts, today)[1]
+            )
+            for (s, c) in threads_about(jid(p))
+            if s.root_a == me
+        ];
+        view.matches = matches_for(p, posts, today)
+            if post_status(p, today) == "live"
+            else [];
+        view.threads = links;
+        view.questions = detail_questions(p) if post_status(p, today) == "live" else [];
+        view.owner_state = owner_state(p, view.matches, links, today);
+    } else {
+        for (s, c) in threads_about(jid(p)) {
+            view.my_chat = jid(c);
         }
     }
-    return ("\n".join(lines), matched);
+    return view;
 }
 
 """File a group message into the market if it is about the market (R6-R8). When intent is unclear
@@ -370,7 +489,14 @@ def file_market(
     text = msg.text;
     drafted = make_draft(text, today, verified_profile());
     if not drafted.ok or drafted.draft is None {
-        return GroupPostResult(ok=True, message_id=message_id);
+        # Never fail silently on something that reads like a listing (M-R10).
+        return GroupPostResult(
+            ok=True,
+            message_id=message_id,
+            notice="I couldn't read that as a listing, so it's posted as a plain message. Try again with what it is and a price or budget."
+                if looks_like_market(text)
+                else ""
+        );
     }
     card = drafted.draft;
     known = parse_answers(answers);
@@ -458,10 +584,6 @@ def file_market(
     msg.post_ids = [jid(p) for p in filed];
     msg.post_id = msg.post_ids[0];
     msg.untagged = False;
-    (note, matched) = note_for(filed, g, today);
-    if note {
-        add_message(g, note, ai=True, post_ids=matched);
-    }
     return GroupPostResult(
         ok=True,
         message_id=message_id,
@@ -526,7 +648,7 @@ def view(group_id: str, today: str) -> GroupView {
             continue;
         }
         tags = [
-            tag_view(posts[pid], today, me)
+            tag_view(posts[pid], today, me, posts)
             for pid in m.post_ids
             if pid in posts
         ]
@@ -571,64 +693,6 @@ def untag(message_id: str, today: str) -> ActionOutcome {
     }
     m.untagged = True;
     return ActionOutcome(ok=True, group_id=m.group_id);
-}
-
-"""Open (or reopen) a private chat with a post's owner (R13), like accepting a reply: a one-sided
-"direct" suggestion both sides have accepted."""
-def message_owner(post_id: str, today: str) -> ActionOutcome {
-    me = jid(root);
-    post: Post | None = None;
-    for p in visible_to(all_posts(), me) {
-        if jid(p) == post_id {
-            post = p;
-        }
-    }
-    if post is None {
-        return ActionOutcome(ok=False, error="That message isn't available.");
-    }
-    if post.owner_root == me {
-        return ActionOutcome(ok=False, error="That's your own message.");
-    }
-    if post_status(post, today) != "live" {
-        return ActionOutcome(ok=False, error="This message is closed.");
-    }
-    s: Suggestion | None = None;
-    for existing in all_suggestions() {
-        if existing.origin == "direct"
-            and existing.post_a == post_id
-            and existing.root_b == me
-            and not existing.declined {
-            s = existing;
-        }
-    }
-    if s is None {
-        s = root.shared ++> Suggestion(
-            post_a=post_id,
-            post_b="",
-            root_a=post.owner_root,
-            root_b=me,
-            score=0,
-            reasons=[],
-            created_on=today,
-            accepted_a=True,
-            accepted_b=True,
-            seen_a=False,
-            seen_b=True,
-            emailed_a=True,
-            emailed_b=True,
-            origin="direct",
-            from_name=my_profile().display_name or "A student"
-        );
-        s.open_token = token_create(
-            CHAT_OPEN_PURPOSE, subject=jid(s), ttl_seconds=CHAT_OPEN_TTL_SECONDS
-        );
-        Jac.allow_root(s, UUID(post.owner_root), AccessLevel.WRITE);  # jac:ignore[E1053]
-    }
-    chat = ensure_chat(s);
-    if chat is None {
-        return ActionOutcome(ok=False, error="Couldn't open the chat. Try again.");
-    }
-    return ActionOutcome(ok=True, chat_id=jid(chat));
 }
 
 def denied -> str {
@@ -690,6 +754,26 @@ def:protect untag_group_message(message_id: str) -> ActionOutcome {
         else untag(message_id, today_iso());
 }
 
+"""Answer one clarifying question about the caller's own post (M-R2); matching re-runs."""
+def answer(post_id: str, field: str, value: str, today: str) -> ActionOutcome {
+    p = own_post(post_id);
+    if p is None {
+        return ActionOutcome(ok=False, error="You can only change your own posts.");
+    }
+    error = apply_detail(p, field, value, today);
+    if error {
+        return ActionOutcome(ok=False, error=error);
+    }
+    run_matching(p, today);
+    return ActionOutcome(ok=True);
+}
+
+def:protect answer_detail(post_id: str, field: str, value: str) -> ActionOutcome {
+    return ActionOutcome(ok=False, error=denied())
+        if denied()
+        else answer(post_id, field, value, today_iso());
+}
+
 def:protect close_group_post(post_id: str, reason: str) -> ActionOutcome {
     if denied() {
         return ActionOutcome(ok=False, error=denied());
@@ -698,11 +782,6 @@ def:protect close_group_post(post_id: str, reason: str) -> ActionOutcome {
     return ActionOutcome(ok=r.ok, error=r.error);
 }
 
-def:protect message_poster(post_id: str) -> ActionOutcome {
-    return ActionOutcome(ok=False, error=denied())
-        if denied()
-        else message_owner(post_id, today_iso());
-}
 
 test "suggested groups follow the profile, capped at three and never already joined" {
     assert suggested_keys(Profile(), []) == ["moveout", "furniture"];

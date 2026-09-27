@@ -347,3 +347,16 @@ glob THEMES: list[dict[str, str]] = [
              "description": "Airport rides, carpools and moving help."
          }
      ];
+
+"""Item conditions a student can state (plan 2026-09-27-003 M-R2); the AI records one only when
+the message says it."""
+glob CONDITIONS: list[str] = ["new", "like new", "good", "fair"],
+     PICKUPS: list[str] = ["pickup only", "can deliver", "flexible"],
+     GUESSABLE_FIELDS: list[str] = [
+         "price",
+         "area",
+         "available_from",
+         "available_until",
+         "time_from",
+         "condition"
+     ];

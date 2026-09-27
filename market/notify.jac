@@ -99,9 +99,7 @@ def pending_by_student(today: str, commons: any = None) -> dict[str, list[Pendin
 def digest_body(items: list[Pending], lang: str = "en") -> str {
     base = os.environ.get("UARRIVED_PUBLIC_URL", "http://localhost:8000");
     lines = [
-        f"You have {len(items)} new match{'es'
-            if len(items) != 1
-            else ''} on UArrived:",
+        f"You have {len(items)} new match{'es' if len(items) != 1 else ''} on UMadeIt:",
         ""
     ];
     for it in items {
@@ -148,9 +146,9 @@ def sweep(today: str, commons: any = None) -> int {
             mark_emailed(items);
             continue;
         }
-        subject = "New match on UArrived"
+        subject = "New match on UMadeIt"
             if len(items) == 1
-            else f"{len(items)} new matches on UArrived";
+            else f"{len(items)} new matches on UMadeIt";
         ok = False;
         try {
             ok = send(box.email, subject, digest_body(items, box.language));
@@ -203,7 +201,7 @@ def reply_sweep(commons: any = None) -> int {
         ok = False;
         if box is not None and box.enabled {
             body = "\n".join(
-                ["You have new replies on UArrived:", ""]
+                ["You have new replies on UMadeIt:", ""]
                     + [reply_line(r, titles) for r in items]
                     + [
                         "",
@@ -213,7 +211,7 @@ def reply_sweep(commons: any = None) -> int {
                     ]
             );
             try {
-                ok = send(box.email, "New replies on UArrived", body);
+                ok = send(box.email, "New replies on UMadeIt", body);
             } except Exception {
                 ok = False;
             }

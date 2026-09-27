@@ -1,6 +1,6 @@
-# Running and deploying UArrived
+# Running and deploying UMadeIt
 
-UArrived is one Jac web app (`jac.toml` → `kind = "web-app"`, entry `main.jac`) that's
+UMadeIt is one Jac web app (`jac.toml` → `kind = "web-app"`, entry `main.jac`) that's
 **mobile-first responsive** — there's no separate native mobile project. "Testing on mobile"
 means loading the same app at phone width, either in a resized browser or on an actual phone.
 

@@ -140,7 +140,7 @@ def add_message(
     post_ids: list[str] = []
 ) -> GroupMessage {
     ids = list(post_ids) if post_ids else ([post_id] if post_id else []);
-    name = "UArrived assistant" if ai else (my_profile().display_name or "Student");
+    name = "UMadeIt assistant" if ai else (my_profile().display_name or "Student");
     msg = root.shared ++> GroupMessage(
         group_id=jid(g),
         author_root=jid(root),
@@ -153,6 +153,15 @@ def add_message(
     );
     grant(msg, level=AccessLevel.READ);
     return msg;
+}
+
+def message_by_id(message_id: str) -> GroupMessage | None {
+    for m in [root.shared-->][?:GroupMessage] {
+        if jid(m) == message_id {
+            return m;
+        }
+    }
+    return None;
 }
 
 def messages_in(group_id: str) -> list[GroupMessage] {

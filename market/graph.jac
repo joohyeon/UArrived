@@ -56,7 +56,15 @@ node Post {
         closed_reason: str = "",
         nudged: bool = False,
         topic_group_id: str = "",
-        item: str = "";
+        item: str = "",
+        condition: str = "",
+        pickup: str = "",
+        inferred: list[str] = [],
+        answered: list[str] = [],
+        reserved_for: str = "",
+        reserved_chat: str = "",
+        sold_to: str = "",
+        sold_chat: str = "";
 }
 
 """live, done, expired or hidden (by a moderator), as of `today` (YYYY-MM-DD). A post is visible while today < expires_on."""
@@ -122,7 +130,9 @@ node Suggestion {
         open_token: str = "",
         language_a: str = "",
         language_b: str = "",
-        from_name: str = "";
+        from_name: str = "",
+        group_id: str = "",
+        message_id: str = "";
 }
 
 """The private chat for one connected suggestion. Shared WRITE with exactly its two students;

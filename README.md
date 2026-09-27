@@ -1,4 +1,4 @@
-# Uarrived
+# UMadeIt
 
 Hackathon project, built mostly in [Jac](https://jaclang.org/) (with Python where needed).
 

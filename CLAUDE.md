@@ -1,4 +1,4 @@
-# CLAUDE.md — Uarrived
+# CLAUDE.md — UMadeIt
 
 **Web app first (mobile-first responsive), built end to end in Jac** — graph, walkers and UI.
 Hard rules are in [docs/ENGINEERING_RULES.md](docs/ENGINEERING_RULES.md) and enforced by
