@@ -71,6 +71,8 @@ jac guide                            # current, version-matched Jac reference gu
   (`Membership`, `ReplyTick`).
 - `# jac:ignore[CODE]` is ignored inside `.impl.jac` annexes; keep browser-global code (`new(URLSearchParams, ...)`,
   `window.*`) in the main file with the ignore comment.
+- **Imports go at the top of a test file, never inside a `test` block.** An `import` inside a test body
+  broke `root.shared` ("Shared root unavailable") for every later served test in that worker.
 - Module constants are `glob NAME: type = ...;`; booleans are `True`/`False`.
 - Under `jac test`, `int(s, 16)` raises "invalid literal for int()" — parse hex by hand (see
   `ui/tokens.jac`). `jac guide jac-core-cheatsheet --section pitfalls` lists more.
