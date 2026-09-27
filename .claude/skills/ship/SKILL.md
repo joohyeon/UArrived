@@ -11,7 +11,7 @@ optional — grab one for anything touching `core/`, `ui/` or `data/` if you hav
 otherwise.
 
 **Hackathon speed mode:** only `check_rules.sh` gates the merge (it's also all CI runs). `jac fmt
---check .`, `jac check .` and `jac test -d .` are optional — run them if you want the extra
+--check .`, `jac check .` and `bash scripts/test.sh` are optional — run them if you want the extra
 confidence, but a failure there doesn't block shipping.
 
 ## Steps
@@ -23,7 +23,7 @@ confidence, but a failure there doesn't block shipping.
 2. **Sync.** `git fetch origin && git rebase origin/main`. Resolve conflicts here, then continue.
 3. **Check** — `bash scripts/check_rules.sh` (Jac share, feature boundaries, design tokens) must
    pass; fix failures rather than skipping them. Optionally also run `jac fmt --check .` (fix with
-   `jac fmt --lintfix <file>`), `jac check .`, and `jac test -d .` — nice to have, not required.
+   `jac fmt --lintfix <file>`), `jac check .`, and `bash scripts/test.sh` — nice to have, not required.
 4. **Commit** everything intended, in small logical commits (imperative subject, why in the body).
    `git status` must be clean afterwards; no `.env` or secrets in `git diff origin/main`.
 5. **Push** the branch: `git push -u origin HEAD` (never `--force` on a shared branch; use
