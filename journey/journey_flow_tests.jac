@@ -156,3 +156,59 @@ test "skip_step_check never bypasses task applicability" {
         client.close();
     }
 }
+
+test "the arrival wizard's calls round-trip: fill some steps, self-report a task, finish" {
+    client = served();
+    try {
+        client.register_user("mina@umich.edu", "password123");
+        step1 = call(
+            client,
+            "update_my_profile",
+            {"changes": {"arrival_date": "2026-08-28", "arrival_time": "15:00"}}
+        );
+        assert step1["ok"];
+        step2 = call(
+            client,
+            "update_my_profile",
+            {"changes": {"area": "Central Campus", "housing_status": "have-housing"}}
+        );
+        assert step2["ok"];
+        step3 = call(
+            client, "update_my_profile", {"changes": {"preferred_language": "zh"}}
+        );
+        assert step3["ok"] and step3["profile"]["language_chosen"];
+        step4 = call(
+            client, "mark_task_done", {"tid": "mcard", "skip_step_check": True}
+        );
+        assert step4["ok"];
+        finish = call(
+            client, "update_my_profile", {"changes": {"onboarding_done": True}}
+        );
+        assert finish["ok"] and finish["profile"]["onboarding_done"];
+        mine = call(client, "get_my_profile", {});
+        assert mine["arrival_date"] == "2026-08-28" and mine["area"] == "Central Campus";
+        after = call(client, "my_journey", {});
+        assert task_of(after, "mcard")["status"] == "done";
+    } finally {
+        client.close();
+    }
+}
+
+test "skipping every step still reaches onboarding_done with nothing else changed" {
+    client = served();
+    try {
+        client.register_user("mina@umich.edu", "password123");
+        before = call(client, "get_my_profile", {});
+        finish = call(
+            client, "update_my_profile", {"changes": {"onboarding_done": True}}
+        );
+        assert finish["ok"];
+        after = call(client, "get_my_profile", {});
+        assert after["onboarding_done"];
+        assert after["arrival_date"] == before["arrival_date"] == "";
+        assert after["area"] == before["area"] == "";
+        assert after["preferred_language"] == before["preferred_language"] == "en";
+    } finally {
+        client.close();
+    }
+}
