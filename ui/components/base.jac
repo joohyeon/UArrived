@@ -1,20 +1,23 @@
 """Base components (issue #3): the only building blocks feature screens use.
 
 All color, spacing, radius and type come from ui/tokens.jac, so every screen follows the
-UArrived Design System and switches theme in one place. Mobile-first: touch targets are at
+UArrived Figma design and switches theme in one place. Mobile-first: touch targets are at
 least 44px (SIZE["touch-min"]).
 """
 
-import from ui.tokens { color, space, text_style, RADIUS, SIZE, FONTS }
+import from ui.tokens { color, space, text_style, RADIUS, SIZE, FONTS, FONT_URL }
 
 def px(n: int) -> str {
     return f"{n}px";
 }
 
-"""Global styles components can't set inline: page background, fonts, and the focus ring."""
+"""Global styles components can't set inline: web fonts, page background, and the focus ring."""
 def:pub BaseStyles -> JsxElement {
     css = (
-        "body{margin:0;background:"
+        "@import url('"
+        + FONT_URL
+        + "');"
+        + "body{margin:0;background:"
         + color("ground")
         + ";color:"
         + color("text")
@@ -44,7 +47,7 @@ def:pub Button(
     full: bool = False
 ) -> JsxElement {
     styles: dict[str, str] = {
-        "minHeight": px(SIZE["touch-min"]),
+        "minHeight": px(SIZE["button-h"] if full else SIZE["touch-min"]),
         "padding": "0 " + space("4"),
         "borderRadius": px(RADIUS["button"]),
         "fontFamily": FONTS["sans"],
@@ -65,8 +68,8 @@ def:pub Button(
         styles["border"] = "0";
     } elif variant == "secondary" {
         styles["background"] = color("card");
-        styles["color"] = color("text");
-        styles["border"] = "1px solid " + color("border-strong");
+        styles["color"] = color("action");
+        styles["border"] = "1px solid " + color("action-line");
     } else {
         styles["background"] = "none";
         styles["color"] = color("action");
@@ -85,6 +88,7 @@ def:pub Card(children: any = None) -> JsxElement {
             "background": color("card"),
             "border": "1px solid " + color("border"),
             "borderRadius": px(RADIUS["card"]),
+            "boxShadow": "0 2px 8px " + color("shadow"),
             "padding": space("4"),
             "display": "flex",
             "flexDirection": "column",
@@ -95,14 +99,16 @@ def:pub Card(children: any = None) -> JsxElement {
     </section>
 }
 
-"""A status chip. Kinds: official, ai, progress, warning. Every chip carries a word; color only
-makes it findable (design rule)."""
+"""A status chip. Kinds: official, ai, progress, warning, action (e.g. "20 min", "NEXT ESSENTIAL"),
+neutral. Every chip carries a word; color only makes it findable (design rule)."""
 def:pub Badge(kind: str, label: str) -> JsxElement {
     palette: dict[str, tuple[str, str]] = {
         "official": ("official", "official-bg"),
         "ai": ("ai", "ai-bg"),
         "progress": ("progress", "progress-bg"),
-        "warning": ("warning", "panel")
+        "warning": ("warning", "warning-bg"),
+        "action": ("action", "action-soft"),
+        "neutral": ("sub", "panel")
     };
     (fg, bg) = palette.get(kind, ("sub", "panel"));
     <span
@@ -111,12 +117,14 @@ def:pub Badge(kind: str, label: str) -> JsxElement {
             "alignSelf": "flex-start",
             "alignItems": "center",
             "gap": space("1"),
-            "padding": "2px 10px",
-            "borderRadius": px(RADIUS["pill"]),
+            "padding": "3px 8px",
+            "borderRadius": px(RADIUS["sm"]),
             "background": color(bg),
             "color": color(fg),
-            "fontSize": "13px",
-            "fontWeight": "700",
+            "fontFamily": FONTS["sans"],
+            "fontSize": text_style("badge")["fontSize"],
+            "fontWeight": text_style("badge")["fontWeight"],
+            "letterSpacing": "0.02em",
             "whiteSpace": "nowrap"
         }}
     >
@@ -135,10 +143,10 @@ def:pub Field(
     placeholder: str = ""
 ) -> JsxElement {
     box: dict[str, str] = {
-        "minHeight": px(SIZE["touch-min"]),
-        "padding": space("2") + " " + space("3"),
-        "border": "1px solid " + color("border-strong"),
-        "borderRadius": px(RADIUS["sm"]),
+        "minHeight": px(SIZE["button-h"]),
+        "padding": space("3") + " " + space("4"),
+        "border": "1px solid " + color("border"),
+        "borderRadius": px(RADIUS["field"]),
         "background": color("card"),
         "color": color("text"),
         "fontFamily": FONTS["sans"],
@@ -151,6 +159,7 @@ def:pub Field(
             "display": "flex",
             "flexDirection": "column",
             "gap": space("1"),
+            "fontFamily": FONTS["sans"],
             "fontSize": "14px",
             "fontWeight": "600",
             "color": color("text")
@@ -226,7 +235,7 @@ def:pub AppShell(title: str, active: str, children: any = None) -> JsxElement {
                 "alignItems": "center",
                 "justifyContent": "space-between",
                 "padding": space("2") + " " + space("4"),
-                "background": color("panel"),
+                "background": color("ground"),
                 "borderBottom": "1px solid " + color("border")
             }}
         >
@@ -234,7 +243,8 @@ def:pub AppShell(title: str, active: str, children: any = None) -> JsxElement {
                 style={{
                     "fontFamily": FONTS["display"],
                     "fontSize": "22px",
-                    "fontWeight": "600"
+                    "fontWeight": "700",
+                    "color": color("action")
                 }}
             >
                 UArrived
@@ -258,7 +268,10 @@ def:pub AppShell(title: str, active: str, children: any = None) -> JsxElement {
                 style={{
                     "margin": "0",
                     "fontFamily": FONTS["display"],
-                    "fontSize": "28px"
+                    "fontSize": text_style("screen-title")["fontSize"],
+                    "fontWeight": text_style("screen-title")["fontWeight"],
+                    "lineHeight": text_style("screen-title")["lineHeight"],
+                    "color": color("text")
                 }}
             >
                 {title}
@@ -272,7 +285,7 @@ def:pub AppShell(title: str, active: str, children: any = None) -> JsxElement {
                 "bottom": "0",
                 "display": "grid",
                 "gridTemplateColumns": "repeat(5, minmax(0, 1fr))",
-                "background": color("panel"),
+                "background": color("card"),
                 "borderTop": "1px solid " + color("border")
             }}
         >
@@ -287,8 +300,8 @@ def:pub AppShell(title: str, active: str, children: any = None) -> JsxElement {
                         "alignItems": "center",
                         "justifyContent": "center",
                         "textDecoration": "none",
-                        "fontSize": "13px",
-                        "fontWeight": "700" if key == active else "400",
+                        "fontSize": "12px",
+                        "fontWeight": "700" if key == active else "500",
                         "color": color("action") if key == active else color("sub")
                     }}
                 >
