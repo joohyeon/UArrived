@@ -418,3 +418,141 @@ def:pub TimelineItem(
         {(<span style={badge_style}>{duration}</span>) if duration else None}
     </div>
 }
+
+"""A label chip. Static (document names like Passport, I-20) or, with `onSelect`, a filter chip
+whose selection shows as a filled chip plus aria-pressed, never color alone."""
+def:pub Chip(
+    label: str, selected: bool = False, onSelect: Callable[[], None] | None = None
+) -> JsxElement {
+    def handle(e: MouseEvent) {
+        if onSelect is not None {
+            onSelect();
+        }
+    }
+    style = _text("meta");
+    style["display"] = "inline-flex";
+    style["alignItems"] = "center";
+    style["gap"] = space("1");
+    style["padding"] = "0 " + space("3");
+    style["borderRadius"] = _px(RADIUS["pill"]);
+    style["whiteSpace"] = "nowrap";
+    style["background"] = color("action") if selected else color("panel");
+    style["color"] = color("on-action") if selected else color("text-2");
+    style["border"] = "1px solid " + (color("action") if selected else color("border"));
+    if onSelect is None {
+        style["minHeight"] = "32px";
+        return <span style={style}>{label}</span>;
+    } else {
+        style["minHeight"] = _px(SIZE["touch-min"]);
+        style["cursor"] = "pointer";
+        style["fontFamily"] = FONTS["sans"];
+        return (
+            <button
+                type="button"
+                aria-pressed={selected}
+                onClick={handle}
+                style={style}
+            >
+                {"✓ " + label if selected else label}
+            </button>
+        );
+    }
+}
+
+"""A two-to-four option switch (Map / List). `options` are (value, label) pairs."""
+def:pub SegmentedControl(
+    options: list[tuple[str, str]],
+    value: str,
+    onChange: Callable[[str], None],
+    label: str = ""
+) -> JsxElement {
+    <div
+        role="radiogroup"
+        aria-label={label or None}
+        style={{
+            "display": "inline-flex",
+            "padding": "3px",
+            "gap": "2px",
+            "borderRadius": _px(RADIUS["field"]),
+            "background": color("panel"),
+            "border": "1px solid " + color("border")
+        }}
+    >
+        {[
+            <button
+                key={v}
+                type="button"
+                role="radio"
+                aria-checked={v == value}
+                onClick={lambda (e: MouseEvent) { onChange(v); }}
+                style={{
+                    "minHeight": _px(SIZE["touch-min"] - 6),
+                    "minWidth": "72px",
+                    "padding": "0 " + space("4"),
+                    "border": "0",
+                    "borderRadius": _px(RADIUS["sm"]),
+                    "background": color("card") if v == value else "transparent",
+                    "boxShadow": ("0 1px 3px " + color("shadow"))
+                        if v == value
+                        else "none",
+                    "color": color("action") if v == value else color("text-2"),
+                    "fontFamily": FONTS["sans"],
+                    "fontSize": "14px",
+                    "fontWeight": "700" if v == value else "500",
+                    "cursor": "pointer"
+                }}
+            >
+                {t}
+            </button> for (v, t) in options
+        ]}
+    </div>
+}
+
+"""An aligned label / value row (Place, Hours, Total XP)."""
+def:pub KeyValueRow(label: str, value: str) -> JsxElement {
+    label_style = _text("small");
+    label_style["color"] = color("sub");
+    label_style["flex"] = "0 0 88px";
+    value_style = _text("small");
+    value_style["color"] = color("text-2");
+    value_style["flex"] = "1 1 auto";
+    value_style["overflowWrap"] = "anywhere";
+    <div
+        style={{
+            "display": "flex",
+            "gap": space("3"),
+            "padding": space("2") + " 0",
+            "borderTop": "1px solid " + color("border")
+        }}
+    >
+        <span style={label_style}>{label}</span>
+        <span style={value_style}>{value}</span>
+    </div>
+}
+
+"""The player's level pill, e.g. LVL 2."""
+def:pub LevelBadge(level: int) -> JsxElement {
+    style = _text("badge");
+    style["display"] = "inline-flex";
+    style["alignItems"] = "center";
+    style["padding"] = "4px 10px";
+    style["borderRadius"] = _px(RADIUS["pill"]);
+    style["background"] = color("action");
+    style["color"] = color("on-action");
+    style["letterSpacing"] = "0.06em";
+    style["whiteSpace"] = "nowrap";
+    <span style={style}>{f"LVL {level}"}</span>
+}
+
+"""The back link above a detail screen's content ("< Journey")."""
+def:pub TopBar(back_href: str, back_label: str = "Back") -> JsxElement {
+    style = _text("meta");
+    style["display"] = "inline-flex";
+    style["alignItems"] = "center";
+    style["alignSelf"] = "flex-start";
+    style["gap"] = space("1");
+    style["minHeight"] = _px(SIZE["touch-min"]);
+    style["color"] = color("action");
+    style["textDecoration"] = "none";
+    <a href={back_href} style={style}>{"‹ " + back_label}</a>
+}

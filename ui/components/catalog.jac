@@ -587,7 +587,14 @@ glob component_specs: list[ComponentSpec] = [
          "Avatar": "blocks.Avatar",
          "InfoCard": "blocks.InfoCard",
          "Timeline": "blocks.TimelineItem",
-         "TimelineItem": "blocks.TimelineItem"
+         "TimelineItem": "blocks.TimelineItem",
+         "Chip": "blocks.Chip",
+         "SegmentedControl": "blocks.SegmentedControl",
+         "KeyValueRow": "blocks.KeyValueRow",
+         "LevelBadge": "blocks.LevelBadge",
+         "TopBar": "blocks.TopBar",
+         "MapPin": "map.MapPin",
+         "MapCanvas": "map.MapCanvas"
      };
 
 # Figma component name -> the Jac component that implements it.
@@ -634,5 +641,6 @@ test "specs resolve to the default theme's tokens" {
 test "the to-do list skips built components" {
     todo = todo_components();
     assert "Button" not in todo;
-    assert "MapPin" in todo;
+    assert "MapPin" not in todo;
+    assert "BottomSheet" in todo;
 }
