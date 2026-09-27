@@ -44,6 +44,7 @@ import from market.connect {
     MessageView,
     SendResult
 }
+import from market.items { standard_item }
 import from market.details { facts_split, unknowns, label_guessed }
 
 obj SideSummary {
@@ -107,6 +108,11 @@ def parts(
     if anchor.kind == "offer" {
         return (anchor, theirs, anchor, theirs, s.root_a, s.root_b);
     }
+    if theirs is not None and theirs.kind == "request" {
+        # Two requests (riders sharing a ride): no seller. Each side's "request" is their own.
+        mine = anchor if anchor.owner_root == jid(root) else theirs;
+        return (anchor, theirs, None, mine, "", jid(root));
+    }
     return (anchor, theirs, theirs, anchor, s.root_b, s.root_a);
 }
 
@@ -134,10 +140,24 @@ def thread_state(
         }
         return ("unavailable", "Sold to another student");
     }
+    if offer is None
+        and theirs is not None
+        and cid in [anchor.sold_chat if anchor else "", theirs.sold_chat] {
+        return ("completed", "Completed");
+    }
     if request is not None and request.sold_chat == cid {
         return (
             "completed",
             "Completed · " + ("they found it" if me == seller else "you found it")
+        );
+    }
+    if request is not None and request.done and offer is not None {
+        # The buyer closed their request in another thread (or outside the app).
+        return (
+            "unavailable",
+            "You found one elsewhere"
+                if request.owner_root == me
+                else "They found one elsewhere"
         );
     }
     if s.declined {
@@ -246,9 +266,13 @@ def suggested_replies(
     return out[:4];
 }
 
+def blocked_pair(s: Suggestion) -> bool {
+    return pair_key(s.root_a, s.root_b) in blocked_keys();
+}
+
 def thread_view(chat_id: str, today: str) -> ThreadView {
     found = my_chat(chat_id);
-    if found is None {
+    if found is None or blocked_pair(found[1]) {
         return ThreadView(ok=False, error="That thread isn't available.");
     }
     (c, s) = found;
@@ -311,7 +335,11 @@ def thread_view(chat_id: str, today: str) -> ThreadView {
         origin_text=origin.text if origin else "",
         state=state,
         state_label=label,
-        offer=side(offer, "Selling", seller_name),
+        offer=side(offer, "Selling", seller_name)
+            if offer is not None
+            else side(
+                theirs if request is anchor else anchor, "Also looking for", other
+            ),
         request=side(request, "Looking for", buyer_name),
         fits=fits,
         open_questions=open_q,
@@ -330,7 +358,9 @@ def my_threads(today: str) -> list[ThreadItem] {
     posts: dict[str, Post] = {jid(p): p for p in visible_to(all_posts(), me)};
     out: list[ThreadItem] = [];
     for s in all_suggestions() {
-        if me not in [s.root_a, s.root_b] or not (s.accepted_a and s.accepted_b) {
+        if me not in [s.root_a, s.root_b]
+            or not (s.accepted_a and s.accepted_b)
+            or blocked_pair(s) {
             continue;
         }
         c = ensure_chat(s);
@@ -380,6 +410,22 @@ def start(
     via = ""
         if not via_post_id
         else (via_post_id if own_post(via_post_id) is not None else "");
+    if not via {
+        # Tapped on a feed message: link the caller's own live post for the same thing, if any,
+        # so the assistant can compare both sides (e.g. suggest a counter-offer).
+        want = "request" if post.kind == "offer" else "offer";
+        target = post.item or standard_item(post.category, post.title);
+        for p in posts.values() {
+            if p.owner_root == me
+                and p.kind == want
+                and p.category == post.category
+                and post_status(p, today) == "live"
+                and (p.item or standard_item(p.category, p.title)) == target {
+                via = jid(p);
+                break;
+            }
+        }
+    }
     pair = set([post_id, via]) if via else set([post_id]);
     s: Suggestion | None = None;
     for existing in all_suggestions() {
@@ -544,7 +590,7 @@ def release_if_closed(p: Post) {
 """Send in a thread: allowed while it's open, and after completion so the pair can arrange pickup."""
 def send_here(chat_id: str, text: str, today: str) -> SendResult {
     found = my_chat(chat_id);
-    if found is None {
+    if found is None or blocked_pair(found[1]) {
         return SendResult(ok=False, error="That thread isn't available.");
     }
     (c, s) = found;
