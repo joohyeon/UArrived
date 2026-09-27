@@ -192,13 +192,21 @@ obj ProfileUpdateResult {
         profile: ProfileView | None = None;
 }
 
-"""The caller's profile, created on first use."""
+"""The caller's profile, created on first use.
+
+Called on nearly every protected endpoint, so this whole-collection scan under SERIALIZABLE
+easily collides with a concurrent write anywhere under the caller's root - the client's own
+`heartbeat` polling while a slower request (e.g. `post_in_group`'s AI draft call) is still open
+is enough to trigger it. Wrapped in `retry_on_conflict` for the same reason `sync_mailbox` is."""
 def my_profile -> Profile {
-    found = [root-->][?:Profile];
-    if found {
-        return found[0];
+    def attempt -> Profile {
+        found = [root-->][?:Profile];
+        if found {
+            return found[0];
+        }
+        return root ++> Profile();
     }
-    return root ++> Profile();
+    return retry_on_conflict(attempt);
 }
 
 """The moderators, as one access group (U11). Posts and reports are shared with the group once,

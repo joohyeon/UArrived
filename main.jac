@@ -4,7 +4,12 @@ Serves every endpoint module imported here, plus the client app. A server module
 imported here is not served.
 """
 
-import from core.auth { start_verification, confirm_verification, my_verification }
+import from core.auth {
+    start_verification,
+    confirm_verification,
+    my_verification,
+    claim_umich_account
+}
 import from core.profile { get_my_profile, update_my_profile }
 import from market.drafting { draft_from_message }
 import from market.suggestions { list_my_suggestions, stop_suggestions }
@@ -19,16 +24,16 @@ import from journey.walkers {
 import from journey.events { upcoming_events }
 import from journey.guide { ask_about_task, translate_journey_texts }
 import from market.decide { help_me_decide }
-import from market.topics {
-    my_groups,
-    my_group_invites,
+import from market.themes {
+    list_groups_for_me,
     group_view,
     post_in_group,
     answer_group_followup,
-    join_topic_group,
-    dismiss_topic_invite,
+    join_group,
+    leave_group,
+    untag_group_message,
     close_group_post,
-    leave_topic_group
+    message_poster
 }
 import from market.messages {
     send_market_message,
@@ -69,6 +74,7 @@ import from market.lifecycle {
 # Client-side UI
 import from "@jac/runtime" { jacIsLoggedIn }
 import from core.screens.welcome { Welcome }
+import from core.screens.account { Account }
 import from ui.components.gallery { Gallery }
 import from market.screens.preview { MarketPreview }
 import from market.screens.inbox { MatchesInbox }
@@ -98,11 +104,13 @@ def:pub app -> JsxElement {
     if (
         path.startswith("/market")
         or path.startswith("/journey")
-        or path == "/today"
-        or path == "/onboarding"
+        or path in ["/today", "/profile", "/onboarding"]
     )
         and not jacIsLoggedIn() {
         return <Welcome/>;
+    }
+    if path == "/profile" {
+        return <Account/>;
     }
     if path == "/today" {
         return <Today/>;

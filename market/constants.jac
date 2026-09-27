@@ -294,3 +294,56 @@ glob STANDARD_ITEMS: dict[str, dict[str, list[str]]] = {
              "car": ["car", "sedan", "suv", "vehicle"]
          }
      };
+
+"""The themed group chats (plan 2026-09-27-002 R1), in the order students see them. `key` is the
+group's stable key suffix ("theme:furniture"). A fixed, curated set: students can't create groups."""
+glob THEMES: list[dict[str, str]] = [
+         {
+             "key": "furniture",
+             "name": "Furniture",
+             "icon": "🪑",
+             "description": "Desks, beds, mattresses, chairs, shelves and sofas."
+         },
+         {
+             "key": "electronics",
+             "name": "Electronics",
+             "icon": "💻",
+             "description": "Monitors, laptops, phones, speakers and chargers."
+         },
+         {
+             "key": "textbooks",
+             "name": "Textbooks",
+             "icon": "📚",
+             "description": "Course books, readers and study guides."
+         },
+         {
+             "key": "kitchen",
+             "name": "Kitchen & essentials",
+             "icon": "🍳",
+             "description": "Cookware, fridges, lamps, bedding and everyday things."
+         },
+         {
+             "key": "vehicles",
+             "name": "Bikes & vehicles",
+             "icon": "🚲",
+             "description": "Bikes, scooters and cars."
+         },
+         {
+             "key": "housing",
+             "name": "Housing & sublets",
+             "icon": "🏠",
+             "description": "Rooms, sublets, roommates and lease transfers."
+         },
+         {
+             "key": "moveout",
+             "name": "Move-out sales",
+             "icon": "📦",
+             "description": "Leaving Ann Arbor? Sell or give away everything in one place."
+         },
+         {
+             "key": "rides",
+             "name": "Rides",
+             "icon": "🚗",
+             "description": "Airport rides, carpools and moving help."
+         }
+     ];

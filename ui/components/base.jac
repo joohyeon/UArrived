@@ -149,7 +149,23 @@ def:pub Badge(kind: str, label: str) -> JsxElement {
     </span>
 }
 
-"""A labeled text input (or textarea when `multiline`). `hint` shows under the field."""
+"""A field's label: 14px semibold, or (`caps`) the Figma form style, small uppercase in `sub`."""
+def field_label_style(caps: bool) -> dict[str, str] {
+    return {
+        "display": "flex",
+        "flexDirection": "column",
+        "gap": space("2") if caps else space("1"),
+        "fontFamily": FONTS["sans"],
+        "fontSize": "12px" if caps else "14px",
+        "fontWeight": "700" if caps else "600",
+        "letterSpacing": "0.04em" if caps else "normal",
+        "textTransform": "uppercase" if caps else "none",
+        "color": color("sub") if caps else color("text")
+    };
+}
+
+"""A labeled text input (or textarea when `multiline`). `hint` shows under the field; `caps`
+uses the Figma form label style; `autocomplete` is passed to the input (e.g. "email")."""
 def:pub Field(
     label: str,
     value: str,
@@ -157,7 +173,9 @@ def:pub Field(
     input_type: str = "text",
     hint: str = "",
     multiline: bool = False,
-    placeholder: str = ""
+    placeholder: str = "",
+    caps: bool = False,
+    autocomplete: str = ""
 ) -> JsxElement {
     box: dict[str, str] = {
         "minHeight": px(SIZE["button-h"]),
@@ -171,17 +189,7 @@ def:pub Field(
         "boxSizing": "border-box",
         "width": "100%"
     };
-    <label
-        style={{
-            "display": "flex",
-            "flexDirection": "column",
-            "gap": space("1"),
-            "fontFamily": FONTS["sans"],
-            "fontSize": "14px",
-            "fontWeight": "600",
-            "color": color("text")
-        }}
-    >
+    <label style={field_label_style(caps)}>
         {label}{(
             <textarea
                 value={value}
@@ -197,12 +205,77 @@ def:pub Field(
                     type={input_type}
                     value={value}
                     placeholder={placeholder}
+                    autoComplete={autocomplete or None}
                     style={box}
                     onChange={lambda (e: ChangeEvent) { onChange(e.target.value); }}
                 />
             )}{<span style={{"fontWeight": "400", "color": color("sub")}}>{hint}</span>
             if hint
             else None}
+    </label>
+}
+
+"""A password input with a Show / Hide toggle (a 44px text button, so it works without an icon)."""
+def:pub PasswordField(
+    label: str,
+    value: str,
+    onChange: Callable[[str], None],
+    placeholder: str = "",
+    caps: bool = False,
+    autocomplete: str = "current-password"
+) -> JsxElement {
+    has shown: bool = False;
+    <label style={field_label_style(caps)}>
+        {label}
+        <span style={{"position": "relative", "display": "block"}}>
+            <input
+                type={"text" if shown else "password"}
+                value={value}
+                placeholder={placeholder}
+                autoComplete={autocomplete}
+                onChange={lambda (e: ChangeEvent) { onChange(e.target.value); }}
+                style={{
+                    "minHeight": px(SIZE["button-h"]),
+                    "padding": space("3") + " 72px " + space("3") + " " + space("4"),
+                    "border": "1px solid " + color("border"),
+                    "borderRadius": px(RADIUS["field"]),
+                    "background": color("card"),
+                    "color": color("text"),
+                    "fontFamily": FONTS["sans"],
+                    "fontSize": "16px",
+                    "letterSpacing": "normal",
+                    "textTransform": "none",
+                    "boxSizing": "border-box",
+                    "width": "100%"
+                }}
+            />
+            <button
+                type="button"
+                aria-pressed={shown}
+                aria-label={"Hide password" if shown else "Show password"}
+                onClick={lambda (e: MouseEvent) { shown = not shown; }}
+                style={{
+                    "position": "absolute",
+                    "right": space("1"),
+                    "top": "50%",
+                    "transform": "translateY(-50%)",
+                    "minHeight": px(SIZE["touch-min"]),
+                    "minWidth": px(SIZE["touch-min"]),
+                    "padding": "0 " + space("2"),
+                    "border": "0",
+                    "background": "none",
+                    "color": color("action"),
+                    "fontFamily": FONTS["sans"],
+                    "fontSize": "13px",
+                    "fontWeight": "600",
+                    "letterSpacing": "normal",
+                    "textTransform": "none",
+                    "cursor": "pointer"
+                }}
+            >
+                {"Hide" if shown else "Show"}
+            </button>
+        </span>
     </label>
 }
 

@@ -1,79 +1,91 @@
-"""Groups (plan 004 G6): the cohort group, topic groups the assistant made, and invites.
+"""Themed group chats (plan 2026-09-27-002).
 
-The list shows invites first (group name, why you were invited, Join or Dismiss), then the
-student's groups with the latest message. A group screen is a group chat: the assistant's messages
-carry an "Assistant" label, a topic group shows the live offers and requests filed there, and a
-market message in the cohort may get one follow-up question that only its sender sees. Screens
-poll through `heartbeat` so the client's 60-second read cache never hides a new message.
+The list shows the student's groups first, then every other theme with a Join button; a few are
+marked "Suggested for you". A group screen is a group chat anyone signed in can read: members get a
+composer, others a Join bar. Buy and sell messages carry Buying/Selling tags with their facts and
+status, the assistant's notes are labelled, and a tagged message from someone else offers "Message
+privately". Screens poll through `heartbeat` so the client's 60-second read cache never hides a
+new message.
 """
 
 import from ui.tokens { color, space }
 import from ui.components.base { AppShell, Button, Card, Badge, Field, ResponsiveGrid }
-import from market.screens.common { MarketTabs, PostSummary, query_param, go }
+import from market.screens.common { MarketTabs, query_param, go }
 import from market.feed { heartbeat }
 import from market.notify { unread_suggestions }
 import from market.messages { FollowUp, Choice }
-import from market.topics {
-    my_groups,
-    my_group_invites,
+import from market.themes {
+    list_groups_for_me,
     group_view,
     post_in_group,
     answer_group_followup,
-    join_topic_group,
-    dismiss_topic_invite,
+    join_group,
+    leave_group,
+    untag_group_message,
     close_group_post,
-    leave_topic_group,
+    message_poster,
     GroupSummary,
-    InviteView,
     GroupView,
     GroupMessageView,
+    TagView,
     GroupPostResult,
     ActionOutcome
 }
 
 glob GROUP_POLL_MS: int = 4000;
 
-def:pub InviteCard(
-    inv: InviteView, onAnswer: Callable[[str, bool], None]
-) -> JsxElement {
+def:pub members_text(n: int) -> str {
+    return str(n) + (" member" if n == 1 else " members");
+}
+
+"""One theme card in the list: icon, name, description or latest message, and Join for others."""
+def:pub GroupCard(g: GroupSummary, onJoin: Callable[[str], None]) -> JsxElement {
     <Card>
-        <div
+        <a
+            href={"/market/g?id=" + g.id}
             style={{
+                "textDecoration": "none",
+                "color": color("text"),
                 "display": "flex",
-                "justifyContent": "space-between",
-                "gap": space("2"),
-                "alignItems": "baseline"
+                "flexDirection": "column",
+                "gap": space("1")
             }}
         >
-            <strong>{inv.group_name}</strong>
-            <Badge kind="ai" label="Assistant invite"/>
-        </div>
-        <span style={{"color": color("text-2")}}>{inv.reason}</span>
-        <span style={{"color": color("sub"), "fontSize": "14px"}}>
-            {str(inv.members) + (" member" if inv.members == 1 else " members")}
-        </span>
-        <div style={{"display": "flex", "gap": space("2")}}>
-            <Button
-                label="Join"
-                onClick={lambda (e: MouseEvent) { onAnswer(inv.id, True); }}
-            />
-            <Button
-                label="Dismiss"
-                variant="text"
-                onClick={lambda (e: MouseEvent) { onAnswer(inv.id, False); }}
-            />
-        </div>
+            <div
+                style={{
+                    "display": "flex",
+                    "justifyContent": "space-between",
+                    "gap": space("2"),
+                    "alignItems": "baseline"
+                }}
+            >
+                <strong>{g.icon + " " + g.name}</strong>
+                <span style={{"color": color("sub"), "fontSize": "14px"}}>
+                    {members_text(g.members)}
+                </span>
+            </div>
+            {<Badge kind="action" label="Suggested for you"/> if g.suggested else None}
+            <span style={{"color": color("sub")}}>
+                {g.last_message if g.member and g.last_message else g.description}
+            </span>
+        </a>
+        {<Button
+            label="Join"
+            variant="secondary"
+            onClick={lambda (e: MouseEvent) { onJoin(g.id); }}
+        />
+            if not g.member
+            else None}
     </Card>
 }
 
 def:pub GroupList -> JsxElement {
     has groups: list[GroupSummary] = [],
-        invites: list[InviteView] = [],
         unread: int = 0,
         loaded: bool = False;
 
     async def load -> None;
-    async def answer(invite_id: str, accept: bool) -> None;
+    async def joinIt(group_id: str) -> None;
 
     can with entry {
         load();
@@ -81,133 +93,182 @@ def:pub GroupList -> JsxElement {
         return lambda { clearInterval(timer); };  # jac:ignore[W2001]
     }
 
+    mine = [
+        g
+        for g in groups
+        if g.member
+    ];
+    others = [
+        g
+        for g in groups
+        if not g.member
+    ];
+
     <AppShell title="Groups" active="market" wide={True}>
         <MarketTabs active="/market" unread={unread}/>
-        {(
-            <ResponsiveGrid min="320px">
-                {[
-                    <InviteCard key={inv.id} inv={inv} onAnswer={answer}/>
-                    for inv in invites
-                ]}
-            </ResponsiveGrid>
-        )
-            if len(invites) > 0
+        <p style={{"margin": "0", "color": color("sub")}}>
+            Chat with students who trade the same things. Drop a message like "Selling my bike for $80" or "Looking for a used desk" and the assistant finds the people who want it.
+        </p>
+        {<h2 style={{"margin": "0", "fontSize": "18px"}}>Your groups</h2>
+            if len(mine) > 0
             else None}
-        {(
-            <Card>
-                <p style={{"margin": "0"}}>
-                    Verify your UMich email in Profile to join your arrival group.
-                </p>
-            </Card>
-        )
+        {<ResponsiveGrid min="300px">
+            {[<GroupCard key={g.id} g={g} onJoin={joinIt}/> for g in mine]}
+        </ResponsiveGrid>
+            if len(mine) > 0
+            else None}
+        {<h2 style={{"margin": "0", "fontSize": "18px"}}>
+            {"More groups" if len(mine) > 0 else "Pick a few groups to join"}
+        </h2>
+            if len(others) > 0
+            else None}
+        <ResponsiveGrid min="300px">
+            {[<GroupCard key={g.id} g={g} onJoin={joinIt}/> for g in others]}
+        </ResponsiveGrid>
+        {<Card>
+            <p style={{"margin": "0"}}>Sign in with your UMich email to see groups.</p>
+        </Card>
             if loaded and len(groups) == 0
             else None}
-        <ResponsiveGrid min="320px">
-            {[
-                <a
-                    key={g.id}
-                    href={"/market/g?id=" + g.id}
-                    style={{"textDecoration": "none", "color": color("text")}}
-                >
-                    <Card>
-                        <div
-                            style={{
-                                "display": "flex",
-                                "justifyContent": "space-between",
-                                "gap": space("2"),
-                                "alignItems": "baseline"
-                            }}
-                        >
-                            <strong>{g.name}</strong>
-                            <span style={{"color": color("sub"), "fontSize": "14px"}}>
-                                {str(g.members)
-                                    + (" member" if g.members == 1 else " members")}
-                            </span>
-                        </div>
-                        <span style={{"color": color("sub")}}>
-                            {g.last_message
-                                or (
-                                    "Say hi, or drop a message about something you're buying, selling or looking for."
-                                        if g.kind == "cohort"
-                                        else "No messages yet."
-                                )}
-                        </span>
-                    </Card>
-                </a> for g in groups
-            ]}
-        </ResponsiveGrid>
     </AppShell>
 }
 
 impl GroupList.load -> None {
-    fresh_groups: list[GroupSummary] = [];
-    fresh_invites: list[InviteView] = [];
+    fresh: list[GroupSummary] = [];
     count: int = 0;
     await heartbeat();
-    fresh_groups = await my_groups();
-    fresh_invites = await my_group_invites();
+    fresh = await list_groups_for_me();
     count = await unread_suggestions();
-    groups = fresh_groups;
-    invites = fresh_invites;
+    groups = fresh;
     unread = count;
     loaded = True;
 }
 
-impl GroupList.answer(invite_id: str, accept: bool) -> None {
+impl GroupList.joinIt(group_id: str) -> None {
     result: ActionOutcome | None = None;
-    if accept {
-        result = await join_topic_group(invite_id);
-        if result.ok {
-            go("/market/g?id=" + result.group_id);
-            return;
-        }
-    } else {
-        await dismiss_topic_invite(invite_id);
+    result = await join_group(group_id);
+    if result.ok {
+        go("/market/g?id=" + group_id);
+        return;
     }
     await load();
 }
 
-"""One message bubble. The assistant's messages are labeled and link to the topic group."""
-def:pub GroupBubble(m: GroupMessageView) -> JsxElement {
+"""One Buying/Selling tag: the label, the item and its facts, and the status once closed."""
+def:pub TagLine(t: TagView) -> JsxElement {
+    live = t.status == "live";
     <div
         style={{
-            "alignSelf": "flex-end" if m.mine and not m.ai else "flex-start",
+            "display": "flex",
+            "flexWrap": "wrap",
+            "gap": space("1"),
+            "alignItems": "center"
+        }}
+    >
+        <Badge kind={"action" if t.kind == "selling" else "progress"} label={t.label}/>
+        {<Badge kind="neutral" label={t.status_label}/> if not live else None}
+        <strong
+            style={{
+                "fontSize": "14px",
+                "textDecoration": "none" if live else "line-through"
+            }}
+        >
+            {t.title}
+        </strong>
+        {<span style={{"fontSize": "13px"}}>{t.facts}</span> if t.facts else None}
+    </div>
+}
+
+"""One message bubble with its tags; the assistant's notes are labelled."""
+def:pub GroupBubble(
+    m: GroupMessageView,
+    onClose: Callable[[str, str], None],
+    onUntag: Callable[[str], None],
+    onMessage: Callable[[str], None]
+) -> JsxElement {
+    <div
+        style={{
+            "alignSelf": "flex-end" if m.mine else "flex-start",
             "maxWidth": "85%",
             "display": "flex",
             "flexDirection": "column",
             "gap": space("1"),
             "padding": space("2") + " " + space("3"),
             "borderRadius": "16px",
-            "background": color("action")
-                if m.mine and not m.ai
-                else (color("ai-bg") if m.ai else color("card")),
-            "color": color("on-action") if m.mine and not m.ai else color("text"),
-            "border": "1px solid " + color("border")
+            "background": color("ai-bg") if m.ai else color("card"),
+            "color": color("text"),
+            "border": "1px solid "
+                + (color("action") if m.mine and len(m.tags) == 0 else color("border"))
         }}
     >
         {<Badge kind="ai" label="Assistant"/>
             if m.ai
-            else (
-                <span style={{"fontSize": "13px", "fontWeight": "700"}}>
-                    {m.author}
-                </span>
-                    if not m.mine
-                    else None
-            )}
-        <span>{m.text}</span>
+            else <span style={{"fontSize": "13px", "fontWeight": "700"}}>
+                {m.author}
+            </span>}
+        <span style={{"whiteSpace": "pre-line"}}>{m.text}</span>
         {[
-            <a
-                key={l.group_id}
-                href={"/market/g?id=" + l.group_id}
+            <div
+                key={t.post_id}
                 style={{
-                    "color": color("text"),
-                    "display": "block",
-                    "padding": space("1") + " 0"
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "gap": space("1"),
+                    "paddingTop": space("1"),
+                    "borderTop": "1px solid " + color("border")
                 }}
             >
-                {"Open " + l.name}
-            </a> for l in m.links
+                <TagLine t={t}/>
+                {(
+                    <div
+                        style={{
+                            "display": "flex",
+                            "gap": space("2"),
+                            "flexWrap": "wrap"
+                        }}
+                    >
+                        <Button
+                            label={"Sold" if t.kind == "selling" else "Found one"}
+                            variant="secondary"
+                            onClick={lambda (e: MouseEvent) { onClose(
+                                t.post_id, "sold" if t.kind == "selling" else "found"
+                            ); }}
+                        />
+                        <Button
+                            label="No longer available"
+                            variant="text"
+                            onClick={lambda (e: MouseEvent) { onClose(
+                                t.post_id, "withdrawn"
+                            ); }}
+                        />
+                    </div>
+                )
+                    if t.mine and t.status == "live"
+                    else None}
+                {<Button
+                    label="Message privately"
+                    variant="secondary"
+                    onClick={lambda (e: MouseEvent) { onMessage(t.post_id); }}
+                />
+                    if not t.mine and t.status == "live"
+                    else None}
+            </div> for t in m.tags
         ]}
+        {<Button
+            label="It's just chat"
+            variant="text"
+            onClick={lambda (e: MouseEvent) { onUntag(m.id); }}
+        />
+            if m.mine
+                and len(
+                    [
+                        t
+                        for t in m.tags
+                        if t.status == "live"
+                    ]
+                )
+                    > 0
+            else None}
     </div>
 }
 
@@ -221,14 +282,17 @@ def:pub GroupChat -> JsxElement {
         asked_message: str = "",
         notice: str = "",
         answers: str = "",
+        pending: str = "",
         confirm_leave: bool = False;
 
     async def load -> None;
     async def sendIt(e: MouseEvent) -> None;
     async def choose(value: str) -> None;
     async def settle(result: GroupPostResult) -> None;
-    async def answerInvite(accept: bool) -> None;
+    async def joinIt(e: MouseEvent) -> None;
     async def closePost(post_id: str, reason: str) -> None;
+    async def untagIt(message_id: str) -> None;
+    async def messageIt(post_id: str) -> None;
     async def leaveIt(e: MouseEvent) -> None;
 
     can with entry {
@@ -238,7 +302,10 @@ def:pub GroupChat -> JsxElement {
         return lambda { clearInterval(timer); };  # jac:ignore[W2001]
     }
 
-    <AppShell title={group.name if group and group.ok else "Group"} active="market">
+    <AppShell
+        title={(group.icon + " " + group.name) if group and group.ok else "Group"}
+        active="market"
+    >
         <MarketTabs active="/market"/>
         {<Card>
             <p style={{"margin": "0"}}>{group.error}</p>
@@ -246,100 +313,57 @@ def:pub GroupChat -> JsxElement {
             if group and not group.ok
             else None}
         {<span style={{"color": color("sub")}}>
-            {str(group.members) + (" member" if group.members == 1 else " members")}{" · Drop a message about something you're buying, selling or looking for, and the assistant will find people for it."
-                if group.kind == "cohort"
-                else ""}
+            {members_text(group.members) + " · " + group.description}
         </span>
             if group and group.ok
             else None}
         {(
             <Card>
-                <Badge kind="ai" label="Assistant invite"/>
-                <span>{group.invite_reason}</span>
-                <span style={{"color": color("sub"), "fontSize": "14px"}}>
-                    Join to see the messages and the offers filed here.
-                </span>
-                <div style={{"display": "flex", "gap": space("2")}}>
-                    <Button
-                        label="Join"
-                        onClick={lambda (e: MouseEvent) { answerInvite(True); }}
-                    />
-                    <Button
-                        label="Dismiss"
-                        variant="text"
-                        onClick={lambda (e: MouseEvent) { answerInvite(False); }}
-                    />
-                </div>
-            </Card>
-        )
-            if group and group.ok and not group.member
-            else None}
-        {(
-            <Card>
-                <div
-                    style={{
-                        "display": "flex",
-                        "gap": space("2"),
-                        "alignItems": "center"
-                    }}
-                >
-                    <strong>Filed here</strong>
-                    <Badge kind="ai" label="Kept by the assistant"/>
-                </div>
-                {<span style={{"color": color("sub")}}>Nothing open right now.</span>
-                    if len(group.posts) == 0
-                    else None}
-                {[
-                    <div
-                        key={p.id}
-                        style={{
-                            "display": "flex",
-                            "flexDirection": "column",
-                            "gap": space("1"),
-                            "paddingTop": space("2"),
-                            "borderTop": "1px solid " + color("border")
-                        }}
-                    >
-                        <PostSummary p={p}/>
-                        {(
-                            <div style={{"display": "flex", "gap": space("2")}}>
-                                <Button
-                                    label={"Sold" if p.kind == "offer" else "Found one"}
-                                    variant="secondary"
-                                    onClick={lambda (e: MouseEvent) { closePost(
-                                        p.id, "sold" if p.kind == "offer" else "found"
-                                    ); }}
-                                />
-                                <Button
-                                    label="Withdraw"
-                                    variant="text"
-                                    onClick={lambda (e: MouseEvent) { closePost(
-                                        p.id, "withdrawn"
-                                    ); }}
-                                />
-                            </div>
-                        )
-                            if p.mine
-                            else None}
-                    </div> for p in group.posts
-                ]}
-            </Card>
-        )
-            if group and group.ok and group.member and group.kind == "topic"
-            else None}
-        {(
-            <Card>
                 <p style={{"margin": "0", "color": color("sub"), "fontSize": "14px"}}>
-                    Meet somewhere public, bring a friend if you can, and never pay a deposit before you've seen a room or item.
+                    Meet somewhere public, bring a friend if you can, and never pay before you've seen the item or room.
                 </p>
             </Card>
         )
-            if group and group.ok and group.member and group.kind == "topic"
+            if group and group.ok
+            else None}
+        {<p style={{"margin": "0", "color": color("sub")}}>
+            No messages yet. Say hi, or post what you're buying or selling.
+        </p>
+            if group and group.ok and len(group.messages) == 0
             else None}
         {[
-            <GroupBubble key={m.id} m={m}/>
-            for m in (group.messages if group and group.ok else [])
+            <GroupBubble
+                key={m.id}
+                m={m}
+                onClose={closePost}
+                onUntag={untagIt}
+                onMessage={messageIt}
+            /> for m in (group.messages if group and group.ok else [])
         ]}
+        {(
+            <div
+                style={{
+                    "alignSelf": "flex-end",
+                    "maxWidth": "85%",
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "gap": space("1"),
+                    "padding": space("2") + " " + space("3"),
+                    "borderRadius": "16px",
+                    "background": color("card"),
+                    "border": "1px dashed " + color("border"),
+                    "color": color("text")
+                }}
+            >
+                <span style={{"fontSize": "13px", "fontWeight": "700"}}>You</span>
+                <span>{pending}</span>
+                <span style={{"fontSize": "13px", "color": color("sub")}}>
+                    Sending · the assistant is reading it…
+                </span>
+            </div>
+        )
+            if pending
+            else None}
         {(
             <Card>
                 <Badge kind="ai" label="Assistant · only you see this"/>
@@ -371,6 +395,9 @@ def:pub GroupChat -> JsxElement {
         )
             if asked
             else None}
+        {<p role="alert" style={{"color": color("danger"), "margin": "0"}}>{error}</p>
+            if error
+            else None}
         {(
             <Card>
                 <Field
@@ -383,14 +410,17 @@ def:pub GroupChat -> JsxElement {
                     disabled={sending or not draft.strip()}
                     onClick={sendIt}
                 />
-                {<p role="alert" style={{"color": color("danger"), "margin": "0"}}>
-                    {error}
-                </p>
-                    if error
-                    else None}
             </Card>
         )
             if group and group.ok and group.member
+            else None}
+        {(
+            <Card>
+                <span>You're reading this group. Join to post and get matched.</span>
+                <Button label="Join group" onClick={joinIt}/>
+            </Card>
+        )
+            if group and group.ok and not group.member
             else None}
         {(
             <Card>
@@ -399,10 +429,11 @@ def:pub GroupChat -> JsxElement {
                         style={{
                             "display": "flex",
                             "gap": space("2"),
-                            "alignItems": "center"
+                            "alignItems": "center",
+                            "flexWrap": "wrap"
                         }}
                     >
-                        <span>Leave this group? You'll stop seeing its messages.</span>
+                        <span>Leave this group? You can join again any time.</span>
                         <Button label="Leave" variant="secondary" onClick={leaveIt}/>
                         <Button
                             label="Cancel"
@@ -419,13 +450,19 @@ def:pub GroupChat -> JsxElement {
                     />}
             </Card>
         )
-            if group and group.ok and group.member and group.kind == "topic"
+            if group and group.ok and group.member
             else None}
     </AppShell>
 }
 
 impl GroupChat.load -> None {
     fresh: GroupView | None = None;
+    # A send or an answer runs the assistant for several seconds in one transaction that reads
+    # the student's profile; a heartbeat (a write to that profile) meanwhile makes it conflict
+    # and retry. Skip polling until it returns.
+    if sending {
+        return;
+    }
     await heartbeat();
     fresh = await group_view(group_id);
     group = fresh;
@@ -434,13 +471,25 @@ impl GroupChat.load -> None {
 impl GroupChat.sendIt(e: MouseEvent) -> None {
     result: GroupPostResult | None = None;
     sending = True;
-    result = await post_in_group(group_id, draft);
-    sending = False;
+    pending = draft;
+    draft = "";
+    try {
+        result = await post_in_group(group_id, pending);
+    } except Exception {
+        error = "Couldn't send that. Please try again.";
+        draft = pending;
+        return;
+    } finally {
+        sending = False;
+        pending = "";
+    }
+    if result is None {
+        return;
+    }
     if not result.ok {
         error = result.error;
         return;
     }
-    draft = "";
     error = "";
     answers = "";
     asked_message = result.message_id;
@@ -450,7 +499,15 @@ impl GroupChat.sendIt(e: MouseEvent) -> None {
 impl GroupChat.choose(value: str) -> None {
     result: GroupPostResult | None = None;
     answers = (answers + "|" + value) if answers else value;
-    result = await answer_group_followup(asked_message, answers);
+    sending = True;
+    try {
+        result = await answer_group_followup(asked_message, answers);
+    } finally {
+        sending = False;
+    }
+    if result is None {
+        return;
+    }
     if not result.ok {
         error = result.error;
         asked = None;
@@ -466,15 +523,9 @@ impl GroupChat.settle(result: GroupPostResult) -> None {
     await load();
 }
 
-impl GroupChat.answerInvite(accept: bool) -> None {
-    invite_id = group.invite_id if group else "";
-    if accept {
-        await join_topic_group(invite_id);
-        await load();
-        return;
-    }
-    await dismiss_topic_invite(invite_id);
-    go("/market");
+impl GroupChat.joinIt(e: MouseEvent) -> None {
+    await join_group(group_id);
+    await load();
 }
 
 impl GroupChat.closePost(post_id: str, reason: str) -> None {
@@ -482,9 +533,24 @@ impl GroupChat.closePost(post_id: str, reason: str) -> None {
     await load();
 }
 
+impl GroupChat.untagIt(message_id: str) -> None {
+    await untag_group_message(message_id);
+    await load();
+}
+
+impl GroupChat.messageIt(post_id: str) -> None {
+    result: ActionOutcome | None = None;
+    result = await message_poster(post_id);
+    if not result.ok {
+        error = result.error;
+        return;
+    }
+    go("/market/chat?id=" + result.chat_id);
+}
+
 impl GroupChat.leaveIt(e: MouseEvent) -> None {
     result: ActionOutcome | None = None;
-    result = await leave_topic_group(group_id);
+    result = await leave_group(group_id);
     if not result.ok {
         error = result.error;
         confirm_leave = False;

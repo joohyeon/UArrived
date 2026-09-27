@@ -9,8 +9,7 @@ glob MARKET_TABS: list[tuple[str, str]] = [
          ("/market", "Groups"),
          ("/market/matches", "Matches"),
          ("/market/chats", "Chats"),
-         ("/market/mine", "My posts"),
-         ("/market/feed", "For you")
+         ("/market/mine", "My posts")
      ];
 
 def:pub current_path -> str {
