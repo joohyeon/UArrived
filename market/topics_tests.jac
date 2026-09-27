@@ -771,3 +771,56 @@ test "without AI, a study table still files with desks" {
         client.close();
     }
 }
+
+test "DTW riders two days apart share a ride group, listed soonest first" {
+    client = served();
+    try {
+        cohort = student(client, "mina@umich.edu");
+        ai_says(
+            [
+                PostDraft(
+                    kind=PostKind.REQUEST,
+                    category=Category.SERVICE,
+                    title="Ride from DTW",
+                    description="Need a ride.",
+                    route_from="DTW",
+                    route_to="Ann Arbor",
+                    available_from="2099-10-03",
+                    time_from="15:00"
+                )
+            ]
+        );
+        late = call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Need a ride from DTW Oct 3 at 3pm"}
+        );
+        student(client, "jae@umich.edu");
+        ai_says(
+            [
+                PostDraft(
+                    kind=PostKind.REQUEST,
+                    category=Category.SERVICE,
+                    title="Ride from DTW",
+                    description="Need a ride.",
+                    route_from="DTW",
+                    route_to="Ann Arbor",
+                    available_from="2099-10-01",
+                    time_from="09:00"
+                )
+            ]
+        );
+        early = call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Need a ride from DTW Oct 1 at 9am"}
+        );
+        assert late["filed"] and early["topic_group_id"] == late["topic_group_id"];
+        view = call(client, "group_view", {"group_id": early["topic_group_id"]});
+        assert view["name"] == "Rides from DTW to Ann Arbor · week of Sep 28";
+        assert [p["available_from"] for p in view["posts"]]
+            == ["2099-10-01", "2099-10-03"];
+    } finally {
+        client.close();
+    }
+}

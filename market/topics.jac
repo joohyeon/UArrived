@@ -9,6 +9,7 @@ Invites are opt-in: nobody enters a topic group without tapping Join.
 """
 
 import re;
+import from datetime { date, timedelta }
 import from uuid { UUID }
 import from jaclang { JacRuntime as Jac }
 import from core.auth { verified_profile }
@@ -44,6 +45,21 @@ import from market.lifecycle { publish, view_of, own_post, finish, PostView }
 import from market.messages { blocking_question, fields_from, parse_answers, FollowUp }
 import from market.matching { place, money }
 import from market.items { standard_item }
+
+glob MONTH_NAMES: list[str] = [
+         "Jan",
+         "Feb",
+         "Mar",
+         "Apr",
+         "May",
+         "Jun",
+         "Jul",
+         "Aug",
+         "Sep",
+         "Oct",
+         "Nov",
+         "Dec"
+     ];
 
 glob MAX_GROUP_MESSAGE_CHARS: int = 1000,
      SKIP_WORDS: list[str] = [
@@ -209,10 +225,28 @@ def plural(word: str) -> str {
     return word + "s";
 }
 
+"""Monday of the week containing `day` (YYYY-MM-DD), or "" for no or bad date. Rides group by
+week so riders a day apart meet."""
+def week_of(day: str) -> str {
+    try {
+        d = date.fromisoformat(day);
+    } except ValueError {
+        return "";
+    }
+    return (d - timedelta(days=d.weekday())).isoformat();
+}
+
+def month_day(day: str) -> str {
+    d = date.fromisoformat(day);
+    return f"{MONTH_NAMES[d.month - 1]} {d.day}";
+}
+
 """Which topic group a post belongs in; posts with the same key share one group."""
 def topic_key(p: Post) -> str {
     if p.category == "service" and p.route_from {
-        return f"ride:{place(p.route_from)}>{place(p.route_to)}:{p.available_from}";
+        return f"ride:{place(p.route_from)}>{place(p.route_to)}:{week_of(
+            p.available_from
+        )}";
     }
     if p.category == "housing" {
         return f"housing:{p.arrangement or 'room'}";
@@ -231,9 +265,10 @@ def item_of(p: Post) -> str {
 
 def topic_name(p: Post) -> str {
     if p.category == "service" and p.route_from {
+        week = week_of(p.available_from);
         return f"Rides from {p.route_from}"
             + (f" to {p.route_to}" if p.route_to else "")
-            + (f" · {p.available_from}" if p.available_from else "");
+            + (f" · week of {month_day(week)}" if week else "");
     }
     if p.category == "housing" {
         return {
@@ -518,6 +553,13 @@ def view(group_id: str, today: str) -> GroupView {
         for p in visible
         if p.topic_group_id == group_id and post_status(p, today) == "live"
     ];
+    # Soonest first (rides by date and time); undated posts last.
+    filed.sort(
+        key=lambda (v: PostView) -> tuple[str, str] { return (
+            v.available_from or v.available_until or "9999",
+            v.time_from
+        ); }
+    );
     return GroupView(
         ok=True,
         id=group_id,
@@ -687,7 +729,7 @@ test "item words and topic keys group similar posts together" {
         route_to="Ann Arbor",
         available_from="2026-08-20"
     );
-    assert topic_key(ride) == "ride:dtw>ann arbor:2026-08-20";
+    assert topic_key(ride) == "ride:dtw>ann arbor:2026-08-17";
     assert topic_key(
         Post(
             owner_root="x",
@@ -713,4 +755,27 @@ test "the facts line uses only the post's facts" {
     );
     assert facts_line(p)
         == "Looking for: Desk · budget $40 · 2026-09-27 to 2026-09-28 · Central Campus";
+}
+
+test "rides on the same route group by week" {
+    def ride(day: str, to: str = "Ann Arbor") -> Post {
+        return Post(
+            owner_root="x",
+            kind="request",
+            category="service",
+            title="Ride",
+            route_from="DTW",
+            route_to=to,
+            available_from=day
+        );
+    }
+    assert topic_key(ride("2026-10-02"))
+        == topic_key(ride("2026-10-03"))
+        == topic_key(ride("2026-10-04"));
+    assert topic_key(ride("2026-10-05")) != topic_key(ride("2026-10-04"));
+    assert topic_name(ride("2026-10-02"))
+        == "Rides from DTW to Ann Arbor · week of Sep 28";
+    assert topic_name(ride("2026-10-02", "")) == "Rides from DTW · week of Sep 28";
+    assert topic_name(ride("")) == "Rides from DTW to Ann Arbor";
+    assert week_of("bad") == "";
 }
