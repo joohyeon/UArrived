@@ -41,6 +41,12 @@ jac guide                            # current, version-matched Jac reference gu
 - **Plain graph tests and `root.shared`:** after a served test closes, `root.shared` in the same process can
   point at the dead server's root (serial runs only). Commons helpers take an optional `commons` arg;
   plain tests pass `root`.
+- **Client bundle rules:** a client screen that imports a *value* (glob) from a server module pulls that whole
+  module into the browser and fails (`E5082`). Put shared constants in import-free modules
+  (`core/constants.jac`, `market/constants.jac`). A client helper imported by another client module must be
+  `def:pub`. Server endpoints (`def:protect`) and their obj/node types import fine.
+- **Client reads are cached 60s**; any writer call clears the cache. Polling screens call `heartbeat()`
+  (a tiny write) before reading so they see other students' changes.
 - Served-app tests: `JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp())`, call
   `/function/<name>`; never name a file `test_*.jac`.
 - `# jac:ignore[CODE]` is ignored inside `.impl.jac` annexes; keep browser-global code (`new(URLSearchParams, ...)`,

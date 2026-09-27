@@ -5,18 +5,14 @@ looks like lives here, not in the prompt: the AI can guess, but only these check
 """
 
 import from datetime { date }
-import from jaclang.byllm.lib { ByLLMError }
+import from jaclang.byllm.lib { ByLLMError, OutputConversionError }
 import from ai.draft { draft_post, PostDraft, PostKind, Category }
 import from core.auth { verified_profile }
-import from core.profile { ANN_ARBOR_AREAS, valid_date, valid_time }
+import from core.constants { ANN_ARBOR_AREAS }
+import from core.profile { valid_date, valid_time }
+import from market.constants { ARRANGEMENTS }
 
-glob MAX_MESSAGE_CHARS: int = 1000,
-     ARRANGEMENTS: list[str] = [
-         "roommate opening",
-         "sublet",
-         "lease assignment",
-         "new lease"
-     ];
+glob MAX_MESSAGE_CHARS: int = 1000;
 
 """A draft ready for the poster to review. Plain fields so the client can edit every one."""
 obj DraftCard {
@@ -44,7 +40,33 @@ obj DraftCard {
 obj DraftResult {
     has ok: bool,
         error: str = "",
+        notice: str = "",
         draft: DraftCard | None = None;
+}
+
+"""A blank, non-AI draft holding the student's own words, for when AI drafting is unavailable."""
+def manual_card(text: str) -> DraftCard {
+    return DraftCard(
+        kind="offer",
+        category="furniture",
+        title=text[:80],
+        description=text[:500],
+        price=None,
+        free=False,
+        available_from="",
+        available_until="",
+        time_from="",
+        time_to="",
+        area="",
+        route_from="",
+        route_to="",
+        arrangement="",
+        guessed=[],
+        missing=["price"],
+        suggested_price=None,
+        price_reason="",
+        ai_generated=False
+    );
 }
 
 """Map free-text area to one of ANN_ARBOR_AREAS; unknown text becomes "Other"."""
@@ -162,10 +184,16 @@ def make_draft(message: str, today: str) -> DraftResult {
     }
     try {
         raw = draft_post(text, today);
-    } except ByLLMError {
+    } except OutputConversionError {
         return DraftResult(
             ok=False,
             error="Couldn't read that. Try adding what it is, a price or budget, and dates."
+        );
+    } except ByLLMError {
+        return DraftResult(
+            ok=True,
+            notice="AI drafting isn't available right now, so fill in the details yourself.",
+            draft=manual_card(text)
         );
     }
     return DraftResult(ok=True, draft=normalize(raw));

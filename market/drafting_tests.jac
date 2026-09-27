@@ -3,7 +3,7 @@
 import os;
 import tempfile;
 import ai.draft;
-import from jaclang.byllm.lib { MockLLM }
+import from jaclang.byllm.lib { MockLLM, MockError, AuthenticationError }
 import from jaclang.testing.testing { JacTestClient }
 import from ai.draft { PostDraft, PostKind, Category }
 import from market.drafting { make_draft, match_area, DraftCard }
@@ -153,6 +153,18 @@ test "unreadable model output becomes a friendly error, not a crash" {
     result = make_draft("asdf", TODAY);
     assert not result.ok and "Couldn't read that" in result.error;
     assert result.draft is None;
+}
+
+test "when AI is unavailable the student gets a manual, non-AI form with their words" {
+    ai.draft.drafter = MockLLM(
+        outputs=[MockError(error=AuthenticationError("no API key"))]
+    );
+    result = make_draft("selling a desk lamp $5, north campus", TODAY);
+    assert result.ok and "fill in the details yourself" in result.notice;
+    assert result.draft is not None;
+    assert not result.draft.ai_generated;
+    assert result.draft.title == "selling a desk lamp $5, north campus";
+    assert result.draft.guessed == [] and "price" in result.draft.missing;
 }
 
 test "empty and overlong messages are refused before calling the model" {

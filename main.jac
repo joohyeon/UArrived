@@ -8,6 +8,7 @@ import from core.auth { start_verification, confirm_verification, my_verificatio
 import from core.profile { get_my_profile, update_my_profile }
 import from market.drafting { draft_from_message }
 import from market.suggestions { list_my_suggestions, stop_suggestions }
+import from market.feed { for_you_feed, heartbeat }
 import from market.notify { unread_suggestions, mark_suggestions_seen, email_sweep }
 import from market.connect { connect, decline, list_my_chats, read_chat, send_message }
 import from market.lifecycle {
@@ -20,14 +21,41 @@ import from market.lifecycle {
 }
 
 # Client-side UI
+import from "@jac/runtime" { jacIsLoggedIn }
 import from core.screens.welcome { Welcome }
 import from ui.components.gallery { Gallery }
+import from market.screens.inbox { MatchesInbox }
+import from market.screens.compose { Compose }
+import from market.screens.chats { ChatList, ChatScreen }
+import from market.screens.mine { MyPosts, ForYou }
+import from market.screens.common { current_path }
 
-def current_path -> str {
-    return window.location.pathname;  # jac:ignore[E1032,E1002,W2001]
-}
-
+"""Path-based routing; every market page also works as a direct link (e.g. from an email)."""
 def:pub app -> JsxElement {
-    path = current_path();
-    return <Gallery/> if path == "/ui" else <Welcome/>;
+    path = current_path().rstrip("/") or "/";
+    if path == "/ui" {
+        return <Gallery/>;
+    }
+    if path.startswith("/market") and not jacIsLoggedIn() {
+        return <Welcome/>;
+    }
+    if path == "/market" {
+        return <MatchesInbox/>;
+    }
+    if path == "/market/new" {
+        return <Compose/>;
+    }
+    if path == "/market/chats" {
+        return <ChatList/>;
+    }
+    if path == "/market/chat" {
+        return <ChatScreen/>;
+    }
+    if path == "/market/mine" {
+        return <MyPosts/>;
+    }
+    if path == "/market/feed" {
+        return <ForYou/>;
+    }
+    return <Welcome/>;
 }
