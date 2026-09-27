@@ -6,6 +6,7 @@ least 44px (SIZE["touch-min"]).
 """
 
 import from ui.tokens { color, space, text_style, RADIUS, SIZE, FONTS, FONT_URL }
+import from "@jac/runtime" { jacLogout }
 
 def px(n: int) -> str {
     return f"{n}px";
@@ -322,24 +323,32 @@ def:pub PasswordField(
     </label>
 }
 
-"""Always-visible urgent help (design rule 5). `urgent` means nothing else."""
-def:pub HelpButton -> JsxElement {
-    <a
-        href="/help"
+"""Always-visible sign-out control in the app header."""
+def:pub LogoutButton -> JsxElement {
+    def onClick(e: MouseEvent) {
+        jacLogout();
+        window.location.assign("/login");  # jac:ignore[E1032,W2001]
+    }
+    <button
+        type="button"
+        onClick={onClick}
         style={{
             "display": "inline-flex",
             "alignItems": "center",
             "minHeight": px(SIZE["touch-min"]),
             "padding": "0 " + space("4"),
             "borderRadius": px(RADIUS["pill"]),
-            "background": color("urgent"),
-            "color": color("on-urgent"),
+            "background": "none",
+            "border": "1px solid " + color("border"),
+            "color": color("text-2"),
             "fontWeight": "700",
-            "textDecoration": "none"
+            "fontFamily": FONTS["sans"],
+            "fontSize": text_style("button")["fontSize"],
+            "cursor": "pointer"
         }}
     >
-        Urgent help
-    </a>
+        Log out
+    </button>
 }
 
 glob NAV_ITEMS: list[tuple[str, str]] = [
@@ -390,7 +399,7 @@ def:pub NavIcon(item: str) -> JsxElement {
     </svg>
 }
 
-"""The app frame: a header with the wordmark, section links (wide screens) and Urgent help; the
+"""The app frame: a header with the wordmark, section links (wide screens) and a logout control; the
 screen title and content; and a bottom tab bar with icons on phones. `active` is the NAV_ITEMS key
 of the current section. `wide` raises the content column from 760px (a reading/form column) to
 SIZE["content-max"] (1200px) for card grids or list+detail screens; the header aligns to it."""
@@ -476,7 +485,7 @@ def:pub AppShell(
                         </a> for (key, label) in NAV_ITEMS
                     ]}
                 </nav>
-                <HelpButton/>
+                <LogoutButton/>
             </div>
         </header>
         <main

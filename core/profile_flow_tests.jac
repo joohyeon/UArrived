@@ -53,6 +53,29 @@ test "journey fields round-trip through update and read" {
     }
 }
 
+test "major and class year round-trip through update and read" {
+    client = served();
+    try {
+        client.register_user("mina@umich.edu", "password123");
+        result = call(
+            client,
+            "update_my_profile",
+            {"changes": {"major": "Computer Science", "class_year": "junior"}}
+        );
+        assert result["ok"];
+        mine = call(client, "get_my_profile", {});
+        assert mine["major"] == "Computer Science" and mine["class_year"] == "junior";
+        bad = call(
+            client, "update_my_profile", {"changes": {"class_year": "space-cadet"}}
+        );
+        assert not bad["ok"] and "Class year" in bad["error"];
+        still = call(client, "get_my_profile", {});
+        assert still["class_year"] == "junior";
+    } finally {
+        client.close();
+    }
+}
+
 test "an invalid value is rejected and nothing is changed" {
     client = served();
     try {
