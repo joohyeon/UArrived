@@ -1,7 +1,7 @@
 ---
 title: Personalized Events tab
 type: feat
-status: active
+status: completed
 date: 2026-09-27
 origin: docs/brainstorms/2026-09-27-005-personalized-events-tab-requirements.md
 ---
