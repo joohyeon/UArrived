@@ -36,7 +36,8 @@ obj DraftCard {
         suggested_price: float | None,
         price_reason: str,
         ai_generated: bool = True,
-        constraints: list[str] = [];
+        constraints: list[str] = [],
+        about_market: bool = True;
 }
 
 obj DraftResult {
@@ -174,7 +175,8 @@ def normalize(d: PostDraft) -> DraftCard {
             c.strip()[:60]
             for c in d.constraints
             if c.strip()
-        ][:5]
+        ][:5],
+        about_market=d.about_market
     );
 }
 

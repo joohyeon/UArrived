@@ -31,7 +31,7 @@ def:pub Moderate -> JsxElement {
             else None}{<Card>
             <p style={{"margin": "0"}}>No open reports (or you aren't a moderator).</p>
         </Card>
-            if loaded and not reports
+            if loaded and len(reports) == 0
             else None}{[
             <Card key={r.id}>
                 <strong>{r.post_title}</strong>

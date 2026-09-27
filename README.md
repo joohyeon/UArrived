@@ -22,15 +22,16 @@ Web app (mobile-first), all Jac: `core/` shared model · `journey/` Feature A ·
 ## Check before opening a PR
 
 ```bash
-bash scripts/check_rules.sh             # Jac share ≥ 40%, boundaries, design tokens
-jac fmt --check .                       # formatting (fix with: jac fmt --lintfix <file>)
-jac check .                             # type check
-jac test -d .                           # every test "name" { ... } block in the repo
+bash scripts/check_rules.sh             # Jac share ≥ 40%, boundaries, design tokens — required, CI runs this
+jac fmt --check .                       # formatting (fix with: jac fmt --lintfix <file>) — optional
+jac check .                             # type check — optional
+jac test -d .                           # every test "name" { ... } block in the repo — optional
 ```
 
-CI runs the same three commands on every PR.
+**Hackathon speed mode:** CI only runs `check_rules.sh`. The other three are optional — run them
+locally when you have time, but they won't block your PR.
 
 ## Working as a team
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Short version: branch off `main`, open a PR, get one
-review, squash-merge. Nobody pushes to `main` directly.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Short version: branch off `main`, open a PR, squash-merge.
+Reviews are optional for now. Nobody pushes to `main` directly.

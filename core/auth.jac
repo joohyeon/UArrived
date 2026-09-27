@@ -17,6 +17,7 @@ import from core.profile {
     sync_mailbox,
     sync_moderator_membership
 }
+import from core.groups { sync_cohort }
 
 """Outcome of a verification step, returned to the client."""
 obj VerifyResult {
@@ -111,6 +112,7 @@ def:protect confirm_verification(token: str) -> VerifyResult {
     profile.verified = True;
     sync_mailbox(profile);
     sync_moderator_membership(profile);
+    sync_cohort(profile);
     return VerifyResult(ok=True, email=profile.umich_email);
 }
 
