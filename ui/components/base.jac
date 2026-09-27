@@ -165,7 +165,8 @@ def field_label_style(caps: bool) -> dict[str, str] {
 }
 
 """A labeled text input (or textarea when `multiline`). `hint` shows under the field; `caps`
-uses the Figma form label style; `autocomplete` is passed to the input (e.g. "email")."""
+uses the Figma form label style; `autocomplete` is passed to the input (e.g. "email"); `error`
+shows under the field in `danger` and marks the input aria-invalid."""
 def:pub Field(
     label: str,
     value: str,
@@ -175,12 +176,13 @@ def:pub Field(
     multiline: bool = False,
     placeholder: str = "",
     caps: bool = False,
-    autocomplete: str = ""
+    autocomplete: str = "",
+    error: str = ""
 ) -> JsxElement {
     box: dict[str, str] = {
         "minHeight": px(SIZE["button-h"]),
         "padding": space("3") + " " + space("4"),
-        "border": "1px solid " + color("border"),
+        "border": "1px solid " + (color("danger") if error else color("border")),
         "borderRadius": px(RADIUS["field"]),
         "background": color("card"),
         "color": color("text"),
@@ -206,11 +208,35 @@ def:pub Field(
                     value={value}
                     placeholder={placeholder}
                     autoComplete={autocomplete or None}
+                    aria-invalid={True if error else None}
                     style={box}
                     onChange={lambda (e: ChangeEvent) { onChange(e.target.value); }}
                 />
-            )}{<span style={{"fontWeight": "400", "color": color("sub")}}>{hint}</span>
-            if hint
+            )}{<span
+            style={{
+                "fontWeight": "400",
+                "fontSize": "13px",
+                "letterSpacing": "normal",
+                "textTransform": "none",
+                "color": color("sub")
+            }}
+        >
+            {hint}
+        </span>
+            if hint and not error
+            else None}{<span
+            role="alert"
+            style={{
+                "fontWeight": "600",
+                "fontSize": "14px",
+                "letterSpacing": "normal",
+                "textTransform": "none",
+                "color": color("danger")
+            }}
+        >
+            {error}
+        </span>
+            if error
             else None}
     </label>
 }
@@ -222,7 +248,8 @@ def:pub PasswordField(
     onChange: Callable[[str], None],
     placeholder: str = "",
     caps: bool = False,
-    autocomplete: str = "current-password"
+    autocomplete: str = "current-password",
+    error: str = ""
 ) -> JsxElement {
     has shown: bool = False;
     <label style={field_label_style(caps)}>
@@ -233,11 +260,13 @@ def:pub PasswordField(
                 value={value}
                 placeholder={placeholder}
                 autoComplete={autocomplete}
+                aria-invalid={True if error else None}
                 onChange={lambda (e: ChangeEvent) { onChange(e.target.value); }}
                 style={{
                     "minHeight": px(SIZE["button-h"]),
                     "padding": space("3") + " 72px " + space("3") + " " + space("4"),
-                    "border": "1px solid " + color("border"),
+                    "border": "1px solid "
+                        + (color("danger") if error else color("border")),
                     "borderRadius": px(RADIUS["field"]),
                     "background": color("card"),
                     "color": color("text"),
@@ -276,6 +305,20 @@ def:pub PasswordField(
                 {"Hide" if shown else "Show"}
             </button>
         </span>
+        {<span
+            role="alert"
+            style={{
+                "fontWeight": "600",
+                "fontSize": "14px",
+                "letterSpacing": "normal",
+                "textTransform": "none",
+                "color": color("danger")
+            }}
+        >
+            {error}
+        </span>
+            if error
+            else None}
     </label>
 }
 
@@ -342,7 +385,7 @@ def:pub AppShell(
                     "color": color("action")
                 }}
             >
-                UArrived
+                UMadeIt
             </span>
             <HelpButton/>
         </header>
