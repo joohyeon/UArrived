@@ -116,6 +116,27 @@ def:protect confirm_verification(token: str) -> VerifyResult {
     return VerifyResult(ok=True, email=profile.umich_email);
 }
 
+"""Hackathon sign-in: accept the caller's @umich.edu address without an emailed link. The domain
+is the only check (rejects anything that isn't a single name@umich.edu), and `display_name`, when
+given, becomes the profile name. Replace with start/confirm_verification before a real pilot."""
+def:protect claim_umich_account(email: str, display_name: str) -> VerifyResult {
+    if not is_umich_email(email) {
+        return VerifyResult(ok=False, error="Use your @umich.edu email address.");
+    }
+    profile = my_profile();
+    profile.umich_email = email.strip().lower();
+    profile.pending_email = "";
+    profile.verified = True;
+    name = display_name.strip()[:60];
+    if name {
+        profile.display_name = name;
+    }
+    sync_mailbox(profile);
+    sync_moderator_membership(profile);
+    sync_cohort(profile);
+    return VerifyResult(ok=True, email=profile.umich_email);
+}
+
 """The caller's verification state, for the client."""
 def:protect my_verification -> VerificationState {
     profile = my_profile();
