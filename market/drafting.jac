@@ -363,8 +363,8 @@ def:protect draft_from_message(message: str) -> DraftResult {
 
 """A non-AI ride-request draft from the DTW prompt (U9): DTW to Ann Arbor on `day`, from `time`
 for two hours. Invalid values are dropped; the student reviews everything before publishing.
-The card carries the poster's `language`; its text is English, so the English copy is too."""
-def ride_card(day: str, time: str, language: str = "en") -> DraftCard {
+The text is app-written English, so the card is English whatever the poster's language."""
+def ride_card(day: str, time: str) -> DraftCard {
     day = day if day and valid_date(day) else "";
     start = time if time and valid_time(time) else "";
     end = "";
@@ -394,13 +394,14 @@ def ride_card(day: str, time: str, language: str = "en") -> DraftCard {
         suggested_price=None,
         price_reason="",
         ai_generated=False,
-        language=language,
+        language="en",
         title_en=title,
         description_en=description
     );
 }
 
-"""The pre-filled ride draft for compose's `?prefill=ride&date=&time=` link. Nothing is stored."""
+"""The pre-filled ride draft for compose's `?prefill=ride&date=&time=` link. Nothing is stored.
+The card is English (app-written text); the result's `language` is the poster's, for labels."""
 def:protect ride_prefill(day: str, time: str) -> DraftResult {
     profile = verified_profile();
     if profile is None {
@@ -409,7 +410,7 @@ def:protect ride_prefill(day: str, time: str) -> DraftResult {
         );
     }
     language = profile_language(profile);
-    return drafted_result([ride_card(day, time, language)], language);
+    return drafted_result([ride_card(day, time)], language);
 }
 
 test "the ride prefill is a non-AI DTW request on the arrival day, two hours from the time" {
@@ -419,8 +420,7 @@ test "the ride prefill is a non-AI DTW request on the arrival day, two hours fro
     assert card.available_from == card.available_until == "2026-08-20";
     assert card.time_from == "15:00" and card.time_to == "17:00";
     assert not card.ai_generated and card.missing == [];
-    ko = ride_card("2026-08-20", "15:00", "ko");
-    assert ko.language == "ko" and ko.title_en == ko.title;
+    assert card.language == "en" and card.title_en == card.title;
 }
 
 test "bad prefill values are dropped, and a missing date is flagged" {

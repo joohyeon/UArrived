@@ -3,9 +3,11 @@
 import os;
 import tempfile;
 import ai.decide;
+import ai.translate;
 import from jaclang.byllm.lib { MockLLM, MockError, AuthenticationError }
 import from jaclang.testing.testing { JacTestClient }
 import from ai.decide { DecideNotes }
+import from ai.translate { PostText, PostTranslations }
 import from market.graph { Post }
 import from market.decide { missing_info, risk_flags, clean_notes }
 
@@ -70,6 +72,31 @@ test "known risk patterns are flagged by rule" {
     assert risk_flags(fine) == [];
 }
 
+test "a ko sublet whose English copy asks to wire the deposit gets the payment flag (AE11)" {
+    sublet = Post(
+        owner_root="jae",
+        kind="offer",
+        category="housing",
+        title="방 양도",
+        description="보기 전에 보증금 송금해 주세요",
+        price=800.0,
+        arrangement="sublet",
+        language="ko",
+        texts={
+            "ko": {"title": "방 양도", "description": "보기 전에 보증금 송금해 주세요"},
+            "en": {
+                "title": "Room sublet",
+                "description": "Please wire the deposit before viewing"
+            }
+        }
+    );
+    flags = risk_flags(sublet);
+    assert any(["payment method" in f for f in flags]);
+    assert any(["deposit" in f for f in flags]);
+    sublet.texts = {};
+    assert risk_flags(sublet) == [];
+}
+
 test "AI notes that call a post safe or legit are dropped" {
     kept = clean_notes(
         [
@@ -132,6 +159,7 @@ def two_sublets(client: JacTestClient) -> list[str] {
 
 test "comparing two posts gives facts, missing info, flags and filtered AI notes" {
     os.environ["UARRIVED_DEV_MODE"] = "1";
+    os.environ["ANTHROPIC_API_KEY"] = "";
     ai.decide.advisor = MockLLM(
         outputs=[
             DecideNotes(
@@ -168,6 +196,7 @@ test "comparing two posts gives facts, missing info, flags and filtered AI notes
 
 test "when AI fails the facts and flags still show, without AI notes" {
     os.environ["UARRIVED_DEV_MODE"] = "1";
+    os.environ["ANTHROPIC_API_KEY"] = "";
     ai.decide.advisor = MockLLM(
         outputs=[MockError(error=AuthenticationError("no key"))]
     );
@@ -185,6 +214,7 @@ test "when AI fails the facts and flags still show, without AI notes" {
 
 test "one post, four posts, or a closed post cannot be compared" {
     os.environ["UARRIVED_DEV_MODE"] = "1";
+    os.environ["ANTHROPIC_API_KEY"] = "";
     client = JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp());
     try {
         ids = two_sublets(client);
@@ -194,6 +224,72 @@ test "one post, four posts, or a closed post cannot be compared" {
         assert not call(client, "help_me_decide", {"post_ids": [ids[0], "not-a-post"]})[
             "ok"
         ];
+    } finally {
+        client.close();
+    }
+}
+
+test "help me decide shows a ko sublet in the reader's language and advises on its English" {
+    os.environ["UARRIVED_DEV_MODE"] = "1";
+    os.environ["ANTHROPIC_API_KEY"] = "";
+    ai.translate.translator = MockLLM(
+        outputs=[
+            PostTranslations(
+                items=[
+                    PostText(
+                        language="en",
+                        title="Room sublet",
+                        description="Please wire the deposit before viewing, $800 a month"
+                    ),
+                    PostText(language="zh", title="房间转租", description="看房前请电汇押金，每月$800")
+                ]
+            ),
+            PostTranslations(items=[])
+        ]
+    );
+    advisor = MockLLM(
+        outputs=[DecideNotes(questions=["Can I see the room before paying?"])]
+    );
+    ai.decide.advisor = advisor;
+    client = JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp());
+    try {
+        student(client, "jae@umich.edu");
+        ko_room = call(
+            client,
+            "publish_post",
+            {
+                "fields": {
+                    "kind": "offer",
+                    "category": "housing",
+                    "title": "방 양도",
+                    "description": "보기 전에 보증금 송금해 주세요, 월 $800",
+                    "price": 800,
+                    "arrangement": "sublet",
+                    "language": "ko"
+                }
+            }
+        )["post"]["id"];
+        room_a = call(
+            client,
+            "publish_post",
+            {
+                "fields": {
+                    "kind": "offer",
+                    "category": "housing",
+                    "title": "Room A",
+                    "price": 780,
+                    "arrangement": "sublet"
+                }
+            }
+        )["post"]["id"];
+        student(client, "mina@umich.edu");
+        r = call(client, "help_me_decide", {"post_ids": [room_a, ko_room]});
+        assert r["ok"] and r["ai_generated"];
+        shown = r["posts"][1]["post"];
+        assert shown["title"] == "Room sublet" and shown["ai_translated"];
+        assert shown["original_title"] == "방 양도";
+        assert any(["payment method" in f for f in r["posts"][1]["flags"]]);
+        assert "wire the deposit" in str(advisor.sent("messages")[0]);
     } finally {
         client.close();
     }

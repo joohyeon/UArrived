@@ -7,6 +7,7 @@ import from jaclang.testing.testing { JacTestClient }
 
 def served -> JacTestClient {
     os.environ["UARRIVED_DEV_MODE"] = "1";
+    os.environ["ANTHROPIC_API_KEY"] = "";
     return JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp());
 }
 

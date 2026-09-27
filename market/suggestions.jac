@@ -8,7 +8,7 @@ import from core.clock { today_iso as clock_today }
 import from datetime { date }
 import from core.auth { verified_profile }
 import from market.graph { Post, Suggestion, post_status, all_posts, all_suggestions }
-import from market.lifecycle { PostView, view_of, own_post }
+import from market.lifecycle { PostView, view_of, own_post, reader_of }
 import from market.matching { withdraw_pending }
 
 """A suggestion as one of its two students sees it."""
@@ -42,9 +42,10 @@ def suggestion_status(
     return "connected" if s.accepted_a and s.accepted_b else "open";
 }
 
-"""The caller's suggestions, best first. Declined and withdrawn ones never show (AE3); closed
-ones show only if the pair had connected, so the chat stays findable."""
-def my_suggestions(today: str) -> list[SuggestionView] {
+"""The caller's suggestions, best first, with the other post in the `reader` language. Declined
+and withdrawn ones never show (AE3); closed ones show only if the pair had connected, so the chat
+stays findable."""
+def my_suggestions(today: str, reader: str = "") -> list[SuggestionView] {
     me = jid(root);
     posts: dict[str, Post] = {jid(p): p for p in all_posts()};
     views: list[SuggestionView] = [];
@@ -69,8 +70,8 @@ def my_suggestions(today: str) -> list[SuggestionView] {
                 status=status,
                 score=s.score,
                 reasons=s.reasons,
-                my_post=view_of(a if mine_is_a else b, today),
-                other_post=view_of(b if mine_is_a else a, today),
+                my_post=view_of(a if mine_is_a else b, today, reader),
+                other_post=view_of(b if mine_is_a else a, today, reader),
                 i_accepted=s.accepted_a if mine_is_a else s.accepted_b,
                 unread=not (s.seen_a if mine_is_a else s.seen_b)
             )
@@ -92,10 +93,11 @@ def stop_for(post_id: str) -> bool {
 }
 
 def:protect list_my_suggestions -> list[SuggestionView] {
-    if verified_profile() is None {
+    profile = verified_profile();
+    if profile is None {
         return [];
     }
-    return my_suggestions(clock_today());
+    return my_suggestions(clock_today(), reader_of(profile));
 }
 
 def:protect stop_suggestions(post_id: str) -> bool {

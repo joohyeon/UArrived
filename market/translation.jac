@@ -3,11 +3,12 @@
 Every AI translation passes a deterministic number guard: each digit group in the source must
 appear in the translation. A failed guard, an unreadable reply or an AI outage all return the
 original text with `ok` false, so readers see what the student wrote, never a wrong number.
+No model is called when the translator can't run (no API key), and any translator failure
+(ByLLMError or otherwise) degrades to the original: no endpoint fails because the AI is down.
 """
 
 import re;
-import from jaclang.byllm.lib { ByLLMError, OutputConversionError }
-import from ai.translate { translate, translate_post }
+import from ai.translate { translate, translate_post, translator_ready }
 import from core.constants { PILOT_LANGUAGES, DEFAULT_LANGUAGE }
 
 """A text for one reader. `ai_translated` is true only when `text` is an AI translation;
@@ -55,11 +56,12 @@ def translate_text(text: str, source: str, target: str) -> TranslatedText {
         return original;
     }
     failed = TranslatedText(text=text, ok=False, language=src);
+    if not translator_ready() {
+        return failed;
+    }
     try {
         out = translate(text, src, tgt).text.strip();
-    } except OutputConversionError {
-        return failed;
-    } except ByLLMError {
+    } except Exception {
         return failed;
     }
     if not acceptable(text, out) {
@@ -83,14 +85,14 @@ def translate_post_texts(
         for lang in PILOT_LANGUAGES
         if lang != src
     ];
-    if not targets or (title.strip() == "" and description.strip() == "") {
+    if not targets
+        or (title.strip() == "" and description.strip() == "")
+        or not translator_ready() {
         return texts;
     }
     try {
         got = translate_post(title, description, src, targets);
-    } except OutputConversionError {
-        return texts;
-    } except ByLLMError {
+    } except Exception {
         return texts;
     }
     for item in got.items {

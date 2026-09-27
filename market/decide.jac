@@ -12,7 +12,7 @@ import from jaclang.byllm.lib { ByLLMError }
 import from ai.decide { advise, DecideNotes }
 import from core.auth { verified_profile }
 import from market.graph { Post, post_status, all_posts, visible_to }
-import from market.lifecycle { PostView, view_of }
+import from market.lifecycle { PostView, view_of, reader_of }
 
 glob MIN_COMPARE: int = 2,
      MAX_COMPARE: int = 3,
@@ -95,9 +95,19 @@ def has_word(text: str, phrase: str) -> bool {
     return re.search(r"\b" + re.escape(phrase) + r"\b", text) is not None;
 }
 
-"""Known risk patterns, by rule. A flag is a reason to ask, not a verdict."""
+"""Known risk patterns, by rule. A flag is a reason to ask, not a verdict. The poster's words
+and the post's stored English copy (U5) are both scanned, so a Korean or Chinese post whose
+English translation mentions a wire transfer is flagged too."""
 def risk_flags(p: Post) -> list[str] {
-    text = (p.title + " " + p.description).lower();
+    english = p.texts.get("en", {});
+    text = " ".join(
+        [
+            p.title,
+            p.description,
+            english.get("title", ""),
+            english.get("description", "")
+        ]
+    ).lower();
     out: list[str] = [];
     if any([has_word(text, w) for w in PAYMENT_WORDS]) {
         out.append(
@@ -147,8 +157,10 @@ def summary_of(items: list[Compared]) -> str {
     return "\n".join(parts);
 }
 
-"""Compare the posts with these ids, as of `today`. Only posts the caller can see count."""
-def compare(post_ids: list[str], today: str) -> DecideResult {
+"""Compare the posts with these ids, as of `today`, shown in the `reader` language. Only posts
+the caller can see count. The advisor always gets the English copy (the banned-claim filter is
+English); its notes and the flags are not localized yet (U6)."""
+def compare(post_ids: list[str], today: str, reader: str = "") -> DecideResult {
     wanted = list(dict.fromkeys(post_ids));
     if len(wanted) < MIN_COMPARE {
         return DecideResult(ok=False, error="Pick at least two posts to compare.");
@@ -158,6 +170,7 @@ def compare(post_ids: list[str], today: str) -> DecideResult {
     }
     posts: dict[str, Post] = {jid(p): p for p in visible_to(all_posts(), jid(root))};
     items: list[Compared] = [];
+    for_advisor: list[Compared] = [];
     for pid in wanted {
         p = posts.get(pid);
         if p is None or post_status(p, today) != "live" {
@@ -165,14 +178,20 @@ def compare(post_ids: list[str], today: str) -> DecideResult {
                 ok=False, error="One of those posts isn't available any more."
             );
         }
+        (missing, flags) = (missing_info(p), risk_flags(p));
         items.append(
+            Compared(post=view_of(p, today, reader), missing=missing, flags=flags)
+        );
+        for_advisor.append(
             Compared(
-                post=view_of(p, today), missing=missing_info(p), flags=risk_flags(p)
+                post=view_of(p, today, "en", own_original=False),
+                missing=missing,
+                flags=flags
             )
         );
     }
     try {
-        notes = advise(summary_of(items));
+        notes = advise(summary_of(for_advisor));
     } except ByLLMError {
         return DecideResult(
             ok=True,
@@ -190,12 +209,13 @@ def compare(post_ids: list[str], today: str) -> DecideResult {
 }
 
 def:protect help_me_decide(post_ids: list[str]) -> DecideResult {
-    if verified_profile() is None {
+    profile = verified_profile();
+    if profile is None {
         return DecideResult(
             ok=False, error="Verify your UMich email to use the marketplace."
         );
     }
-    return compare(post_ids, clock_today());
+    return compare(post_ids, clock_today(), reader_of(profile));
 }
 
 test "risk words match whole words only" {

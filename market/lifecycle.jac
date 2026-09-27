@@ -20,7 +20,9 @@ import from market.graph {
     suspended_roots
 }
 import from market.matching { run_matching }
-import from core.profile { share_with_moderators }
+import from core.profile { Profile, share_with_moderators }
+import from market.drafting { language_code, profile_language }
+import from market.translation { translate_post_texts, reader_language }
 
 glob ITEM_DAYS: int = 14,
      HOUSING_DAYS: int = 30,
@@ -43,7 +45,12 @@ glob ITEM_DAYS: int = 14,
          "arrangement"
      ];
 
-"""A post as the client sees it."""
+"""A post as one reader sees it (U5). `title`/`description` are in `language`: the reader's
+language when a guarded translation exists, else the poster's original. `ai_translated` is true
+only when the shown text is a translation; then `original_title`/`original_description` hold
+the poster's words in `source_language` (otherwise they are empty). Price, dates, times and
+area always come from the structured fields, never from translated text. Posts from before U5
+have an empty `source_language` and show as written."""
 obj PostView {
     has id: str,
         mine: bool,
@@ -64,7 +71,12 @@ obj PostView {
         route_to: str,
         arrangement: str,
         ai_generated: bool,
-        expires_on: str;
+        expires_on: str,
+        language: str = "",
+        source_language: str = "",
+        ai_translated: bool = False,
+        original_title: str = "",
+        original_description: str = "";
 }
 
 obj PostResult {
@@ -191,16 +203,46 @@ def post_error(fields: dict[str, any], today: str = "") -> str {
     return "";
 }
 
-def view_of(post: Post, today: str) -> PostView {
+"""The language a student reads posts in: their profile language if it is a pilot language,
+else English."""
+def reader_of(profile: Profile | None) -> str {
+    return reader_language(profile.preferred_language if profile is not None else None);
+}
+
+"""The (title, description, language) a `reader` sees: the stored `reader` translation when
+there is one, else the original. An empty `reader` always gets the original."""
+def shown_text(post: Post, reader: str) -> tuple[str, str, str] {
+    if reader and reader != post.language and reader in post.texts {
+        t = post.texts[reader];
+        return (t.get("title", ""), t.get("description", ""), reader);
+    }
+    return (post.title, post.description, post.language);
+}
+
+"""`post` as seen by a `reader` (a pilot language code, "" for the original). The poster always
+sees their own words unless `own_original` is false (Help me decide's English summary)."""
+def view_of(
+    post: Post, today: str, reader: str = "", own_original: bool = True
+) -> PostView {
+    mine = post.owner_root == jid(root);
+    (title, description, shown) = shown_text(
+        post, "" if mine and own_original else reader
+    );
+    translated = shown != post.language;
     return PostView(
         id=jid(post),
-        mine=post.owner_root == jid(root),
+        mine=mine,
         status=post_status(post, today),
         poster_name=post.poster_name,
         kind=post.kind,
         category=post.category,
-        title=post.title,
-        description=post.description,
+        title=title,
+        description=description,
+        language=shown,
+        source_language=post.language,
+        ai_translated=translated,
+        original_title=post.title if translated else "",
+        original_description=post.description if translated else "",
         price=post.price,
         free=post.free,
         available_from=post.available_from,
@@ -262,7 +304,23 @@ def own_post(post_id: str) -> Post | None {
     return None;
 }
 
-"""Publish the reviewed draft `fields` as a live post, as of `today`."""
+"""The language a post's text is written in: the draft's `language` if it is a well-formed code
+(any 2-3 letters, so a French draft stays French), else the poster's profile language."""
+def post_language(fields: dict[str, any], profile: Profile) -> str {
+    given = fields.get("language", "");
+    return language_code(
+        given if isinstance(given, str) else "", profile_language(profile)
+    );
+}
+
+"""Store `post`'s language and its title and description in every pilot language."""
+def store_texts(post: Post, language: str) {
+    post.language = language;
+    post.texts = translate_post_texts(post.title, post.description, language);
+}
+
+"""Publish the reviewed draft `fields` as a live post, as of `today`. The reviewed native
+title and description are translated here; any English copy the client sends is ignored."""
 def publish(
     fields: dict[str, any], today: str, ai_generated: bool = True
 ) -> PostResult {
@@ -297,15 +355,18 @@ def publish(
         expires_on=expiry_for(clean, today)
     );
     apply_fields(post, clean);
+    store_texts(post, post_language(fields, profile));
     grant(post, level=AccessLevel.READ);
     share_with_moderators(post);
     run_matching(post, today);
     return PostResult(ok=True, post=view_of(post, today));
 }
 
-"""Edit the caller's own post: `changes` overrides any EDITABLE field; the result is re-validated."""
+"""Edit the caller's own post: `changes` overrides any EDITABLE field; the result is re-validated.
+Translations are redone only when the title or description changed."""
 def edit(post_id: str, changes: dict[str, any], today: str) -> PostResult {
-    if verified_profile() is None {
+    profile = verified_profile();
+    if profile is None {
         return PostResult(
             ok=False, error="Verify your UMich email to use the marketplace."
         );
@@ -324,7 +385,12 @@ def edit(post_id: str, changes: dict[str, any], today: str) -> PostResult {
     if error {
         return PostResult(ok=False, error=error);
     }
+    text_changed = merged["title"] != post.title
+        or merged["description"] != post.description;
     apply_fields(post, merged);
+    if text_changed {
+        store_texts(post, post.language or profile_language(profile));
+    }
     post.ai_generated = False;
     if not post.done {
         post.expires_on = expiry_for(merged, post.published_on or today);
@@ -369,18 +435,18 @@ def renew(post_id: str, today: str) -> PostResult {
     return PostResult(ok=True, post=view_of(post, today));
 }
 
-"""Live posts visible to the caller, newest first."""
-def live_posts(today: str) -> list[PostView] {
+"""Live posts visible to the caller, newest first, for a `reader` language."""
+def live_posts(today: str, reader: str = "") -> list[PostView] {
     posts = [
         p
         for p in visible_to(all_posts(), jid(root))
         if post_status(p, today) == "live"
     ];
     posts.sort(key=lambda (p: Post) -> str { return p.published_on; }, reverse=True);
-    return [view_of(p, today) for p in posts];
+    return [view_of(p, today, reader) for p in posts];
 }
 
-"""The caller's own posts in any status, newest first."""
+"""The caller's own posts in any status, newest first, in the poster's own words."""
 def mine(today: str) -> list[PostView] {
     posts = [
         p
@@ -415,10 +481,11 @@ def:protect renew_post(post_id: str) -> PostResult {
 }
 
 def:protect list_live_posts -> list[PostView] {
-    if verified_profile() is None {
+    profile = verified_profile();
+    if profile is None {
         return [];
     }
-    return live_posts(today_iso());
+    return live_posts(today_iso(), reader_of(profile));
 }
 
 def:protect list_my_posts -> list[PostView] {

@@ -5,9 +5,18 @@ with a deterministic number guard and falls back to the original text. The model
 `translator`, a module glob so tests can swap in MockLLM.
 """
 
+import os;
 import from jaclang.byllm.lib { Model }
 
 glob translator: any = Model(model_name="claude-haiku-4-5-20251001");
+
+"""Whether a translation call can succeed: false for the real (Anthropic) model when
+ANTHROPIC_API_KEY is unset, so callers skip it at once instead of paying a failed network call.
+A test double (MockLLM) is always ready."""
+def translator_ready -> bool {
+    return not isinstance(translator, Model)
+        or bool(os.environ.get("ANTHROPIC_API_KEY", "").strip());
+}
 
 obj Translation {
     has text: str;

@@ -1,8 +1,10 @@
 """Tests for the market translation wrapper (U3). The model is always MockLLM; no test calls a
 real provider."""
 
+import os;
+import time;
 import ai.translate;
-import from jaclang.byllm.lib { MockLLM, MockError, AuthenticationError }
+import from jaclang.byllm.lib { MockLLM, MockError, AuthenticationError, Model }
 import from ai.translate { Translation, PostText, PostTranslations }
 import from market.translation {
     digits_preserved,
@@ -160,4 +162,28 @@ test "reader language maps anything outside the pilot set to English" {
     assert reader_language(" ZH ") == "zh";
     assert reader_language("") == "en";
     assert reader_language(None) == "en";
+}
+
+test "with no API key the real model is skipped at once, keeping the original" {
+    saved = os.environ.get("ANTHROPIC_API_KEY", "");
+    os.environ["ANTHROPIC_API_KEY"] = "";
+    ai.translate.translator = Model(model_name="claude-haiku-4-5-20251001");
+    try {
+        started = time.monotonic();
+        texts = translate_post_texts("책상", "$25", "ko");
+        one = translate_text("책상", "ko", "en");
+        assert texts == {"ko": {"title": "책상", "description": "$25"}};
+        assert not one.ok and one.text == "책상" and not one.ai_translated;
+        assert time.monotonic() - started < 1.0;
+    } finally {
+        os.environ["ANTHROPIC_API_KEY"] = saved;
+        ai.translate.translator = MockLLM(outputs=[]);
+    }
+}
+
+test "any translator failure, not only ByLLMError, degrades to the original" {
+    ai.translate.translator = MockLLM(outputs=[]);
+    assert translate_post_texts("Desk", "$25", "en")
+        == {"en": {"title": "Desk", "description": "$25"}};
+    assert not translate_text("Desk", "en", "ko").ok;
 }

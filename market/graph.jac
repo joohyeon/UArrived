@@ -20,6 +20,10 @@ glob KINDS: list[str] = ["offer", "request"],
          "service"
      ];
 
+"""One marketplace post. `language` is the language the poster wrote `title`/`description` in;
+`texts` maps a language to {"title", "description"}: the original under `language` plus every
+pilot-language translation that passed the number guard (U5). Posts from before U5 have
+neither and render as written."""
 node Post {
     has owner_root: str,
         kind: str,
@@ -42,7 +46,9 @@ node Post {
         expires_on: str = "",
         done: bool = False,
         suggestions_stopped: bool = False,
-        hidden: bool = False;
+        hidden: bool = False,
+        language: str = "",
+        texts: dict[str, dict[str, str]] = {};
 }
 
 """live, done, expired or hidden (by a moderator), as of `today` (YYYY-MM-DD). A post is visible while today < expires_on."""
