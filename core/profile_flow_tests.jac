@@ -186,6 +186,20 @@ test "a first message's language becomes the default only until the student choo
     assert chose.preferred_language == "en";
 }
 
+test "the first-message default applies once, even when the first message needs no change" {
+    p = Profile();
+    assert default_language_from("ko", p, root) and p.language_defaulted;
+    assert not default_language_from("zh", p, root);
+    assert p.preferred_language == "ko";
+    same = Profile();
+    assert not default_language_from("en", same, root) and same.language_defaulted;
+    assert not default_language_from("ko", same, root);
+    assert same.preferred_language == "en";
+    chose = Profile();
+    set_language(chose, "zh", True, root);
+    assert chose.language_defaulted;
+}
+
 test "the mailbox language follows every language change" {
     p = Profile(umich_email=f"lang-{uuid.uuid4()}@umich.edu", verified=True);
     sync_mailbox(p, root);
