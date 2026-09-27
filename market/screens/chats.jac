@@ -38,7 +38,7 @@ def:pub ChatList -> JsxElement {
                 </p>
             </Card>
         )
-            if loaded and not chats
+            if loaded and len(chats) == 0
             else None}
         {[
             <a
@@ -58,7 +58,9 @@ def:pub ChatList -> JsxElement {
                         {<Badge kind="warning" label="Closed"/> if not c.open else None}
                     </div>
                     <span style={{"color": color("sub")}}>
-                        {"For your post: " + c.my_post_title}
+                        {("For your post: " + c.my_post_title)
+                            if c.my_post_title
+                            else "About their post"}
                     </span>
                     {<span style={{"color": color("text-2")}}>{c.last_message}</span>
                         if c.last_message

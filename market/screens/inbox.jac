@@ -28,9 +28,9 @@ def:pub MatchesInbox -> JsxElement {
         return lambda { clearInterval(timer); };  # jac:ignore[W2001]
     }
 
-    <AppShell title="Market" active="market">
+    <AppShell title="Matches" active="market">
         <MarketTabs
-            active="/market"
+            active="/market/matches"
             unread={len(
                 [
                     i
@@ -52,7 +52,7 @@ def:pub MatchesInbox -> JsxElement {
                 />
             </Card>
         )
-            if loaded and not items
+            if loaded and len(items) == 0
             else None}
         {[
             <Card key={s.id}>
@@ -127,7 +127,7 @@ impl MatchesInbox.load -> None {
         for i in fresh
         if i.unread
     ];
-    if unseen {
+    if len(unseen) > 0 {
         await mark_suggestions_seen(unseen);
     }
 }

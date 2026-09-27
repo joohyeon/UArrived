@@ -5,8 +5,8 @@ import from ui.components.base { Badge, Button, Field }
 import from market.lifecycle { PostView }
 
 glob MARKET_TABS: list[tuple[str, str]] = [
-         ("/market", "Matches"),
-         ("/market/new", "New post"),
+         ("/market", "Groups"),
+         ("/market/matches", "Matches"),
          ("/market/chats", "Chats"),
          ("/market/mine", "My posts"),
          ("/market/feed", "For you")
@@ -26,7 +26,7 @@ def:pub go(path: str) {
     window.location.assign(path);  # jac:ignore[E1032,W2001]
 }
 
-def price_text(p: PostView) -> str {
+def:pub price_text(p: PostView) -> str {
     if p.free {
         return "Free";
     }
@@ -40,7 +40,7 @@ def price_text(p: PostView) -> str {
     return ("Budget " + amount) if p.kind == "request" else amount;
 }
 
-def when_text(p: PostView) -> str {
+def:pub when_text(p: PostView) -> str {
     parts: list[str] = [];
     if p.available_from
         and p.available_until
@@ -55,7 +55,7 @@ def when_text(p: PostView) -> str {
     return " ".join(parts);
 }
 
-"""The market's own tab bar. The matches inbox is the landing tab; the feed comes last."""
+"""The market's own tab bar. Groups is the landing tab; the feed comes last."""
 def:pub MarketTabs(active: str, unread: int = 0) -> JsxElement {
     <nav
         aria-label="Market"
@@ -116,7 +116,7 @@ def:pub PostSummary(p: PostView) -> JsxElement {
             </span>
         </div>
         {<span style={{"color": color("sub")}}>{" · ".join(facts)}</span>
-            if facts
+            if len(facts) > 0
             else None}
         {(
             <span style={{"color": color("sub")}}>

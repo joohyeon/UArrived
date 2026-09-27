@@ -11,6 +11,16 @@ import from market.suggestions { list_my_suggestions, stop_suggestions }
 import from market.feed { for_you_feed, heartbeat }
 import from journey.prompts { my_journey_prompts }
 import from market.decide { help_me_decide }
+import from market.topics {
+    my_groups,
+    my_group_invites,
+    group_view,
+    post_in_group,
+    answer_group_followup,
+    join_topic_group,
+    dismiss_topic_invite,
+    close_group_post
+}
 import from market.messages {
     send_market_message,
     market_stream,
@@ -52,6 +62,7 @@ import from "@jac/runtime" { jacIsLoggedIn }
 import from core.screens.welcome { Welcome }
 import from ui.components.gallery { Gallery }
 import from market.screens.inbox { MatchesInbox }
+import from market.screens.groups { GroupList, GroupChat }
 import from market.screens.compose { Compose }
 import from market.screens.chats { ChatList, ChatScreen }
 import from market.screens.mine { MyPosts, ForYou }
@@ -73,6 +84,12 @@ def:pub app -> JsxElement {
         return <Today/>;
     }
     if path == "/market" {
+        return <GroupList/>;
+    }
+    if path == "/market/g" {
+        return <GroupChat/>;
+    }
+    if path == "/market/matches" {
         return <MatchesInbox/>;
     }
     if path == "/market/new" {

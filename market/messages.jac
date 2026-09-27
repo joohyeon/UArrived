@@ -161,8 +161,9 @@ def blocking_question(card: DraftCard, known: dict[str, str]) -> FollowUp | None
             choices=choice_list(KIND_CHOICES)
         );
     }
-    if "category" not in known
-        and (not card.ai_generated or "category" in card.guessed) {
+    # The model always "infers" a category from the fixed list, so a guessed category is normal;
+    # ask for it only when there is no AI at all.
+    if "category" not in known and not card.ai_generated {
         return FollowUp(
             question="What kind of thing is it?", choices=choice_list(CATEGORY_CHOICES)
         );
@@ -182,7 +183,10 @@ def fields_from(card: DraftCard, known: dict[str, str], text: str) -> dict[str, 
         "kind": known.get("kind", card.kind),
         "category": known.get("category", card.category),
         "title": card.title or text[:60],
-        "description": card.description if card.ai_generated else text[:500],
+        # The model's words assume its own guess; if the student corrected the kind, use theirs.
+        "description": card.description
+            if card.ai_generated and known.get("kind", card.kind) == card.kind
+            else text[:500],
         "price": card.price,
         "free": card.free,
         "available_from": card.available_from,
@@ -282,6 +286,9 @@ def compose_note(
 ) -> tuple[str, str, list[NoteItem], list[Choice]] {
     items = match_items(post, today, commons);
     other_side = "offers" if post.kind == "request" else "students looking for this";
+    nobody = "No offers match yet."
+        if post.kind == "request"
+        else "Nobody is looking for this yet.";
     if items {
         lead = "Nobody has replied yet, but these still fit:"
             if moment == "nudge"
@@ -296,7 +303,8 @@ def compose_note(
     lead = (
         "No replies or matches yet. Changing one detail often helps:"
             if moment == "nudge"
-            else f"No {other_side} match yet. I'll keep looking and tell you when one does. To widen the search:"
+            else nobody
+                + " I'll keep looking and tell you when one does. To widen the search:"
     );
     return ("no_match", lead, [], refinements(post));
 }

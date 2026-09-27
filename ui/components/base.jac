@@ -114,6 +114,7 @@ def:pub Badge(kind: str, label: str) -> JsxElement {
     <span
         style={{
             "display": "inline-flex",
+            "alignSelf": "flex-start",
             "alignItems": "center",
             "gap": space("1"),
             "padding": "3px 8px",

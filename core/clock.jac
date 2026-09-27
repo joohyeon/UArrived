@@ -1,4 +1,4 @@
-"""Today's date for server code. `UARRIVED_TODAY=YYYY-MM-DD` pinneds it so tests can move time
+"""Today's date for server code. `UARRIVED_TODAY=YYYY-MM-DD` pins it so tests can move time
 forward (for example, to expire a post) instead of publishing dates in the past."""
 
 import os;
