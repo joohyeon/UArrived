@@ -213,3 +213,45 @@ test "skipping every step still reaches onboarding_done with nothing else change
         client.close();
     }
 }
+
+test "a new student has no interests until they pick some, and a second pick overwrites the first" {
+    client = served();
+    try {
+        client.register_user("noor@umich.edu", "password123");
+        assert call(client, "has_interests", {}) is False;
+        assert call(client, "my_interests", {}) == [];
+        saved = call(
+            client,
+            "set_interests",
+            {"categories": ["Arts", "Social", "Not-A-Real-Category"]}
+        );
+        assert saved == ["Arts", "Social"];
+        assert call(client, "has_interests", {});
+        assert call(client, "my_interests", {}) == ["Arts", "Social"];
+        call(client, "set_interests", {"categories": ["Sports"]});
+        assert call(client, "my_interests", {}) == ["Sports"];
+    } finally {
+        client.close();
+    }
+}
+
+test "marking interest through the served app is a public, repeatable tally" {
+    client = served();
+    try {
+        client.register_user("priya@umich.edu", "password123");
+        upcoming = call(client, "upcoming_events", {});
+        (real, other) = (upcoming[0]["eid"], upcoming[1]["eid"]);
+        before = call(client, "interest_counts", {"eids": [real, other]});
+        assert before == {real: 0, other: 0};
+        first = call(client, "mark_interested", {"eid": real});
+        assert first == 1;
+        again = call(client, "mark_interested", {"eid": real});
+        assert again == 2;
+        after = call(client, "interest_counts", {"eids": [real, other]});
+        assert after == {real: 2, other: 0};
+        fake = call(client, "mark_interested", {"eid": "not-a-real-event"});
+        assert fake == 0 , "an unrecognized eid must be a no-op, not recorded";
+    } finally {
+        client.close();
+    }
+}

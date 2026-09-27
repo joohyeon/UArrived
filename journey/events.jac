@@ -300,6 +300,72 @@ def:pub preview_events(count: int = 3) -> list[EventView] {
     return preview_of(all_events(today_iso()), count);
 }
 
+"""The soonest event in `events` whose category is one of `interests`, or None if none match.
+`events` must already be date-sorted (as all_events()/upcoming_events() return them) -- the first
+match is therefore the soonest one. Deterministic tag matching, no ranking model (U5, plan
+2026-09-27-003)."""
+def best_match(events: list[EventView], interests: list[str]) -> EventView | None {
+    for e in events {
+        if e.category in interests {
+            return e;
+        }
+    }
+    return None;
+}
+
+"""A public, content-free record that some student marked interest in event `eid` -- the
+market/graph.jac ReplyTick shape: no identity, no dedup, a pure fire-and-forget tally (U6, plan
+2026-09-27-003 R11: "no memory of which student clicked")."""
+node EventInterest {
+    has eid: str;
+
+    def __jac_access__ -> AccessLevel | None {
+        return AccessLevel.READ;
+    }
+}
+
+def commons_or_shared(commons: any = None) -> any {
+    return commons if commons is not None else root.shared;
+}
+
+"""How many students have marked interest in event `eid`."""
+def interest_count(eid: str, commons: any = None) -> int {
+    return len(
+        [
+            t
+            for t in [commons_or_shared(commons)-->][?:EventInterest]
+            if t.eid == eid
+        ]
+    );
+}
+
+"""Interest counts for several events in one call, so the events screen doesn't pay one round
+trip per card. Every id in `eids` is present in the result, 0 if nobody has marked it yet."""
+def:protect interest_counts(eids: list[str]) -> dict[str, int] {
+    wanted = set(eids);
+    counts: dict[str, int] = {eid: 0 for eid in eids};
+    for t in [root.shared-->][?:EventInterest] {
+        if t.eid in wanted {
+            counts[t.eid] = counts.get(t.eid, 0) + 1;
+        }
+    }
+    return counts;
+}
+
+"""Record that the caller is interested in event `eid`. Fire-and-forget: no de-dup, no identity
+kept, so a repeat tap simply adds to the count -- an accepted trade-off for keeping this a
+throwaway tally instead of a tracked RSVP (see the plan's Key Technical Decisions). `eid` must
+belong to a real upcoming event, so the endpoint can't be used to grow the graph with tallies for
+made-up ids -- unlike a fire-and-forget count, that growth would be unbounded and unrelated to any
+real event. Returns the new count (unchanged if `eid` isn't real)."""
+def:protect mark_interested(eid: str) -> int {
+    if eid not in [e.eid for e in all_events(today_iso())] {
+        return interest_count(eid);
+    }
+    root.shared ++> EventInterest(eid=eid);
+    return interest_count(eid);
+}
+
 test "events file parses into upcoming, deduplicated events in date order" {
     events = all_events("2026-09-27");
     assert len(events) > 20;
@@ -381,4 +447,58 @@ test "event times read as weekday, date and time range" {
         == "Sun, Sep 27 – Oct 11";
     assert when_label("2026-10-02", "", "", "") == "Fri, Oct 2";
     assert when_label("soon", "", "7:00 PM", "") == "soon 7:00 PM";
+}
+
+test "best_match picks the soonest event in an interest category, or None if none match" {
+    doc = {
+        "1": {
+            "event_title": "Film night",
+            "event_type": "Film",
+            "date_start": "2026-10-01",
+            "location_name": "Michigan Theater"
+        },
+        "2": {
+            "event_title": "Career Fair",
+            "event_type": "Career",
+            "date_start": "2026-10-02",
+            "location_name": "Pierpont Commons"
+        },
+        "3": {
+            "event_title": "Second Film",
+            "event_type": "Film",
+            "date_start": "2026-10-03",
+            "location_name": "State Theatre"
+        }
+    };
+    events = parse_events(doc, "2026-09-27");
+    arts_match = best_match(events, ["Arts"]);
+    careers_match = best_match(events, ["Careers"]);
+    assert arts_match is not None and arts_match.title == "Film night";
+    assert careers_match is not None and careers_match.title == "Career Fair";
+    assert best_match(events, ["Sports"]) is None;
+}
+
+test "marking interest is a fire-and-forget tally with no dedup" {
+    real = all_events(today_iso())[0].eid;
+    assert interest_count(real) == 0;
+    n1 = mark_interested(real);
+    assert n1 == 1 and interest_count(real) == 1;
+    n2 = mark_interested(real);
+    assert n2 == 2 , "a repeat tap adds to the count instead of being deduped";
+    assert interest_count("e2") == 0;
+}
+
+test "marking interest in a made-up event id is a no-op, not a recorded tally" {
+    assert interest_count("not-a-real-event") == 0;
+    n = mark_interested("not-a-real-event");
+    assert n == 0 , "an unrecognized eid must not create an EventInterest node";
+    assert interest_count("not-a-real-event") == 0;
+}
+
+test "interest_counts batches several events in one call, defaulting unmarked ones to 0" {
+    upcoming = all_events(today_iso());
+    (marked, never_marked) = (upcoming[0].eid, upcoming[1].eid);
+    mark_interested(marked);
+    counts = interest_counts([marked, never_marked]);
+    assert counts == {marked: 1, never_marked: 0};
 }

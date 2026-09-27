@@ -1,20 +1,134 @@
-"""/journey/events: upcoming U-M events for new students, as a list or on the map, filtered by
-category and cost. Each event links to its official U-M Happening page. Tapping a map pin lists
-that venue's events (`?venue=`)."""
+"""/events: upcoming U-M events for new students, as a list or on the map, filtered by category
+and cost. Each event links to its official U-M Happening page. Tapping a map pin lists that
+venue's events (`?venue=`). Its own bottom-nav tab (U4, plan 2026-09-27-003) -- no longer nested
+under Journey, so it doesn't render Journey's Tasks/Events sub-tab strip."""
 
 import from ui.tokens { color, space, text_style }
-import from ui.components.base { AppShell, Card, Badge, ResponsiveGrid }
+import from ui.components.base { AppShell, Card, Badge, Button, ResponsiveGrid }
 import from ui.components.blocks { Chip, SegmentedControl, SectionLabel }
 import from ui.components.map { MapCanvas }
 import from journey.constants { EVENT_CATEGORIES, ANN_ARBOR_BOUNDS, CAMPUS_CENTER }
-import from journey.events { upcoming_events, EventView }
+import from journey.events {
+    upcoming_events,
+    interest_counts,
+    mark_interested,
+    EventView
+}
+import from journey.interests { my_interests }
 import from journey.guide { translate_journey_texts }
-import from journey.screens.common { JourneyTabs, query_param }
+import from journey.screens.common { query_param }
 
-def:pub EventCard(e: EventView, tx: Callable[[str], str]) -> JsxElement {
+"""Renders the interest count as words, e.g. "N students interested," never a bare 0."""
+def:pub interest_line(count: int) -> str {
+    return "Be the first student interested"
+        if count == 0
+        else (
+            f"{count} student interested"
+                if count == 1
+                else f"{count} students interested"
+        );
+}
+
+"""The soonest event in `events` whose category is in `interests`, or None if none match. Mirrors
+journey.events.best_match() exactly, but is defined here (not imported): that copy is a plain
+(non-`:pub`) function, so it can't bridge to client code, and journey.events also imports
+server-private values (`core.clock.today_iso`, `journey.task_data.world_px`) that fail to resolve
+for the client bundle the moment anything from that module is imported here -- confirmed by trying
+the import and hitting E5082 on those two names, not on best_match itself."""
+def:pub best_match(events: list[EventView], interests: list[str]) -> EventView | None {
+    for e in events {
+        if e.category in interests {
+            return e;
+        }
+    }
+    return None;
+}
+
+"""The soonest matching pick for the student, shown above the list. `is_match` is False when
+nothing matched their interests and this is just the soonest event overall -- no "For you" badge
+in that case (AE2). `count` is the current interest tally; `tapped` disables the button for this
+page load once the caller has already marked interest (U6)."""
+def:pub EventHero(
+    e: EventView,
+    tx: Callable[[str], str],
+    is_match: bool,
+    count: int,
+    tapped: bool,
+    onInterested: Callable[[], None]
+) -> JsxElement {
     small = text_style("small");
     <Card>
         <div style={{"display": "flex", "gap": space("2"), "flexWrap": "wrap"}}>
+            {<Badge kind="action" label="For you"/> if is_match else None}
+            <Badge kind="neutral" label={tx(e.category)}/>
+            {<Badge kind="progress" label="Free"/> if e.free else None}
+        </div>
+        <strong style={text_style("stage-title")}>{tx(e.title)}</strong>
+        <span style={{** small, "color": color("text-2")}}>{e.when}</span>
+        <span style={{** small, "color": color("sub")}}>
+            {"Online" if e.virtual else e.location}
+        </span>
+        <span style={{** small, "color": color("sub")}}>{interest_line(count)}</span>
+        <Button
+            label={"You're interested" if tapped else "I'm interested"}
+            variant="secondary"
+            disabled={tapped}
+            onClick={lambda (ev: MouseEvent) { onInterested(); }}
+        />
+        {(
+            <details>
+                <summary
+                    style={{
+                        ** text_style("meta"),
+                        "cursor": "pointer",
+                        "minHeight": "44px"
+                    }}
+                >
+                    About this event
+                </summary>
+                <p
+                    style={{
+                        ** small,
+                        "color": color("text-2"),
+                        "whiteSpace": "pre-wrap"
+                    }}
+                >
+                    {e.summary}
+                </p>
+                {<p style={{** small, "color": color("sub")}}>{"Cost: " + e.cost}</p>
+                    if e.cost
+                    else None}
+                {<p style={{** small, "color": color("sub")}}>{e.sponsor}</p>
+                    if e.sponsor
+                    else None}
+            </details>
+        )
+            if e.summary
+            else None}
+        {(
+            <a
+                href={e.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={text_style("meta")}
+            >
+                Official event page
+            </a>
+        )
+            if e.url
+            else None}
+    </Card>
+}
+
+def:pub EventCard(
+    e: EventView, tx: Callable[[str], str], interests: list[str], count: int
+) -> JsxElement {
+    small = text_style("small");
+    <Card>
+        <div style={{"display": "flex", "gap": space("2"), "flexWrap": "wrap"}}>
+            {<Badge kind="action" label="For you"/>
+                if e.category in interests
+                else None}
             <Badge kind="neutral" label={tx(e.category)}/>
             {<Badge kind="progress" label="Free"/> if e.free else None}
         </div>
@@ -23,6 +137,7 @@ def:pub EventCard(e: EventView, tx: Callable[[str], str]) -> JsxElement {
         <span style={{** small, "color": color("sub")}}>
             {"Online" if e.virtual else e.location}
         </span>
+        <span style={{** small, "color": color("sub")}}>{interest_line(count)}</span>
         {(
             <details>
                 <summary
@@ -70,6 +185,10 @@ def:pub EventCard(e: EventView, tx: Callable[[str], str]) -> JsxElement {
 
 def:pub Events -> JsxElement {
     has events: list[EventView] = [],
+        all_upcoming: list[EventView] = [],
+        interests: list[str] = [],
+        counts: dict[str, int] = {},
+        tapped: list[str] = [],
         loaded: bool = False,
         category: str = "All",
         free_only: bool = False,
@@ -78,10 +197,12 @@ def:pub Events -> JsxElement {
         words: dict[str, str] = {};
 
     async def load(cat: str, free: bool) -> None;
+    async def init -> None;
+    async def markInterested(eid: str) -> None;
 
     can with entry {
         venue = query_param("venue");
-        load("All", False);
+        init();
     }
 
     def tx(s: str) -> str {
@@ -100,10 +221,20 @@ def:pub Events -> JsxElement {
         load(category, now);
     }
 
+    # The hero is a fixed personalized spotlight, independent of the category/free filters below
+    # it -- computed from all_upcoming (always "All"/not-free-only), not the filtered `events`.
+    hero: EventView | None = best_match(all_upcoming, interests);
+    if hero is None and len(all_upcoming) > 0 {
+        hero = all_upcoming[0];
+    }
+    hero_is_match = hero is not None and hero.category in interests;
+    # Bound outside the lambda below: narrowing `hero is not None` doesn't carry into a closure.
+    hero_eid = hero.eid if hero is not None else "";
+
     shown = [
         e
         for e in events
-        if venue == "" or e.venue == venue
+        if (venue == "" or e.venue == venue) and (hero is None or e.eid != hero.eid)
     ];
     online = len(
         [
@@ -129,15 +260,29 @@ def:pub Events -> JsxElement {
                 "wx": e.wx,
                 "wy": e.wy,
                 "label": e.venue,
-                "href": "/journey/events?venue=" + encodeURIComponent(e.venue),  # jac:ignore[W2001]
+                "href": "/events?venue=" + encodeURIComponent(e.venue),  # jac:ignore[W2001]
                 "state": "event",
                 "count": 1
             }
         );
     }
 
-    <AppShell title="Events" active="journey" wide={True}>
-        <JourneyTabs active="/journey/events"/>
+    <AppShell title="Events" active="events" wide={True}>
+        {(
+            <EventHero
+                e={hero}
+                tx={tx}
+                is_match={hero_is_match}
+                count={counts.get(hero_eid, 0)}
+                tapped={hero_eid in tapped}
+                onInterested={lambda { markInterested(hero_eid); }}
+            />
+        )
+            if hero is not None
+            else None}
+        <a href="/interests?next=/events" style={text_style("meta")}>
+            Edit your interests
+        </a>
         <div
             role="group"
             aria-label="Category"
@@ -184,7 +329,7 @@ def:pub Events -> JsxElement {
                 }}
             >
                 <SectionLabel label={"At " + venue}/>
-                <a href="/journey/events" style={text_style("meta")}>Show all venues</a>
+                <a href="/events" style={text_style("meta")}>Show all venues</a>
             </div>
         )
             if venue
@@ -216,7 +361,15 @@ def:pub Events -> JsxElement {
             else None}
         {(
             <ResponsiveGrid min="300px">
-                {[<EventCard key={e.eid} e={e} tx={tx}/> for e in shown]}
+                {[
+                    <EventCard
+                        key={e.eid}
+                        e={e}
+                        tx={tx}
+                        interests={interests}
+                        count={counts.get(e.eid, 0)}
+                    /> for e in shown
+                ]}
             </ResponsiveGrid>
         )
             if view == "list"
@@ -231,6 +384,14 @@ impl Events.load(cat: str, free: bool) -> None {
     fresh: list[EventView] = [];
     fresh = await upcoming_events(cat, free);
     events = fresh;
+    # Every call's own fetch result -- never a later read of the shared `events` state -- feeds
+    # all_upcoming, and only when this call's own filters are the unfiltered default. A category
+    # chip tapped while this call is still in flight starts its own, separate load(); each call
+    # only ever writes all_upcoming from data it fetched itself, so the two can't race and stomp
+    # each other's result into the wrong (filtered) list.
+    if cat == "All" and not free {
+        all_upcoming = fresh;
+    }
     loaded = True;
     sources: list[str] = [c for c in EVENT_CATEGORIES] + [e.title for e in fresh[:60]];
     outs: list[str] = [];
@@ -242,4 +403,42 @@ impl Events.load(cat: str, free: bool) -> None {
         }
     }
     words = found;
+}
+
+"""Fetches interests, then the default (All / not-free-only) event list once -- load(cat, free)
+above sets all_upcoming from that same call when its filters are the default, so this makes one
+events call on initial page load, not two, without reading back the (possibly since-changed)
+shared `events` state."""
+impl Events.init -> None {
+    try {
+        picks: list[str] = [];
+        picks = await my_interests();
+        interests = picks;
+    } except Exception as err {
+        # Fail open (no personalization, not a stuck screen) and make sure load() below still
+        # runs -- a rejected my_interests() call must not leave the screen on "Loading events…"
+        # forever with no diagnostic trail.
+        print("Events.init interests fetch failed: " + str(err));
+    }
+    await load("All", False);
+    try {
+        fetched: dict[str, int] = {};
+        fetched = await interest_counts([e.eid for e in all_upcoming]);
+        counts = fetched;
+    } except Exception as err {
+        # Counts fall back to 0 (each card reads "Be the first student interested") rather than
+        # blocking the rest of the screen -- logged so a persistent failure is diagnosable
+        # instead of looking like nobody's ever interested in anything.
+        print("Events.init interest_counts fetch failed: " + str(err));
+    }
+}
+
+impl Events.markInterested(eid: str) -> None {
+    if eid in tapped {
+        return;
+    }
+    new_count: int = 0;
+    new_count = await mark_interested(eid);
+    counts = {** counts, eid: new_count};
+    tapped = tapped + [eid];
 }

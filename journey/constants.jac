@@ -15,6 +15,17 @@ glob XP_PER_LEVEL: int = 300,
          "Community",
          "Other"
      ],
+     # The subset of EVENT_CATEGORIES a student can actually pick as an interest: "All" is the
+     # events screen's no-filter chip and "Other" is its catch-all fallback, neither a real
+     # category any event ever has (journey/events.jac's category_of() never returns either), so
+     # neither can ever match in best_match(). The one-time interest picker (journey/screens/
+     # interests.jac) and its server-side validation (journey/interests.jac's set_interests) both
+     # read this same list so they can't drift apart.
+     INTEREST_CATEGORIES: list[str] = [
+         c
+         for c in EVENT_CATEGORIES
+         if c not in ["All", "Other"]
+     ],
      # Ann Arbor in Web Mercator world pixels at zoom 18 (min x, min y, max x, max y): journey maps
      # pan inside it. Computed from 42.3230 N, 83.8500 W to 42.2220 N, 83.6750 W.
      ANN_ARBOR_BOUNDS: list[float] = [17923659.0, 24830724.0, 17956281.0, 24856169.0],

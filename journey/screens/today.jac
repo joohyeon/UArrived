@@ -1,7 +1,8 @@
 """Today: a short greeting, the next first-week step and progress, arrival prompts that lead into
 the marketplace (the DTW ride share), and on the side what's on around campus and quick ways into
 the Market. Two columns on wide screens, one on phones. Students who haven't finished the arrival
-wizard are sent to /onboarding first.
+wizard are sent to /onboarding first, then a student who hasn't picked event interests yet is sent
+to /interests -- see Today.load.
 """
 
 import from ui.tokens { color, space, text_style, RADIUS }
@@ -13,6 +14,7 @@ import from journey.events { upcoming_events, EventView }
 import from journey.screens.journey { TaskListCard }
 import from core.profile { get_my_profile, ProfileView }
 import from journey.screens.common { go }
+import from journey.interests { has_interests }
 
 def:pub same_text(s: str) -> str {
     return s;
@@ -235,7 +237,7 @@ def:pub Today -> JsxElement {
                             </p>
                         )}
                     <a
-                        href="/journey/events"
+                        href="/events"
                         style={{
                             ** text_style("meta"),
                             "minHeight": "44px",
@@ -269,20 +271,40 @@ def:pub Today -> JsxElement {
     </AppShell>
 }
 
+"""Gated in sequence, not concurrently: the arrival wizard first (onboarding_done), then the
+one-time interest pick (has_interests) once that's done. Running both checks concurrently (each
+its own fire-and-forget async call) would race two navigations against each other for a brand new
+student who needs both."""
 impl Today.load -> None {
     profile: ProfileView | None = None;
-    profile = await get_my_profile();
-    if not profile.onboarding_done {
-        go("/onboarding");
-        return;
+    try {
+        profile = await get_my_profile();
+        if not profile.onboarding_done {
+            go("/onboarding");
+            return;
+        }
+        got_interests: bool = await has_interests();
+        if not got_interests {
+            go("/interests?next=/today");
+            return;
+        }
+        name = profile.display_name;
+    } except Exception as err {
+        # A failed gate check must not leave the screen permanently blank with no signal --
+        # log it and fall through to loading the journey content anyway (fail open, matching
+        # translate_journey_texts's degrade-rather-than-block convention in journey/guide.jac).
+        print("Today.load gate check failed: " + str(err));
     }
-    name = profile.display_name;
     fresh: list[JourneyPrompt] = [];
-    fresh = await my_journey_prompts();
-    prompts = fresh;
-    journey: JourneySummary | None = None;
-    journey = await my_journey();
-    summary = journey;
+    try {
+        fresh = await my_journey_prompts();
+        prompts = fresh;
+        journey: JourneySummary | None = None;
+        journey = await my_journey();
+        summary = journey;
+    } except Exception as err {
+        print("Today.load failed: " + str(err));
+    }
     upcoming: list[EventView] = [];
     try {
         upcoming = await upcoming_events("All", False);

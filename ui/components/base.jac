@@ -345,6 +345,7 @@ def:pub HelpButton -> JsxElement {
 glob NAV_ITEMS: list[tuple[str, str]] = [
          ("today", "Today"),
          ("journey", "Journey"),
+         ("events", "Events"),
          ("market", "Market"),
          ("profile", "Profile")
      ],
@@ -352,6 +353,7 @@ glob NAV_ITEMS: list[tuple[str, str]] = [
      NAV_ICONS: dict[str, str] = {
          "today": "M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z",
          "journey": "M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14",
+         "events": "M4 5h16v15H4V5zM4 9h16M8 3v4M16 3v4",
          "market": "M6 7h12l-1 13H7L6 7zM9 7a3 3 0 0 1 6 0",
          "profile": "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0"
      };
@@ -514,7 +516,7 @@ def:pub AppShell(
                 "right": "0",
                 "bottom": "0",
                 "zIndex": "20",
-                "gridTemplateColumns": "repeat(4, minmax(0, 1fr))",
+                "gridTemplateColumns": f"repeat({len(NAV_ITEMS)}, minmax(0, 1fr))",
                 "padding": "0 0 env(safe-area-inset-bottom)",
                 "background": color("card"),
                 "borderTop": "1px solid " + color("border")
