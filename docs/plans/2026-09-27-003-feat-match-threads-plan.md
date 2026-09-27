@@ -1,7 +1,7 @@
 ---
 title: "feat: From a dropped message to a match and a private thread"
 type: feat
-status: active
+status: completed
 date: 2026-09-27
 origin: user brief (2026-09-27), refining docs/plans/2026-09-27-002-feat-themed-group-chats-plan.md
 ---
