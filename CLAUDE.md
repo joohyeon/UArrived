@@ -18,7 +18,7 @@ everything in `.jac` by default; use Python only when Jac cannot do the job, and
 jac run main.jac                     # run the entry point
 jac fmt --check .                    # formatting; fix one file with: jac fmt --lintfix <file>
 jac check .                          # type check (also runs in-file tests)
-jac test -d .                        # all tests; bare `jac test` collects nothing, and a file list must start with main.jac
+bash scripts/test.sh                 # all tests (jac test -d . with DB pooling off); args = file list, must start with main.jac
 bash scripts/check_rules.sh          # repo rules: Jac share, boundaries, design tokens
 jac run --dev main.jac               # serve the web app with hot reload (once the web-app shell exists)
 jac browse open localhost:8000       # QA the running app in a headless browser (snapshot / click / screenshot)
@@ -51,6 +51,11 @@ jac guide                            # current, version-matched Jac reference gu
   never `if xs` / `not xs` for lists (strings and numbers are fine).
 - **Client reads are cached 60s**; any writer call clears the cache. Polling screens call `heartbeat()`
   (a tiny write) before reading so they see other students' changes.
+- **Shared local Postgres (256 connections).** Every graph test and served test uses jac's embedded
+  Postgres; there is no in-memory backend. Pooling keeps idle connections per test database for 5
+  min, so parallel `jac test -d .` runs can fill it and hang every test and `jac run` on the machine.
+  Use `bash scripts/test.sh` (pooling off, `[dev] test_jobs = 4`); check with
+  `ps -eo command | grep -c '^postgres: jac'`.
 - Served-app tests: `JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp())`, call
   `/function/<name>`; never name a file `test_*.jac`.
 - **Mocking the AI in served tests:** setting `ai.draft.drafter = MockLLM(...)` only reaches the served app if

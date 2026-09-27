@@ -34,3 +34,8 @@ default_model = "claude-haiku-4-5-20251001"
 [scale.scheduler]
 # market/notify.jac email_sweep; fires only under `jac run --serve`
 enabled = true
+
+[dev]
+# Parallel `jac test` workers. Each served test opens its own database on the shared local
+# Postgres (256 connections); keep this low. Run tests via scripts/test.sh (turns off pooling).
+test_jobs = 4
