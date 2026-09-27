@@ -1,4 +1,4 @@
-"""AI drafting: one free-text message in any language -> its language plus up to three
+"""AI drafting: one free-text message in any language -> its language plus one or more
 structured post drafts, each with an English copy (R1, R2, R5, R19, R22, R25).
 
 Knows nothing about the graph or the marketplace rules; `market/drafting.jac` validates and
@@ -50,10 +50,13 @@ obj PostDraft {
         price_reason: str = "",
         about_market: bool = True,
         title_en: str = "",
-        description_en: str = "";
+        description_en: str = "",
+        item: str = "";
 }
 
+
 sem PostDraft.about_market = "True only if the student says they want to buy, sell, give away, rent, find or offer housing, share a ride, or get moving help. False for greetings, introductions, asking who else is arriving or on a flight, and questions about campus life.";
+sem PostDraft.item = "The item as one standard name. furniture: desk, chair, bed, mattress, sofa, shelf, table, dresser. essentials: lamp, fridge, microwave, kitchenware, bedding, fan, monitor, textbook. vehicle: bike, scooter, car. Map synonyms (study table -> desk, mini fridge -> fridge, bookcase -> shelf). 'other' if none fits; empty for housing and services.";
 sem PostDraft.title = "The item or need itself in a few words, like 'Bike', 'Wooden desk' or 'Ride from DTW', in the student's own language. Never start with 'Selling', 'Looking for' or 'Need'; the post type already says that. At most 8 words.";
 sem PostDraft.description = "One or two plain sentences in the student's own voice (first person, e.g. 'I need a desk near campus this weekend.') in the student's own language, restating only what they said. Never invent condition, brand or features. Keep every number as digits.";
 sem PostDraft.title_en = "The title in English. Keep every number as digits exactly as written.";
@@ -80,9 +83,9 @@ obj DraftSet {
 }
 
 sem DraftSet.language = "ISO 639-1 code of the language the student wrote in, for example 'en', 'ko', 'zh'.";
-sem DraftSet.drafts = "One draft per distinct need in the message (for example a ride, a room and a desk are three drafts), at most three. A message about one thing is one draft.";
+sem DraftSet.drafts = "One draft per distinct need in the message (for example a ride, a room and a desk are three drafts; a bike, a lamp and a mattress for sale are three drafts). A message about one thing is one draft.";
 
-sem draft_posts = "Turn a student's marketplace message, in any language, into structured draft posts. Detect the language. Split distinct needs into separate drafts, at most three. Write each title and description in the student's language and the English copy separately. Keep every number as digits. Only use facts in the message; mark anything inferred in guessed.";
+sem draft_posts = "Turn a student's marketplace message, in any language, into structured draft posts. Detect the language. Split distinct needs and distinct items into separate drafts. Write each title and description in the student's language and the English copy separately. Keep every number as digits. Only use facts in the message; mark anything inferred in guessed.";
 sem draft_posts.message = "The student's message, exactly as typed.";
 sem draft_posts.today = "Today's date, YYYY-MM-DD, for resolving words like 'sat' or 'next week'.";
 

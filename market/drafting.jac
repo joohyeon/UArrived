@@ -23,7 +23,7 @@ import from market.translation {
 }
 
 glob MAX_MESSAGE_CHARS: int = 1000,
-     MAX_DRAFTS: int = 3;
+     MAX_DRAFTS: int = 5;
 
 """A draft ready for the poster to review. Plain fields so the client can edit every one."""
 obj DraftCard {
@@ -50,7 +50,8 @@ obj DraftCard {
         title_en: str = "",
         description_en: str = "",
         constraints: list[str] = [],
-        about_market: bool = True;
+        about_market: bool = True,
+        item: str = "";
 }
 
 """`language` is the detected (or, for non-AI cards, the poster's profile) language; `draft`
@@ -61,7 +62,8 @@ obj DraftResult {
         notice: str = "",
         draft: DraftCard | None = None,
         drafts: list[DraftCard] = [],
-        language: str = "";
+        language: str = "",
+        dropped: int = 0;
 }
 
 """A successful result holding `cards` (at least one) in `language`."""
@@ -213,7 +215,8 @@ def normalize(d: PostDraft) -> DraftCard {
             for c in d.constraints
             if c.strip()
         ][:5],
-        about_market=d.about_market
+        about_market=d.about_market,
+        item=d.item.strip().lower()
     );
 }
 
@@ -319,10 +322,13 @@ def make_draft(
     }
     language = language_code(raw.language, fallback);
     cards = [card_from(d, language, text) for d in raw.drafts[:MAX_DRAFTS]];
+    dropped = max(0, len(raw.drafts) - MAX_DRAFTS);
     if profile is not None {
         default_language_from(language, profile);
     }
-    return drafted_result(cards, language);
+    result = drafted_result(cards, language);
+    result.dropped = dropped;
+    return result;
 }
 
 """Draft a post from the caller's message. Verified UMich students only (R15)."""

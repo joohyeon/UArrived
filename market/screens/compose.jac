@@ -45,6 +45,7 @@ def:pub fields_of(d: DraftCard) -> dict[str, any] {
         "route_from": d.route_from,
         "route_to": d.route_to,
         "arrangement": d.arrangement,
+        "item": d.item,
         "ai_generated": d.ai_generated,
         "language": d.language
     };

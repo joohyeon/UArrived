@@ -9,7 +9,7 @@ each join also leaves a public `Membership` record: that is how anyone counts a 
 
 import from uuid { UUID }
 import from jaclang { JacRuntime as Jac }
-import from core.clock { now_iso }
+import from core.clock { now_iso, now_precise }
 import from core.profile { Profile, my_profile }
 
 glob MONTHS: list[str] = [
@@ -53,6 +53,18 @@ node Membership {
     }
 }
 
+"""Public, content-free record that `member_root` left `group_id` at `left_at`. Lets the next
+matching post invite them back once (market/topics.jac)."""
+node LeftGroup {
+    has group_id: str,
+        member_root: str,
+        left_at: str;
+
+    def __jac_access__ -> AccessLevel | None {
+        return AccessLevel.READ;
+    }
+}
+
 """One message in a group. `ai` marks the assistant's messages; `post_id` links a market post."""
 node GroupMessage {
     has group_id: str,
@@ -61,7 +73,8 @@ node GroupMessage {
         text: str,
         created_at: str,
         ai: bool = False,
-        post_id: str = "";
+        post_id: str = "",
+        post_ids: list[str] = [];
 }
 
 def cohort_key(p: Profile) -> str {
@@ -136,6 +149,17 @@ def leave(g: ChatGroup) {
             del m;
         }
     }
+    root.shared ++> LeftGroup(group_id=jid(g), member_root=me, left_at=now_precise());
+}
+
+"""When `member_root` last left `group_id` ("" if never)."""
+def last_left(group_id: str, member_root: str) -> str {
+    times = [
+        l.left_at
+        for l in [root.shared-->][?:LeftGroup]
+        if l.group_id == group_id and l.member_root == member_root
+    ];
+    return max(times) if times else "";
 }
 
 """Root ids of the group's members."""
@@ -171,19 +195,26 @@ def sync_cohort(p: Profile) -> ChatGroup {
     return g;
 }
 
-"""Post a message in `g` as the caller, shared with the group's members."""
+"""Post a message in `g` as the caller, shared with the group's members. `post_ids` links several
+posts (the first is also kept as `post_id`)."""
 def add_message(
-    g: ChatGroup, text: str, ai: bool = False, post_id: str = ""
+    g: ChatGroup,
+    text: str,
+    ai: bool = False,
+    post_id: str = "",
+    post_ids: list[str] = []
 ) -> GroupMessage {
+    ids = list(post_ids) if post_ids else ([post_id] if post_id else []);
     name = "UArrived assistant" if ai else (my_profile().display_name or "Student");
     msg = root.shared ++> GroupMessage(
         group_id=jid(g),
         author_root=jid(root),
         author_name=name,
         text=text,
-        created_at=now_iso(),
+        created_at=now_precise(),
         ai=ai,
-        post_id=post_id
+        post_id=ids[0] if ids else "",
+        post_ids=ids
     );
     Jac.allow_group(msg, UUID(jid(g)), AccessLevel.READ);  # jac:ignore[E1053]
     return msg;

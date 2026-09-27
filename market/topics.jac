@@ -9,10 +9,11 @@ Invites are opt-in: nobody enters a topic group without tapping Join.
 """
 
 import re;
+import from datetime { date, timedelta }
 import from uuid { UUID }
 import from jaclang { JacRuntime as Jac }
 import from core.auth { verified_profile }
-import from core.clock { today_iso, now_iso }
+import from core.clock { today_iso, now_iso, now_precise }
 import from core.profile { my_profile }
 import from core.groups {
     ChatGroup,
@@ -28,7 +29,10 @@ import from core.groups {
     member_count,
     member_ids,
     my_group_ids,
-    sync_cohort
+    sync_cohort,
+    all_groups,
+    leave,
+    last_left
 }
 import from market.graph {
     Post,
@@ -44,6 +48,22 @@ import from market.translation { reader_of }
 import from market.lifecycle { publish, view_of, own_post, finish, PostView }
 import from market.messages { blocking_question, fields_from, parse_answers, FollowUp }
 import from market.matching { place, money }
+import from market.items { standard_item, category_for }
+
+glob MONTH_NAMES: list[str] = [
+         "Jan",
+         "Feb",
+         "Mar",
+         "Apr",
+         "May",
+         "Jun",
+         "Jul",
+         "Aug",
+         "Sep",
+         "Oct",
+         "Nov",
+         "Dec"
+     ];
 
 glob MAX_GROUP_MESSAGE_CHARS: int = 1000,
      SKIP_WORDS: list[str] = [
@@ -93,6 +113,9 @@ glob MAX_GROUP_MESSAGE_CHARS: int = 1000,
          "roommate",
          "lease",
          "ride",
+         "uber",
+         "lyft",
+         "carpool",
          "$"
      ];
 
@@ -111,7 +134,8 @@ node Invite {
 next matching post can see it (the Invite itself is visible only to its sender and invitee)."""
 node InviteMark {
     has group_id: str,
-        invitee_root: str;
+        invitee_root: str,
+        created_at: str = "";
 
     def __jac_access__ -> AccessLevel | None {
         return AccessLevel.READ;
@@ -126,7 +150,14 @@ obj GroupPostResult {
         filed: bool = False,
         topic_group_id: str = "",
         invited: int = 0,
+        filed_count: int = 0,
         follow_up: FollowUp | None = None;
+}
+
+"""A link from an assistant message to a topic group the reader is in."""
+obj GroupLink {
+    has group_id: str,
+        name: str;
 }
 
 obj GroupMessageView {
@@ -138,7 +169,8 @@ obj GroupMessageView {
         ai: bool,
         post_id: str,
         topic_group_id: str = "",
-        can_open: bool = False;
+        can_open: bool = False,
+        links: list[GroupLink] = [];
 }
 
 obj GroupView {
@@ -209,22 +241,50 @@ def plural(word: str) -> str {
     return word + "s";
 }
 
+"""Monday of the week containing `day` (YYYY-MM-DD), or "" for no or bad date. Rides group by
+week so riders a day apart meet."""
+def week_of(day: str) -> str {
+    try {
+        d = date.fromisoformat(day);
+    } except ValueError {
+        return "";
+    }
+    return (d - timedelta(days=d.weekday())).isoformat();
+}
+
+def month_day(day: str) -> str {
+    d = date.fromisoformat(day);
+    return f"{MONTH_NAMES[d.month - 1]} {d.day}";
+}
+
 """Which topic group a post belongs in; posts with the same key share one group."""
 def topic_key(p: Post) -> str {
     if p.category == "service" and p.route_from {
-        return f"ride:{place(p.route_from)}>{place(p.route_to)}:{p.available_from}";
+        return f"ride:{place(p.route_from)}>{place(p.route_to)}:{week_of(
+            p.available_from
+        )}";
     }
     if p.category == "housing" {
         return f"housing:{p.arrangement or 'room'}";
     }
-    return f"{p.category}:{item_word(p.title) or p.category}";
+    return f"{p.category}:{item_of(p)}";
+}
+
+"""The post's standard item; posts stored before items existed map their title at read time.
+Categories without a standard list (non-ride services) keep the title's last word."""
+def item_of(p: Post) -> str {
+    return p.item
+        or standard_item(p.category, p.title)
+        or item_word(p.title)
+        or p.category;
 }
 
 def topic_name(p: Post) -> str {
     if p.category == "service" and p.route_from {
+        week = week_of(p.available_from);
         return f"Rides from {p.route_from}"
             + (f" to {p.route_to}" if p.route_to else "")
-            + (f" · {p.available_from}" if p.available_from else "");
+            + (f" · week of {month_day(week)}" if week else "");
     }
     if p.category == "housing" {
         return {
@@ -236,7 +296,11 @@ def topic_name(p: Post) -> str {
             p.arrangement, "Rooms and housing"
         );
     }
-    return f"{plural(item_word(p.title) or p.category).capitalize()} near campus";
+    item = item_of(p);
+    if item == "other" {
+        return f"Other {p.category}";
+    }
+    return f"{plural(item).capitalize()} near campus";
 }
 
 """A one-line summary of a post's facts, for the topic group announcement."""
@@ -274,9 +338,14 @@ def looks_like_market(text: str) -> bool {
     return any([w in t for w in MARKET_WORDS]);
 }
 
+"""Whether `invitee` already has an invite to `group_id` since they last left it, so a student
+who leaves can be invited back once by the next matching post."""
 def invited_already(group_id: str, invitee: str) -> bool {
+    left = last_left(group_id, invitee);
     for i in [root.shared-->][?:InviteMark] {
-        if i.group_id == group_id and i.invitee_root == invitee {
+        if i.group_id == group_id
+            and i.invitee_root == invitee
+            and i.created_at > left {
             return True;
         }
     }
@@ -311,7 +380,8 @@ def invite_matches(post: Post, topic: ChatGroup, today: str) -> int {
         # Only invite on facts: the same item, or (housing and rides, whose groups are narrower
         # than a match) a match with stated reasons. "Dates overlap" alone never links a desk to
         # a mattress.
-        same_item = topic_key(other) == topic_key(post);
+        # "Other furniture" posts share a group but aren't the same item.
+        same_item = topic_key(other) == topic_key(post) and item_of(post) != "other";
         loose = post.category in ["housing", "service"] and len(s.reasons) > 0;
         if not same_item and not loose {
             continue;
@@ -320,9 +390,7 @@ def invite_matches(post: Post, topic: ChatGroup, today: str) -> int {
             + (
                 "; ".join(s.reasons)
                     if s.reasons
-                    else f"it's about {plural(
-                        item_word(post.title) or post.category
-                    )} too"
+                    else f"it's about {plural(item_of(post))} too"
             );
         inv = root.shared ++> Invite(
             group_id=jid(topic),
@@ -332,7 +400,9 @@ def invite_matches(post: Post, topic: ChatGroup, today: str) -> int {
             created_at=now_iso()
         );
         Jac.allow_root(inv, UUID(other.owner_root), AccessLevel.WRITE);  # jac:ignore[E1053]
-        root.shared ++> InviteMark(group_id=jid(topic), invitee_root=other.owner_root);
+        root.shared ++> InviteMark(
+            group_id=jid(topic), invitee_root=other.owner_root, created_at=now_precise()
+        );
         count += 1;
     }
     return count;
@@ -349,13 +419,17 @@ def file_market(
     }
     card = drafted.draft;
     known = parse_answers(answers);
-    about = card.about_market if card.ai_generated else looks_like_market(text);
+    # Clear market words ("selling", "looking for", "$40") count even when the model says chat;
+    # a greeting it can't place is still caught below.
+    about = (card.about_market if card.ai_generated else False)
+        or looks_like_market(text);
     # In a group, a sentence whose kind and category are both guesses is chat, not a question;
     # a bare item name ("desk") still gets the question.
     unsure = card.ai_generated
         and "kind" in card.guessed
         and "category" in card.guessed
-        and len(text.split()) > 3;
+        and len(text.split()) > 3
+        and not looks_like_market(text);
     if (not about or unsure) and not known {
         return GroupPostResult(ok=True, message_id=message_id);
     }
@@ -363,22 +437,84 @@ def file_market(
     if question is not None {
         return GroupPostResult(ok=True, message_id=message_id, follow_up=question);
     }
-    result = publish(
-        fields_from(card, known, text), today, ai_generated=card.ai_generated
-    );
-    if not result.ok or result.post is None {
+    # One post per distinct need the drafter found (market/drafting.jac, #46). The answer to the
+    # question about the first draft applies to the others only where they guessed the same field.
+    items = [
+        fields_from(
+            c,
+            known
+                if i == 0
+                else {
+                    k: v
+                    for (k, v) in known.items()
+                    if k in c.guessed
+                },
+            text
+        ) for (i, c) in enumerate(drafted.drafts or [card])
+    ];
+    for fields in items {
+        # The drafter sometimes puts an item in a neighbouring category (a mattress as
+        # essentials). If the item list clearly knows it under another goods category, file it
+        # there. Only for messages the assistant files, never a form the student reviewed.
+        fixed = category_for(fields["title"], fields["category"]);
+        if fixed {
+            fields["category"] = fixed;
+        }
+    }
+    over = drafted.dropped;
+    filed: list[tuple[Post, ChatGroup, int, bool]] = [];
+    failed: list[str] = [];
+    last_error = "";
+    for fields in items {
+        result = publish(fields, today, ai_generated=card.ai_generated);
+        post = own_post(result.post.id) if result.ok and result.post else None;
+        if post is None {
+            last_error = result.error or "it couldn't be saved";
+            failed.append(f"\"{fields['title']}\" ({last_error})");
+            continue;
+        }
+        (topic, invited, reused) = file_post(post, today);
+        filed.append((post, topic, invited, reused));
+    }
+    notes: list[str] = [];
+    if failed {
+        notes.append("I couldn't file " + "; ".join(failed) + ".");
+    }
+    if over > 0 {
+        notes.append(
+            f"I filed the first {len(items)} items; post the other {over} in another message."
+        );
+    }
+    notice = " ".join(notes);
+    if not filed {
         return GroupPostResult(
             ok=True,
             message_id=message_id,
-            notice=f"Your message is posted, but I couldn't file it for the market: {result.error}"
+            notice=f"Your message is posted, but I couldn't file it for the market: {last_error}"
+                if len(items) == 1
+                else "Your message is posted, but " + notice
         );
     }
-    post = own_post(result.post.id);
-    if post is None {
-        return GroupPostResult(
-            ok=False, message_id=message_id, error="Couldn't file that message."
-        );
-    }
+    add_message(
+        cohort,
+        cohort_reply(filed),
+        ai=True,
+        post_ids=[jid(p) for (p, _, _, _) in filed]
+    );
+    return GroupPostResult(
+        ok=True,
+        message_id=message_id,
+        filed=True,
+        topic_group_id=jid(filed[0][1]),
+        invited=sum([n for (_, _, n, _) in filed]),
+        filed_count=len(filed),
+        notice=notice
+    );
+}
+
+"""File one published post into its topic group: create or reuse the group, join it, announce the
+post there and invite matching students. Returns (group, invited, reused)."""
+def file_post(post: Post, today: str) -> tuple[ChatGroup, int, bool] {
     reused = len(groups_with_key(topic_key(post))) > 0;
     topic = ensure_group(
         "topic", topic_key(post), topic_name(post), reason=facts_line(post)
@@ -391,24 +527,29 @@ def file_market(
         ai=True,
         post_id=jid(post)
     );
-    invited = invite_matches(post, topic, today);
-    people = f"invited {invited} student{'s' if invited != 1 else ''} whose posts fit.";
-    nobody = "Nobody else's posts fit yet; I'll invite people as matching posts come in.";
-    if reused {
-        reply = f"I added this to \"{topic.name}\""
-            + (f" and {people}" if invited > 0 else f". {nobody}");
-    } else {
-        reply = f"I started a group for this, \"{topic.name}\""
+    return (topic, invite_matches(post, topic, today), reused);
+}
+
+"""The assistant's reply in the cohort: where each filed item went and who was invited."""
+def cohort_reply(filed: list[tuple[Post, ChatGroup, int, bool]]) -> str {
+    if len(filed) == 1 {
+        (_, topic, invited, reused) = filed[0];
+        people = f"invited {invited} student{'s'
+            if invited != 1
+            else ''} whose posts fit.";
+        nobody = "Nobody else's posts fit yet; I'll invite people as matching posts come in.";
+        if reused {
+            return f"I added this to \"{topic.name}\""
+                + (f" and {people}" if invited > 0 else f". {nobody}");
+        }
+        return f"I started a group for this, \"{topic.name}\""
             + (f", and {people}" if invited > 0 else f". {nobody}");
     }
-    add_message(cohort, reply, ai=True, post_id=jid(post));
-    return GroupPostResult(
-        ok=True,
-        message_id=message_id,
-        filed=True,
-        topic_group_id=jid(topic),
-        invited=invited
-    );
+    parts = [
+        f"{p.title} → \"{t.name}\"" + (f" (invited {n})" if n > 0 else "")
+        for (p, t, n, _) in filed
+    ];
+    return f"I filed {len(filed)} items: " + "; ".join(parts) + ".";
 }
 
 """Post `text` in a group the caller belongs to. In a cohort group the assistant may file it."""
@@ -460,6 +601,21 @@ def my_invite_for(group_id: str) -> Invite | None {
     return None;
 }
 
+"""Links to the topic groups these posts were filed in, only groups the reader is in (`names`
+holds exactly those), each once, in order."""
+def links_for(
+    post_ids: list[str], topic_of: dict[str, str], names: dict[str, str]
+) -> list[GroupLink] {
+    out: list[GroupLink] = [];
+    for pid in post_ids {
+        gid = topic_of.get(pid, "");
+        if gid in names and gid not in [l.group_id for l in out] {
+            out.append(GroupLink(group_id=gid, name=names[gid]));
+        }
+    }
+    return out;
+}
+
 def view(group_id: str, today: str, reader: str = "") -> GroupView {
     g = group_by_id(group_id);
     if g is None {
@@ -486,6 +642,11 @@ def view(group_id: str, today: str, reader: str = "") -> GroupView {
     visible = visible_to(all_posts(), me);
     topic_of: dict[str, str] = {jid(p): p.topic_group_id for p in visible};
     mine = my_group_ids();
+    names: dict[str, str] = {
+        jid(x): x.name
+        for x in all_groups()
+        if jid(x) in mine
+    };
     msgs = [
         GroupMessageView(
             id=jid(m),
@@ -496,7 +657,10 @@ def view(group_id: str, today: str, reader: str = "") -> GroupView {
             ai=m.ai,
             post_id=m.post_id,
             topic_group_id=topic_of.get(m.post_id, "") if g.kind == "cohort" else "",
-            can_open=topic_of.get(m.post_id, "") in mine
+            can_open=topic_of.get(m.post_id, "") in mine,
+            links=links_for(m.post_ids or [m.post_id], topic_of, names)
+                if g.kind == "cohort" and m.ai
+                else []
         )
         for m in messages_in(group_id)
         if m.ai or m.author_root == me or pair_key(me, m.author_root) not in blocked
@@ -506,6 +670,13 @@ def view(group_id: str, today: str, reader: str = "") -> GroupView {
         for p in visible
         if p.topic_group_id == group_id and post_status(p, today) == "live"
     ];
+    # Soonest first (rides by date and time); undated posts last.
+    filed.sort(
+        key=lambda (v: PostView) -> tuple[str, str] { return (
+            v.available_from or v.available_until or "9999",
+            v.time_from
+        ); }
+    );
     return GroupView(
         ok=True,
         id=group_id,
@@ -533,11 +704,10 @@ def groups_of_mine -> list[GroupSummary] {
             )
         );
     }
+    # Cohort first, then the most recently active topic groups.
+    out.sort(key=lambda (s: GroupSummary) -> str { return s.last_at; }, reverse=True);
     out.sort(
-        key=lambda (s: GroupSummary) -> tuple[int, str] { return (
-            0 if s.kind == "cohort" else 1,
-            s.last_at
-        ); }
+        key=lambda (s: GroupSummary) -> int { return 0 if s.kind == "cohort" else 1; }
     );
     return out;
 }
@@ -640,6 +810,27 @@ def:protect dismiss_topic_invite(invite_id: str) -> ActionOutcome {
         else respond_invite(invite_id, False);
 }
 
+def leave_topic(group_id: str) -> ActionOutcome {
+    g = group_by_id(group_id);
+    if g is None or not is_member(g) {
+        return ActionOutcome(ok=False, error="You're not in that group.");
+    }
+    if g.kind == "cohort" {
+        return ActionOutcome(
+            ok=False,
+            error="Your arrival group follows your profile, so you can't leave it."
+        );
+    }
+    leave(g);
+    return ActionOutcome(ok=True, group_id=group_id);
+}
+
+def:protect leave_topic_group(group_id: str) -> ActionOutcome {
+    return ActionOutcome(ok=False, error=denied())
+        if denied()
+        else leave_topic(group_id);
+}
+
 def:protect close_group_post(post_id: str, reason: str) -> ActionOutcome {
     if denied() {
         return ActionOutcome(ok=False, error=denied());
@@ -658,6 +849,12 @@ test "item words and topic keys group similar posts together" {
     b = Post(owner_root="y", kind="request", category="furniture", title="Need a desk");
     assert topic_key(a) == topic_key(b) == "furniture:desk";
     assert topic_name(a) == "Desks near campus";
+    study = Post(
+        owner_root="z", kind="request", category="furniture", title="Study table"
+    );
+    assert topic_key(study) == "furniture:desk";
+    odd = Post(owner_root="z", kind="offer", category="furniture", title="Kayak");
+    assert topic_key(odd) == "furniture:other" and topic_name(odd) == "Other furniture";
     assert plural("mattress") == "mattresses" and plural("lamp") == "lamps";
     assert plural("battery") == "batteries" and plural("key") == "keys";
     ride = Post(
@@ -669,7 +866,7 @@ test "item words and topic keys group similar posts together" {
         route_to="Ann Arbor",
         available_from="2026-08-20"
     );
-    assert topic_key(ride) == "ride:dtw>ann arbor:2026-08-20";
+    assert topic_key(ride) == "ride:dtw>ann arbor:2026-08-17";
     assert topic_key(
         Post(
             owner_root="x",
@@ -695,4 +892,27 @@ test "the facts line uses only the post's facts" {
     );
     assert facts_line(p)
         == "Looking for: Desk · budget $40 · 2026-09-27 to 2026-09-28 · Central Campus";
+}
+
+test "rides on the same route group by week" {
+    def ride(day: str, to: str = "Ann Arbor") -> Post {
+        return Post(
+            owner_root="x",
+            kind="request",
+            category="service",
+            title="Ride",
+            route_from="DTW",
+            route_to=to,
+            available_from=day
+        );
+    }
+    assert topic_key(ride("2026-10-02"))
+        == topic_key(ride("2026-10-03"))
+        == topic_key(ride("2026-10-04"));
+    assert topic_key(ride("2026-10-05")) != topic_key(ride("2026-10-04"));
+    assert topic_name(ride("2026-10-02"))
+        == "Rides from DTW to Ann Arbor · week of Sep 28";
+    assert topic_name(ride("2026-10-02", "")) == "Rides from DTW · week of Sep 28";
+    assert topic_name(ride("")) == "Rides from DTW to Ann Arbor";
+    assert week_of("bad") == "";
 }

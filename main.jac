@@ -19,7 +19,8 @@ import from market.topics {
     answer_group_followup,
     join_topic_group,
     dismiss_topic_invite,
-    close_group_post
+    close_group_post,
+    leave_topic_group
 }
 import from market.messages {
     send_market_message,

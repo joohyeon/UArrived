@@ -645,3 +645,591 @@ test "a seller of other furniture isn't invited just because dates overlap" {
         client.close();
     }
 }
+
+test "different words for the same item meet in one topic group" {
+    client = served();
+    try {
+        cohort = student(client, "mina@umich.edu");
+        ai_says(
+            [
+                PostDraft(
+                    kind=PostKind.REQUEST,
+                    category=Category.FURNITURE,
+                    title="Study table",
+                    description="I need a study table.",
+                    price=40.0,
+                    item="desk"
+                )
+            ]
+        );
+        first = call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Need a study table, up to $40"}
+        );
+        student(client, "jae@umich.edu");
+        ai_says(
+            [
+                PostDraft(
+                    kind=PostKind.OFFER,
+                    category=Category.FURNITURE,
+                    title="Wooden desk",
+                    description="Selling.",
+                    price=30.0,
+                    item="desk"
+                )
+            ]
+        );
+        second = call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Selling a wooden desk $30"}
+        );
+        assert first["topic_group_id"] == second["topic_group_id"];
+        assert call(client, "group_view", {"group_id": first["topic_group_id"]})["name"]
+            == "Desks near campus";
+    } finally {
+        client.close();
+    }
+}
+
+test "an unlisted item files under Other, and the compose form gets items from the title" {
+    client = served();
+    try {
+        cohort = student(client, "mina@umich.edu");
+        ai_says(
+            [
+                PostDraft(
+                    kind=PostKind.OFFER,
+                    category=Category.FURNITURE,
+                    title="Kayak rack",
+                    description="Selling.",
+                    price=15.0,
+                    item="gizmo"
+                )
+            ]
+        );
+        odd = call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Selling a kayak rack $15"}
+        );
+        assert call(client, "group_view", {"group_id": odd["topic_group_id"]})["name"]
+            == "Other furniture";
+        made = call(
+            client,
+            "publish_post",
+            {
+                "fields": {
+                    "kind": "offer",
+                    "category": "furniture",
+                    "title": "Desk chair",
+                    "price": 20
+                }
+            }
+        );
+        assert made["ok"] and made["post"]["item"] == "chair";
+        edited = call(
+            client,
+            "edit_post",
+            {
+                "post_id": made["post"]["id"],
+                "changes": {"title": "Floor lamp", "category": "essentials"}
+            }
+        );
+        assert edited["ok"] and edited["post"]["item"] == "lamp";
+        kept = call(
+            client,
+            "edit_post",
+            {"post_id": made["post"]["id"], "changes": {"price": 25}}
+        );
+        assert kept["post"]["item"] == "lamp";
+    } finally {
+        client.close();
+    }
+}
+
+test "without AI, a study table still files with desks" {
+    client = served();
+    try {
+        cohort = student(client, "mina@umich.edu");
+        ai_says([MockError(error=AuthenticationError("no key"))]);
+        q = call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Selling my study table"}
+        );
+        ai_says([MockError(error=AuthenticationError("no key"))]);
+        done = call(
+            client,
+            "answer_group_followup",
+            {"message_id": q["message_id"], "answers": "kind:offer|category:furniture"}
+        );
+        assert done["filed"];
+        assert call(client, "group_view", {"group_id": done["topic_group_id"]})["name"]
+            == "Desks near campus";
+    } finally {
+        client.close();
+    }
+}
+
+test "DTW riders two days apart share a ride group, listed soonest first" {
+    client = served();
+    try {
+        cohort = student(client, "mina@umich.edu");
+        ai_says(
+            [
+                PostDraft(
+                    kind=PostKind.REQUEST,
+                    category=Category.SERVICE,
+                    title="Ride from DTW",
+                    description="Need a ride.",
+                    route_from="DTW",
+                    route_to="Ann Arbor",
+                    available_from="2099-10-03",
+                    time_from="15:00"
+                )
+            ]
+        );
+        late = call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Need a ride from DTW Oct 3 at 3pm"}
+        );
+        student(client, "jae@umich.edu");
+        ai_says(
+            [
+                PostDraft(
+                    kind=PostKind.REQUEST,
+                    category=Category.SERVICE,
+                    title="Ride from DTW",
+                    description="Need a ride.",
+                    route_from="DTW",
+                    route_to="Ann Arbor",
+                    available_from="2099-10-01",
+                    time_from="09:00"
+                )
+            ]
+        );
+        early = call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Need a ride from DTW Oct 1 at 9am"}
+        );
+        assert late["filed"] and early["topic_group_id"] == late["topic_group_id"];
+        view = call(client, "group_view", {"group_id": early["topic_group_id"]});
+        assert view["name"] == "Rides from DTW to Ann Arbor · week of Sep 28";
+        assert [p["available_from"] for p in view["posts"]]
+            == ["2099-10-01", "2099-10-03"];
+    } finally {
+        client.close();
+    }
+}
+
+test "the group list shows the cohort first, then the most recently active topic group" {
+    client = served();
+    try {
+        cohort = student(client, "mina@umich.edu");
+        ai_says([sell_desk()]);
+        desks = call(
+            client, "post_in_group", {"group_id": cohort, "text": "Selling my desk"}
+        )["topic_group_id"];
+        ai_says(
+            [
+                PostDraft(
+                    kind=PostKind.OFFER,
+                    category=Category.ESSENTIALS,
+                    title="Floor lamp",
+                    description="Selling.",
+                    price=10.0,
+                    item="lamp"
+                )
+            ]
+        );
+        lamps = call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Selling a floor lamp $10"}
+        )["topic_group_id"];
+        assert [g["id"] for g in call(client, "my_groups", {})]
+            == [cohort, lamps, desks];
+        call(client, "post_in_group", {"group_id": desks, "text": "Still available"});
+        assert [g["id"] for g in call(client, "my_groups", {})]
+            == [cohort, desks, lamps];
+    } finally {
+        client.close();
+    }
+}
+
+test "a student can leave a topic group but not their cohort" {
+    client = served();
+    try {
+        cohort = student(client, "mina@umich.edu");
+        ai_says([sell_desk()]);
+        desks = call(
+            client, "post_in_group", {"group_id": cohort, "text": "Selling my desk"}
+        )["topic_group_id"];
+        student(client, "jae@umich.edu");
+        assert not call(client, "leave_topic_group", {"group_id": desks})["ok"];
+        act_as(client, "mina@umich.edu");
+        assert not call(client, "leave_topic_group", {"group_id": cohort})["ok"];
+        assert call(client, "leave_topic_group", {"group_id": desks})["ok"];
+        assert desks not in [g["id"] for g in call(client, "my_groups", {})];
+        assert not call(client, "group_view", {"group_id": desks})["ok"];
+    } finally {
+        client.close();
+    }
+}
+
+test "after leaving, the next matching post invites the student back once" {
+    client = served();
+    try {
+        cohort = student(client, "mina@umich.edu");
+        call(
+            client,
+            "publish_post",
+            {
+                "fields": {
+                    "kind": "request",
+                    "category": "furniture",
+                    "title": "Desk",
+                    "price": 40
+                }
+            }
+        );
+        student(client, "jae@umich.edu");
+        ai_says([sell_desk()]);
+        desks = call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Selling my wooden desk $30"}
+        )["topic_group_id"];
+        act_as(client, "mina@umich.edu");
+        invite = call(client, "my_group_invites", {})[0]["id"];
+        assert call(client, "join_topic_group", {"invite_id": invite})["ok"];
+        assert call(client, "leave_topic_group", {"group_id": desks})["ok"];
+        student(client, "kai@umich.edu");
+        ai_says(
+            [
+                PostDraft(
+                    kind=PostKind.OFFER,
+                    category=Category.FURNITURE,
+                    title="Oak desk",
+                    description="Selling.",
+                    price=35.0,
+                    item="desk"
+                )
+            ]
+        );
+        assert call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Selling an oak desk $35"}
+        )["invited"]
+            == 1;
+        student(client, "lee@umich.edu");
+        ai_says(
+            [
+                PostDraft(
+                    kind=PostKind.OFFER,
+                    category=Category.FURNITURE,
+                    title="Pine desk",
+                    description="Selling.",
+                    price=25.0,
+                    item="desk"
+                )
+            ]
+        );
+        assert call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Selling a pine desk $25"}
+        )["invited"]
+            == 0;
+        act_as(client, "mina@umich.edu");
+        assert len(call(client, "my_group_invites", {})) == 1;
+    } finally {
+        client.close();
+    }
+}
+
+def item_draft(
+    title: str,
+    category: any,
+    item: str,
+    price: float | None = None,
+    kind: any = PostKind.OFFER
+) -> PostDraft {
+    return PostDraft(
+        kind=kind,
+        category=category,
+        title=title,
+        description=f"{title}.",
+        price=price,
+        area="kerrytown",
+        item=item
+    );
+}
+
+def moving_sale(more: list[PostDraft]) -> DraftSet {
+    return DraftSet(
+        language="en",
+        drafts=[item_draft("Bike", Category.VEHICLE, "bike", 50.0)] + more
+    );
+}
+
+test "a moving-out sale becomes one post per item, each in its own group" {
+    client = served();
+    try {
+        cohort = student(client, "kai@umich.edu");
+        ai_says(
+            [
+                moving_sale(
+                    [
+                        item_draft("Floor lamp", Category.ESSENTIALS, "lamp", 10.0),
+                        item_draft("Twin mattress", Category.FURNITURE, "mattress")
+                    ]
+                )
+            ]
+        );
+        sent = call(
+            client,
+            "post_in_group",
+            {
+                "group_id": cohort,
+                "text": "Moving out - bike $50, lamp $10 and a twin mattress, Kerrytown"
+            }
+        );
+        assert sent["filed"] and sent["filed_count"] == 3 and sent["notice"] == "";
+        mine = {p["title"]: p for p in call(client, "list_my_posts", {})};
+        assert sorted(mine.keys()) == ["Bike", "Floor lamp", "Twin mattress"];
+        assert mine["Bike"]["price"] == 50.0 and mine["Floor lamp"]["price"] == 10.0;
+        assert mine["Twin mattress"]["price"] is None;
+        assert mine["Floor lamp"]["category"] == "essentials"
+            and mine["Floor lamp"]["item"] == "lamp";
+        reply = [
+            m
+            for m in call(client, "group_view", {"group_id": cohort})["messages"]
+            if m["ai"]
+        ];
+        assert len(reply) == 1
+            and reply[0]["text"].startswith(
+                "I filed 3 items: Bike → \"Bikes near campus\""
+            );
+        assert [l["name"] for l in reply[0]["links"]]
+            == ["Bikes near campus", "Lamps near campus", "Mattresses near campus"];
+        student(client, "mina@umich.edu");
+        other = [
+            m
+            for m in call(client, "group_view", {"group_id": cohort})["messages"]
+            if m["ai"]
+        ][0];
+        assert other["links"] == [];
+    } finally {
+        client.close();
+    }
+}
+
+test "one message can sell one thing and ask for another" {
+    client = served();
+    try {
+        cohort = student(client, "kai@umich.edu");
+        ai_says(
+            [
+                moving_sale(
+                    [
+                        item_draft(
+                            "Desk", Category.FURNITURE, "desk", 40.0, PostKind.REQUEST
+                        )
+                    ]
+                )
+            ]
+        );
+        sent = call(
+            client,
+            "post_in_group",
+            {
+                "group_id": cohort,
+                "text": "Selling my bike $50, and I need a desk under $40"
+            }
+        );
+        assert sent["filed_count"] == 2;
+        kinds = {p["title"]: p["kind"] for p in call(client, "list_my_posts", {})};
+        assert kinds == {"Bike": "offer", "Desk": "request"};
+    } finally {
+        client.close();
+    }
+}
+
+test "a buyer is invited only to the group of the item they want" {
+    client = served();
+    try {
+        cohort = student(client, "mina@umich.edu");
+        call(
+            client,
+            "publish_post",
+            {
+                "fields": {
+                    "kind": "request",
+                    "category": "essentials",
+                    "title": "Lamp",
+                    "price": 20
+                }
+            }
+        );
+        student(client, "kai@umich.edu");
+        ai_says(
+            [moving_sale([item_draft("Floor lamp", Category.ESSENTIALS, "lamp", 10.0)])]
+        );
+        sent = call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Selling bike $50 and floor lamp $10"}
+        );
+        assert sent["invited"] == 1;
+        reply = [
+            m
+            for m in call(client, "group_view", {"group_id": cohort})["messages"]
+            if m["ai"]
+        ][0];
+        assert "Floor lamp → \"Lamps near campus\" (invited 1)" in reply["text"];
+        act_as(client, "mina@umich.edu");
+        assert [i["group_name"] for i in call(client, "my_group_invites", {})]
+            == ["Lamps near campus"];
+    } finally {
+        client.close();
+    }
+}
+
+test "only five items file from one message, and the sender is told about the rest" {
+    client = served();
+    try {
+        cohort = student(client, "kai@umich.edu");
+        ai_says(
+            [
+                moving_sale(
+                    [
+                        item_draft(t, Category.FURNITURE, "")
+                        for t in [
+                            "Desk",
+                            "Chair",
+                            "Sofa",
+                            "Dresser",
+                            "Bookshelf",
+                            "Bed"
+                        ]
+                    ]
+                )
+            ]
+        );
+        sent = call(
+            client,
+            "post_in_group",
+            {
+                "group_id": cohort,
+                "text": "Moving sale: bike, desk, chair, sofa, dresser, bookshelf, bed"
+            }
+        );
+        assert sent["filed_count"] == 5 and "post the other 2" in sent["notice"];
+        assert len(call(client, "list_my_posts", {})) == 5;
+    } finally {
+        client.close();
+    }
+}
+
+test "one item that can't be filed doesn't stop the others, and only the sender hears why" {
+    client = served();
+    try {
+        cohort = student(client, "kai@umich.edu");
+        ai_says(
+            [
+                moving_sale(
+                    [
+                        item_draft("Floor lamp", Category.ESSENTIALS, "lamp"),
+                        item_draft("Car", Category.VEHICLE, "car", 900000.0)
+                    ]
+                )
+            ]
+        );
+        sent = call(
+            client, "post_in_group", {"group_id": cohort, "text": "bike $50, lamp, car"}
+        );
+        assert sent["filed_count"] == 2 and "\"Car\"" in sent["notice"];
+        reply = [
+            m
+            for m in call(client, "group_view", {"group_id": cohort})["messages"]
+            if m["ai"]
+        ][0];
+        assert "Car" not in reply["text"];
+    } finally {
+        client.close();
+    }
+}
+
+test "clear market words beat the model's no" {
+    client = served();
+    try {
+        cohort = student(client, "mina@umich.edu");
+        ai_says(
+            [
+                PostDraft(
+                    about_market=False,
+                    kind=PostKind.REQUEST,
+                    category=Category.FURNITURE,
+                    title="Study table",
+                    description="I need a study table.",
+                    price=40.0,
+                    item="desk"
+                )
+            ]
+        );
+        assert call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Looking for a study table, budget $40"}
+        )["filed"];
+    } finally {
+        client.close();
+    }
+}
+
+test "a drafted item in the wrong goods category files where the list knows it, and ride questions count" {
+    client = served();
+    try {
+        cohort = student(client, "kai@umich.edu");
+        ai_says([moving_sale([item_draft("Twin mattress", Category.ESSENTIALS, "")])]);
+        call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "selling bike $50 and a twin mattress"}
+        );
+        mattress = [
+            p
+            for p in call(client, "list_my_posts", {})
+            if p["title"] == "Twin mattress"
+        ][0];
+        assert mattress["category"] == "furniture" and mattress["item"] == "mattress";
+        ai_says(
+            [
+                PostDraft(
+                    kind=PostKind.REQUEST,
+                    category=Category.SERVICE,
+                    title="Ride from DTW",
+                    description="Sharing a ride.",
+                    route_from="DTW",
+                    route_to="Ann Arbor",
+                    available_from="2099-10-03",
+                    guessed=["kind", "category"]
+                )
+            ]
+        );
+        ride = call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Anyone sharing an uber from DTW Oct 3?"}
+        );
+        assert "offering this (a ride or help)" in ride["follow_up"]["question"];
+    } finally {
+        client.close();
+    }
+}

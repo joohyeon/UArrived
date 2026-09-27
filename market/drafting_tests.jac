@@ -288,20 +288,19 @@ test "a single-need English message gives one card whose English copy is the ori
     assert card.description_en == card.description;
 }
 
-test "more than three drafts are trimmed to three" {
+test "more than five drafts are trimmed to five, and the rest are counted" {
     drafts = [
         PostDraft(
             kind=PostKind.REQUEST,
             category=Category.ESSENTIALS,
             title=f"Need item {i}",
             description=f"Item {i}."
-        ) for i in range(5)
+        ) for i in range(7)
     ];
     mock([DraftSet(language="en", drafts=drafts)]);
-    result = drafted_all("need items 0 1 2 3 4");
-    assert len(result.drafts) == 3;
-    assert [c.title for c in result.drafts]
-        == ["Need item 0", "Need item 1", "Need item 2"];
+    result = drafted_all("need items 0 1 2 3 4 5 6");
+    assert len(result.drafts) == 5 and result.dropped == 2;
+    assert [c.title for c in result.drafts] == [f"Need item {i}" for i in range(5)];
 }
 
 test "an unknown language code is kept and its drafts still normalize" {
