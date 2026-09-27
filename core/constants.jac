@@ -20,7 +20,13 @@ glob PILOT_LANGUAGES: list[str] = ["en", "ko", "zh"],
 glob LANGUAGE_NAMES: dict[str, str] = {"en": "English", "ko": "한국어", "zh": "中文"};
 
 """Class year options for the onboarding "what year are you?" question."""
-glob CLASS_YEARS: list[str] = ["freshman", "sophomore", "junior", "senior", "graduate"],
+glob CLASS_YEARS: list[str] = [
+         "freshman",
+         "sophomore",
+         "junior",
+         "senior",
+         "graduate"
+     ],
      CLASS_YEAR_NAMES: dict[str, str] = {
          "freshman": "Freshman",
          "sophomore": "Sophomore",
