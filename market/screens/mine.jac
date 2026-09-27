@@ -3,7 +3,7 @@ controls: stop suggestions, mark done, renew. Plus the "For you" feed (R13), kep
 
 import from ui.tokens { color, space }
 import from ui.components.base { AppShell, Button, Card, Badge }
-import from market.screens.common { MarketTabs, PostSummary }
+import from market.screens.common { MarketTabs, PostSummary, go }
 import from market.lifecycle {
     list_my_posts,
     mark_post_done,
@@ -120,7 +120,18 @@ impl MyPosts.stop(post_id: str) -> None {
 
 def:pub ForYou -> JsxElement {
     has posts: list[PostView] = [],
-        loaded: bool = False;
+        loaded: bool = False,
+        picked: list[str] = [];
+
+    def toggle(post_id: str) {
+        picked = [
+            x
+            for x in picked
+            if x != post_id
+        ]
+            if post_id in picked
+            else (picked + [post_id])[-3:];
+    }
 
     async def load -> None;
 
@@ -143,8 +154,35 @@ def:pub ForYou -> JsxElement {
         {[
             <Card key={p.id}>
                 <PostSummary p={p}/>
+                <label
+                    style={{
+                        "display": "flex",
+                        "gap": "8px",
+                        "alignItems": "center",
+                        "minHeight": "44px"
+                    }}
+                >
+                    <input
+                        type="checkbox"
+                        checked={p.id in picked}
+                        onChange={lambda (e: ChangeEvent) { toggle(p.id); }}
+                    />
+                    Compare
+                </label>
             </Card> for p in posts
         ]}
+        {(
+            <Button
+                label={f"Help me decide ({len(picked)})"}
+                disabled={len(picked) < 2}
+                full={True}
+                onClick={lambda (e: MouseEvent) { go(
+                    "/market/compare?ids=" + ",".join(picked)
+                ); }}
+            />
+        )
+            if posts
+            else None}
     </AppShell>
 }
 
