@@ -1,15 +1,21 @@
-"""Today (stub for U9): shows journey prompts that lead into the marketplace.
-
-Feature A owns the real Today screen (next three actions, milestones); this stub only renders
-`my_journey_prompts` so the DTW ride-share link works end to end until then. Replace freely.
+"""Today: the next first-week task and progress (links into /journey), then journey prompts that
+lead into the marketplace (the DTW ride share).
 """
 
-import from ui.tokens { color }
+import from ui.tokens { color, space, text_style }
 import from ui.components.base { AppShell, Card, Badge }
+import from ui.components.blocks { ProgressBar, LevelBadge, SectionLabel }
 import from journey.prompts { my_journey_prompts, JourneyPrompt }
+import from journey.walkers { my_journey, JourneySummary }
+import from journey.screens.journey { TaskListCard }
+
+def:pub same_text(s: str) -> str {
+    return s;
+}
 
 def:pub Today -> JsxElement {
     has prompts: list[JourneyPrompt] = [],
+        summary: JourneySummary | None = None,
         loaded: bool = False;
 
     async def load -> None;
@@ -18,8 +24,41 @@ def:pub Today -> JsxElement {
         load();
     }
 
+    next_views = [
+        v
+        for v in summary.tasks
+        if v.task.tid == summary.next_tid
+    ]
+        if summary is not None
+        else [];
+
     <AppShell title="Today" active="today">
         {(
+            <Card>
+                <div
+                    style={{
+                        "display": "flex",
+                        "alignItems": "center",
+                        "justifyContent": "space-between"
+                    }}
+                >
+                    <SectionLabel label="Your first week"/>
+                    <LevelBadge level={summary.level}/>
+                </div>
+                <ProgressBar
+                    done={summary.required_done}
+                    total={summary.required_total}
+                    label={f"{summary.required_done} of {summary.required_total} essentials done"}
+                />
+                <a href="/journey" style={text_style("meta")}>
+                    See all first-week tasks
+                </a>
+            </Card>
+        )
+            if summary is not None
+            else None}{<TaskListCard v={next_views[0]} tx={same_text} next={True}/>
+            if len(next_views) > 0
+            else None}{(
             <Card>
                 <p style={{"margin": "0"}}>
                     Nothing to suggest yet. Add your arrival date and whether you need an airport ride in Profile.
@@ -56,5 +95,8 @@ impl Today.load -> None {
     fresh: list[JourneyPrompt] = [];
     fresh = await my_journey_prompts();
     prompts = fresh;
+    journey: JourneySummary | None = None;
+    journey = await my_journey();
+    summary = journey;
     loaded = True;
 }
