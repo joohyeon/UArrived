@@ -271,7 +271,7 @@ def:pub DraftForm(
             else None}
         <p style={{"margin": "0", "color": color("sub"), "fontSize": "14px"}}>
             {SAFETY_TIPS.get(fields.get("category", ""), SAFETY_TIPS["furniture"])
-                + " UArrived never takes payments or signs leases."}
+                + " UMadeIt never takes payments or signs leases."}
         </p>
         {<p role="alert" style={{"color": color("danger"), "margin": "0"}}>{error}</p>
             if error

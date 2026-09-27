@@ -1,7 +1,7 @@
 """Base components (issue #3): the only building blocks feature screens use.
 
 All color, spacing, radius and type come from ui/tokens.jac, so every screen follows the
-UArrived Figma design and switches theme in one place. Mobile-first: touch targets are at
+UMadeIt Figma design and switches theme in one place. Mobile-first: touch targets are at
 least 44px (SIZE["touch-min"]).
 """
 
@@ -342,7 +342,7 @@ def:pub AppShell(
                     "color": color("action")
                 }}
             >
-                UArrived
+                UMadeIt
             </span>
             <HelpButton/>
         </header>

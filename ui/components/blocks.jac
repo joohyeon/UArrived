@@ -1,4 +1,4 @@
-"""Figma building blocks: the pieces the UArrived Figma screens repeat (onboarding, landing plan,
+"""Figma building blocks: the pieces the UMadeIt Figma screens repeat (onboarding, landing plan,
 task detail, challenges). Like base.jac, every value comes from ui/tokens.jac.
 
 Status never rides on color alone: done rows say "Marked done by you" or carry a strikethrough

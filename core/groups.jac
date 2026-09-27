@@ -140,7 +140,7 @@ def add_message(
     post_ids: list[str] = []
 ) -> GroupMessage {
     ids = list(post_ids) if post_ids else ([post_id] if post_id else []);
-    name = "UArrived assistant" if ai else (my_profile().display_name or "Student");
+    name = "UMadeIt assistant" if ai else (my_profile().display_name or "Student");
     msg = root.shared ++> GroupMessage(
         group_id=jid(g),
         author_root=jid(root),

@@ -76,7 +76,7 @@ def:protect start_verification(email: str) -> VerifyResult {
     try {
         sent = send(
             address,
-            "Verify your UArrived account",
+            "Verify your UMadeIt account",
             f"Open this link to verify your UMich email:\n\n{base}/verify?token={token}\n\nIt expires in 24 hours. If you didn't ask for this, ignore this email."
         );
     } except Exception {

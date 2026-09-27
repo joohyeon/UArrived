@@ -1,4 +1,4 @@
-"""UArrived - entry point.
+"""UMadeIt - entry point.
 
 Serves every endpoint module imported here, plus the client app. A server module that is not
 imported here is not served.
