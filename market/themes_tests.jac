@@ -399,7 +399,7 @@ test "a match in the same group gets one labelled note under the message" {
         msgs = messages(client, g);
         note = msgs[-1];
         assert note["ai"] and note["tags"] == [];
-        assert note["text"].startswith("Mina is looking for this: ");
+        assert note["text"].startswith("Mina is looking for \"Desk\": ");
         assert "$30 is within the $40 budget" in note["text"];
     } finally {
         client.close();
@@ -551,6 +551,22 @@ test "blocked students don't see each other's messages or get matched" {
         say(client, g, "hello from jae");
         act_as(client, "mina@umich.edu");
         assert [m["text"] for m in messages(client, g)] == [];
+    } finally {
+        client.close();
+    }
+}
+
+test "a clear buy phrase files without asking even when the model guessed the kind" {
+    client = served();
+    try {
+        student(client, "kai@umich.edu");
+        g = joined(client, "vehicles");
+        guess = draft("Bike", PostKind.OFFER, Category.VEHICLE, "bike", 100.0);
+        guess.guessed = ["kind"];
+        ai_says([guess]);
+        sent = say(client, g, "Looking for a bike under $100");
+        assert sent["filed"] and sent["follow_up"] is None;
+        assert messages(client, g)[0]["tags"][0]["label"] == "Buying";
     } finally {
         client.close();
     }

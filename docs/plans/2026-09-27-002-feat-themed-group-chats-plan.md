@@ -1,7 +1,7 @@
 ---
 title: "feat: Themed group chats with Buying and Selling messages"
 type: feat
-status: active
+status: completed
 date: 2026-09-27
 origin: docs/brainstorms/2026-09-27-004-themed-group-chats-requirements.md
 ---

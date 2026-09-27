@@ -282,6 +282,7 @@ def:pub GroupChat -> JsxElement {
         asked_message: str = "",
         notice: str = "",
         answers: str = "",
+        pending: str = "",
         confirm_leave: bool = False;
 
     async def load -> None;
@@ -339,6 +340,30 @@ def:pub GroupChat -> JsxElement {
                 onMessage={messageIt}
             /> for m in (group.messages if group and group.ok else [])
         ]}
+        {(
+            <div
+                style={{
+                    "alignSelf": "flex-end",
+                    "maxWidth": "85%",
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "gap": space("1"),
+                    "padding": space("2") + " " + space("3"),
+                    "borderRadius": "16px",
+                    "background": color("card"),
+                    "border": "1px dashed " + color("border"),
+                    "color": color("text")
+                }}
+            >
+                <span style={{"fontSize": "13px", "fontWeight": "700"}}>You</span>
+                <span>{pending}</span>
+                <span style={{"fontSize": "13px", "color": color("sub")}}>
+                    Sending · the assistant is reading it…
+                </span>
+            </div>
+        )
+            if pending
+            else None}
         {(
             <Card>
                 <Badge kind="ai" label="Assistant · only you see this"/>
@@ -432,6 +457,12 @@ def:pub GroupChat -> JsxElement {
 
 impl GroupChat.load -> None {
     fresh: GroupView | None = None;
+    # A send or an answer runs the assistant for several seconds in one transaction that reads
+    # the student's profile; a heartbeat (a write to that profile) meanwhile makes it conflict
+    # and retry. Skip polling until it returns.
+    if sending {
+        return;
+    }
     await heartbeat();
     fresh = await group_view(group_id);
     group = fresh;
@@ -440,13 +471,17 @@ impl GroupChat.load -> None {
 impl GroupChat.sendIt(e: MouseEvent) -> None {
     result: GroupPostResult | None = None;
     sending = True;
+    pending = draft;
+    draft = "";
     try {
-        result = await post_in_group(group_id, draft);
+        result = await post_in_group(group_id, pending);
     } except Exception {
         error = "Couldn't send that. Please try again.";
+        draft = pending;
         return;
     } finally {
         sending = False;
+        pending = "";
     }
     if result is None {
         return;
@@ -455,7 +490,6 @@ impl GroupChat.sendIt(e: MouseEvent) -> None {
         error = result.error;
         return;
     }
-    draft = "";
     error = "";
     answers = "";
     asked_message = result.message_id;
@@ -465,7 +499,15 @@ impl GroupChat.sendIt(e: MouseEvent) -> None {
 impl GroupChat.choose(value: str) -> None {
     result: GroupPostResult | None = None;
     answers = (answers + "|" + value) if answers else value;
-    result = await answer_group_followup(asked_message, answers);
+    sending = True;
+    try {
+        result = await answer_group_followup(asked_message, answers);
+    } finally {
+        sending = False;
+    }
+    if result is None {
+        return;
+    }
     if not result.ok {
         error = result.error;
         asked = None;

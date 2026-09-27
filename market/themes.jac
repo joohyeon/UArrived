@@ -71,6 +71,25 @@ glob MAX_GROUP_MESSAGE_CHARS: int = 1000,
          "carpool",
          "$"
      ],
+     BUY_WORDS: list[str] = [
+         "looking for",
+         "i need",
+         "need a",
+         "need an",
+         "want to buy",
+         "wtb",
+         "buying",
+         "anyone selling",
+         "iso "
+     ],
+     SELL_WORDS: list[str] = [
+         "selling",
+         "for sale",
+         "giving away",
+         "give away",
+         "giveaway",
+         "wts"
+     ],
      STATUS_LABELS: dict[str, str] = {
          "sold": "Sold",
          "found": "Found",
@@ -248,6 +267,23 @@ def facts_line(p: Post) -> str {
     return " · ".join(parts);
 }
 
+"""The kind the words settle on their own: "request" for buy-only phrases ("looking for"),
+"offer" for sell-only ones ("selling"), "" when neither or both appear."""
+def kind_from_words(text: str) -> str {
+    t = " " + text.lower() + " ";
+    buying = any([w in t for w in BUY_WORDS]);
+    # "Anyone selling a desk?" asks to buy; don't let its "selling" count as selling.
+    t = t.replace("anyone selling", "");
+    selling = any([w in t for w in SELL_WORDS]);
+    if buying and not selling {
+        return "request";
+    }
+    if selling and not buying {
+        return "offer";
+    }
+    return "";
+}
+
 """Without AI: does the text look like a market message?"""
 def looks_like_market(text: str) -> bool {
     t = text.lower();
@@ -312,9 +348,10 @@ def note_for(filed: list[Post], g: ChatGroup, today: str) -> tuple[str, list[str
             continue;
         }
         who = other.poster_name or "A student";
-        doing = "is looking for this" if other.kind == "request" else "is offering one";
+        doing = "is looking for" if other.kind == "request" else "is selling";
         lines.append(
-            f"{who} {doing}: " + ("; ".join(s.reasons) if s.reasons else other.title)
+            f"{who} {doing} \"{other.title}\""
+                + (": " + "; ".join(s.reasons) if s.reasons else "")
         );
         matched.append(jid(other));
         if len(matched) >= MAX_NOTE_MATCHES {
@@ -337,6 +374,13 @@ def file_market(
     }
     card = drafted.draft;
     known = parse_answers(answers);
+    # "Looking for a bike" needs no question even when the model marks the kind as a guess.
+    worded = kind_from_words(text);
+    if worded
+        and "kind" not in known
+        and (not card.ai_generated or "kind" in card.guessed) {
+        known["kind"] = worded;
+    }
     # Clear market words ("selling", "looking for", "$40") count even when the model says chat;
     # a greeting it can't place is still caught below.
     about = (card.about_market if card.ai_generated else False)
@@ -682,4 +726,12 @@ test "the facts line uses only the post's facts" {
         area="Central Campus"
     );
     assert facts_line(p) == "budget $40 · 2026-09-27 to 2026-09-28 · Central Campus";
+}
+
+test "clear buy or sell words settle the kind; mixed or missing words don't" {
+    assert kind_from_words("Looking for a bike under $100") == "request";
+    assert kind_from_words("Selling my bike for $80") == "offer";
+    assert kind_from_words("anyone selling a desk?") == "request";
+    assert kind_from_words("Selling my bike, looking for a desk") == "";
+    assert kind_from_words("desk") == "";
 }
