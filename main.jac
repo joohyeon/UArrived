@@ -21,7 +21,7 @@ import from journey.walkers {
     mark_task_done,
     reopen_task
 }
-import from journey.events { upcoming_events }
+import from journey.events { upcoming_events, preview_events }
 import from journey.guide { ask_about_task, translate_journey_texts }
 import from market.decide { help_me_decide }
 import from market.themes {
@@ -81,6 +81,7 @@ import from market.lifecycle {
 # Client-side UI
 import from "@jac/runtime" { jacIsLoggedIn }
 import from core.screens.welcome { Welcome }
+import from core.screens.landing { Landing }
 import from core.screens.account { Account }
 import from ui.components.gallery { Gallery }
 import from market.screens.preview { MarketPreview }
@@ -113,6 +114,12 @@ def:pub app -> JsxElement {
         or path in ["/today", "/profile"]
     )
         and not jacIsLoggedIn() {
+        return <Welcome/>;
+    }
+    if path == "/" {
+        return <Landing/>;
+    }
+    if path in ["/login", "/signup"] {
         return <Welcome/>;
     }
     if path == "/profile" {
