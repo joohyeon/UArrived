@@ -11,6 +11,9 @@ import from core.profile { valid_date, valid_time }
 import from market.constants { ARRANGEMENTS }
 import from market.graph { Post, KINDS, CATEGORIES, post_status, all_posts }
 import from market.matching { run_matching }
+import from uuid { UUID }
+import from jaclang { JacRuntime as Jac }
+import from core.profile { moderator_roots }
 
 glob ITEM_DAYS: int = 14,
      HOUSING_DAYS: int = 30,
@@ -279,6 +282,11 @@ def publish(
     );
     apply_fields(post, clean);
     grant(post, level=AccessLevel.READ);
+    for m in moderator_roots() {
+        if m != jid(root) {
+            Jac.allow_root(post, UUID(m), AccessLevel.WRITE);  # jac:ignore[E1053]
+        }
+    }
     run_matching(post, today);
     return PostResult(ok=True, post=view_of(post, today));
 }

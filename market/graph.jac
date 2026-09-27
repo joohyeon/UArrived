@@ -8,6 +8,9 @@ Where things live (plan, Key Technical Decisions; doc-review P1s):
   anyone writing to a node another student owns.
 """
 
+import os;
+import hashlib;
+
 glob KINDS: list[str] = ["offer", "request"],
      CATEGORIES: list[str] = [
          "furniture",
@@ -38,11 +41,15 @@ node Post {
         published_on: str = "",
         expires_on: str = "",
         done: bool = False,
-        suggestions_stopped: bool = False;
+        suggestions_stopped: bool = False,
+        hidden: bool = False;
 }
 
-"""live, done or expired, as of `today` (YYYY-MM-DD). A post is visible while today < expires_on."""
+"""live, done, expired or hidden (by a moderator), as of `today` (YYYY-MM-DD). A post is visible while today < expires_on."""
 def post_status(post: Post, today: str) -> str {
+    if post.hidden {
+        return "hidden";
+    }
     if post.done {
         return "done";
     }
@@ -117,4 +124,47 @@ def all_chats -> list[Chat] {
 """Every suggestion the caller is allowed to see (the commons filters by grant)."""
 def all_suggestions(commons: any = None) -> list[Suggestion] {
     return [commons_or_shared(commons)-->][?:Suggestion];
+}
+
+"""A block between two students, stored only as a one-way key of the pair so matching can check it
+but no one can read who blocked whom. Readable by everyone."""
+node Block {
+    has pair_key: str;
+
+    def __jac_access__ -> AccessLevel | None {
+        return AccessLevel.READ;
+    }
+}
+
+"""A report of a post or chat. Shared WRITE with every moderator; never with other students."""
+node Report {
+    has reporter_root: str,
+        post_id: str,
+        chat_id: str,
+        reason: str,
+        created_at: str,
+        resolved: bool = False;
+}
+
+def all_blocks(commons: any = None) -> list[Block] {
+    return [commons_or_shared(commons)-->][?:Block];
+}
+
+def all_reports(commons: any = None) -> list[Report] {
+    return [commons_or_shared(commons)-->][?:Report];
+}
+
+"""One-way key for a pair of roots, the same whichever order they come in."""
+def pair_key(a: str, b: str) -> str {
+    salt = os.environ.get("UARRIVED_BLOCK_SALT", "uarrived-blocks");
+    (x, y) = (a, b) if a < b else (b, a);
+    return hashlib.sha256(f"{salt}|{x}|{y}".encode()).hexdigest();
+}
+
+def blocked_keys(commons: any = None) -> set[str] {
+    return {b.pair_key for b in all_blocks(commons)};
+}
+
+def is_blocked(a: str, b: str, keys: set[str]) -> bool {
+    return pair_key(a, b) in keys;
 }

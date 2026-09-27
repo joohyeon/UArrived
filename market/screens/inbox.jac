@@ -3,7 +3,8 @@ Connect / Not interested, and an unread badge. Polls while open."""
 
 import from ui.tokens { color, space }
 import from ui.components.base { AppShell, Button, Card, Badge }
-import from market.screens.common { MarketTabs, PostSummary, go }
+import from market.screens.common { MarketTabs, PostSummary, go, ReportBox }
+import from market.moderation { report_post, block_in_suggestion }
 import from market.suggestions { list_my_suggestions, SuggestionView }
 import from market.connect { connect, decline, ConnectResult }
 import from market.notify { mark_suggestions_seen }
@@ -19,6 +20,7 @@ def:pub MatchesInbox -> JsxElement {
     async def load -> None;
     async def accept(sid: str) -> None;
     async def pass_on(sid: str) -> None;
+    async def blockThem(sid: str) -> None;
 
     can with entry {
         load();
@@ -97,6 +99,16 @@ def:pub MatchesInbox -> JsxElement {
                                 else "Waiting for them to connect too."}
                         </p>
                     )}
+                <div style={{"display": "flex", "gap": space("2"), "flexWrap": "wrap"}}>
+                    <ReportBox
+                        onSubmit={lambda (r: str) { report_post(s.other_post.id, r); }}
+                    />
+                    <Button
+                        label="Block"
+                        variant="text"
+                        onClick={lambda (e: MouseEvent) { blockThem(s.id); }}
+                    />
+                </div>
             </Card> for s in items
         ]}
     </AppShell>
@@ -134,5 +146,10 @@ impl MatchesInbox.accept(sid: str) -> None {
 
 impl MatchesInbox.pass_on(sid: str) -> None {
     await decline(sid);
+    await load();
+}
+
+impl MatchesInbox.blockThem(sid: str) -> None {
+    await block_in_suggestion(sid);
     await load();
 }
