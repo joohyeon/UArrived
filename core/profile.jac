@@ -34,6 +34,7 @@ node Profile {
         has_us_phone: bool = False,
         has_us_bank: bool = False,
         email_notifications: bool = True,
+        onboarding_done: bool = False,
         last_seen: str = "";
 }
 
@@ -180,6 +181,7 @@ obj ProfileView {
         has_us_phone: bool,
         has_us_bank: bool,
         email_notifications: bool,
+        onboarding_done: bool,
         is_moderator: bool;
 }
 
@@ -276,6 +278,7 @@ def view_of(profile: Profile) -> ProfileView {
         has_us_phone=profile.has_us_phone,
         has_us_bank=profile.has_us_bank,
         email_notifications=profile.email_notifications,
+        onboarding_done=profile.onboarding_done,
         is_moderator=is_moderator(profile)
     );
 }
@@ -354,7 +357,8 @@ glob TEXT_FIELDS: list[str] = [
          "needs_airport_ride",
          "has_us_phone",
          "has_us_bank",
-         "email_notifications"
+         "email_notifications",
+         "onboarding_done"
      ];
 
 """Update the caller's own profile from `changes` (field -> new value).
@@ -429,6 +433,9 @@ def:protect update_my_profile(changes: dict[str, any]) -> ProfileUpdateResult {
     }
     if "email_notifications" in changes {
         p.email_notifications = changes["email_notifications"];
+    }
+    if "onboarding_done" in changes {
+        p.onboarding_done = changes["onboarding_done"];
     }
     synced = "preferred_language" in text
         and set_language(p, text["preferred_language"].lower(), True);

@@ -211,3 +211,20 @@ test "the mailbox language follows every language change" {
     default_language_from("en", p, root);
     assert box_of(p).language == "zh";
 }
+
+test "onboarding_done is off by default and settable through update_my_profile" {
+    client = served();
+    try {
+        client.register_user("mina@umich.edu", "password123");
+        fresh = call(client, "get_my_profile", {});
+        assert not fresh["onboarding_done"];
+        result = call(
+            client, "update_my_profile", {"changes": {"onboarding_done": True}}
+        );
+        assert result["ok"] and result["profile"]["onboarding_done"];
+        mine = call(client, "get_my_profile", {});
+        assert mine["onboarding_done"];
+    } finally {
+        client.close();
+    }
+}
