@@ -24,7 +24,7 @@ success without evidence from commands you ran in this session.
    bash scripts/check_rules.sh
    jac fmt --check .
    jac check .
-   jac test $(git ls-files '*.jac')
+   jac test -d .
    ```
    Note any test that does not assert the behaviour in the claim list (a test whose name promises
    more than its assertions prove is a finding).

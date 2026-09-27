@@ -1,11 +1,36 @@
 [project]
-name = "Uarrived"
+name = "uarrived"
 version = "0.1.0"
-entry-point = "main.jac"
+description = "UArrived: first-week journey and student marketplace for Ann Arbor"
+entry-point = "main"
+kind = "web-app"
+jac-version = "==0.37.23"
 
-[jacpack]
-name = 'Uarrived'
-description = 'Jac IDE snapshot for Uarrived'
+[dependencies]
+[dependencies.npm]
+react = "^19.2.0"
+react-dom = "^19.2.0"
+react-router-dom = "^6.22.0"
+react-error-boundary = "^5.0.0"
+"@tanstack/react-form" = "^1.33.0"
+zod = "^4.3.6"
 
-[jachammer]
-project_id = "prj_70b4e811d379468cb84b2a052c13b204"
+[dependencies.npm.dev]
+vite = "^6.4.1"
+"@vitejs/plugin-react" = "^4.7.0"
+typescript = "^5.3.3"
+"@types/react" = "^19.2.0"
+"@types/react-dom" = "^19.2.0"
+
+[dev-dependencies]
+watchdog = ">=3.0.0"
+
+[client]
+
+[byllm.model]
+# ai/draft.jac pins its own model; this is the project default. Needs ANTHROPIC_API_KEY.
+default_model = "claude-haiku-4-5-20251001"
+
+[scale.scheduler]
+# market/notify.jac email_sweep; fires only under `jac run --serve`
+enabled = true

@@ -21,7 +21,7 @@ recommended for anything touching `core/`, `ui/` or `data/`, but not required.
    bash scripts/check_rules.sh  # Jac share, feature boundaries, design tokens
    jac fmt --check .            # fix with: jac fmt --lintfix <file>
    jac check .
-   jac test $(git ls-files '*.jac')
+   jac test -d .
    ```
 4. **Commit** everything intended, in small logical commits (imperative subject, why in the body).
    `git status` must be clean afterwards; no `.env` or secrets in `git diff origin/main`.

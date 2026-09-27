@@ -1,0 +1,557 @@
+{
+  "metadata": {
+    "title": "University of Michigan–Ann Arbor 新生办理与到校任务清单",
+    "scope": "面向 Ann Arbor 校区新生，重点覆盖报到后常见的身份证件、校园参访、学费、国际学生签证服务、医疗、银行、手机和可选 SSN。",
+    "campus": "University of Michigan–Ann Arbor",
+    "verified_as_of": "2026-09-26",
+    "timezone": "America/Detroit",
+    "source_priority": [
+      "U-M official sources",
+      "government official sources",
+      "service-provider official sources",
+      "third-party local listings only when official pages did not expose a needed local detail"
+    ],
+    "data_quality_note": "营业时间和政策可能因假日、学期、临时调整而变化。涉及必须亲自到场的事项，建议出发当天再次打开 source_url 核实。"
+  },
+  "tasks": [
+    {
+      "id": "mcard",
+      "task": "办理 / 领取 MCard",
+      "required": true,
+      "campus_area": "Central Campus / North Campus",
+      "where": [
+        {
+          "campus_area": "CENTRAL CAMPUS",
+          "name": "MCard Issuing Station – Michigan Union Tech Shop",
+          "address": "Ground Level, Michigan Union, 530 S State St, Ann Arbor, MI 48109",
+          "hours": {
+            "monday-friday": "08:00-19:00",
+            "saturday": "11:00-17:00",
+            "sunday": "Closed"
+          },
+          "appointment": "Walk-ins accepted; no appointment needed"
+        },
+        {
+          "campus_area": "NORTH CAMPUS",
+          "name": "MCard Issuing Station – Pierpont Commons",
+          "address": "Suite 2202, Pierpont Commons, 2101 Bonisteel Blvd, Ann Arbor, MI 48109",
+          "hours": {
+            "monday-friday": "08:00-19:00",
+            "saturday": "12:00-17:00",
+            "sunday": "12:00-17:00"
+          },
+          "appointment": "Walk-ins accepted; no appointment needed"
+        }
+      ],
+      "what_to_bring": [
+        "Government-issued photo ID for a first-time MCard; the ID must be unexpired, valid, and contain photo, name, date of birth, and signature.",
+        "If you submitted an online MCard photo, bring/check the email instructions telling you how to obtain the card.",
+        "If you have a previous MCard, bring/return it as applicable; otherwise a replacement fee may apply."
+      ],
+      "cost": "New student MCard is no cost; returning students with an existing valid student MCard can continue using it until expiration. A $20 replacement fee may apply in certain replacement situations.",
+      "notes": [
+        "New students do not normally use the Shared Services Center for MCard pickup; the official page specifically says new students who submitted photos online should follow the email instructions and should not use SSC.",
+        "Student MCards are valid for five years.",
+        "Online photo submission is available for new Ann Arbor students."
+      ],
+      "source_url": "https://ssc.umich.edu/mcard/get-your-mcard/ann-arbor-campus-mcards/"
+    },
+    {
+      "id": "campus_tour",
+      "task": "参加 U-M 官方 Central Campus Tour",
+      "required": false,
+      "campus_area": "CENTRAL CAMPUS",
+      "where": {
+        "name": "U-M Office of Undergraduate Admissions – official in-person campus tour",
+        "area": "Central Campus",
+        "duration": "Approximately 75 minutes"
+      },
+      "start_location": null,
+      "end_location": null,
+      "route_note": "The current official Admissions pages confirm a 75-minute Central Campus walking tour but do not publish a fixed start/end location in the text available to this search. Do not infer a meeting point from the self-guided campus map. Check the appointment/registration confirmation for the exact meeting point on the day.",
+      "registration": {
+        "required": true,
+        "walk_ins": false,
+        "official_registration": "https://enrollmentconnect.umich.edu/portal/campus_tours"
+      },
+      "what_to_bring": [
+        "Weather-appropriate clothing; most of the tour is outdoors.",
+        "Comfortable walking shoes.",
+        "Registration confirmation / appointment details."
+      ],
+      "notes": [
+        "Party size is limited to four total people.",
+        "Arriving more than 10 minutes late means the group will have departed; a self-guided walking tour map is provided instead.",
+        "The standard tour includes a model residence-hall room but not a dining-hall visit.",
+        "Accessibility needs can be entered during registration."
+      ],
+      "source_urls": [
+        "https://admissions.umich.edu/explore-visit/visit-campus",
+        "https://enrollmentconnect.umich.edu/portal/campus_tours",
+        "https://admissions.umich.edu/sites/default/files/attachments/CampusWalkingTourMap.pdf"
+      ]
+    },
+    {
+      "id": "tuition",
+      "task": "确认 2026-27 学费 / 学生账单",
+      "required": true,
+      "campus_area": "Online / CENTRAL CAMPUS support office",
+      "where": {
+        "primary": "Wolverine Access → Student Business / eBill for the student's actual bill",
+        "in_person_support": "Student Financial Services, 2226 Student Activities Building, 515 E Jefferson St, Ann Arbor, MI 48109-1316"
+      },
+      "hours": {
+        "monday": "08:00-16:30",
+        "tuesday": "08:00-16:30",
+        "wednesday": "08:00-16:30",
+        "thursday": "10:00-16:30",
+        "friday": "08:00-16:30"
+      },
+      "2026_2027_reference_costs": [
+        {
+          "population": "Ann Arbor undergraduate, LSA reference, 15-credit semester basis",
+          "in_state_annual": 18649,
+          "out_of_state_annual": 66849,
+          "note": "U-M Facts & Figures lists these as 2026-27 tuition + fees reference figures; program-specific rates can differ."
+        },
+        {
+          "population": "International undergraduate, LSA lower division (0-54 credits toward program)",
+          "tuition_and_fees": 67096,
+          "estimated_total_budget": 88394,
+          "note": "U-M Admissions states these 2026-27 figures are based on approved rates and use LSA as the reference program."
+        },
+        {
+          "population": "International undergraduate, LSA upper division (55+ credits toward program)",
+          "tuition_and_fees": 71798,
+          "estimated_total_budget": 93096,
+          "note": "U-M Admissions states these 2026-27 figures are based on approved rates and use LSA as the reference program."
+        }
+      ],
+      "what_to_bring": [
+        "For an in-person Student Financial Services transaction: UMID number plus valid photo ID.",
+        "For Teller Services, U-M's FAQ states two valid IDs are required, preferably MCard + driver's license or passport."
+      ],
+      "notes": [
+        "The exact tuition assessment depends on school/college, program, residency, credits, and fees; use the student's actual Wolverine Access bill as the authoritative amount.",
+        "U-M's FAQ states the university does not accept credit cards directly for student tuition bills.",
+        "Bills are delivered electronically through Wolverine Access."
+      ],
+      "source_urls": [
+        "https://umich.edu/facts-figures/",
+        "https://admissions.umich.edu/i-am/international-students",
+        "https://finance.umich.edu/finops/faq",
+        "https://finance.umich.edu/finops/collections/payments"
+      ]
+    },
+    {
+      "id": "international_center",
+      "task": "International Center / ISSS 签证与身份服务",
+      "required": "F-1/J-1 students: relevant/required depending on task",
+      "campus_area": "CENTRAL CAMPUS",
+      "where": {
+        "name": "U-M International Center",
+        "address": "1500 Student Activities Building, 515 E Jefferson St, Ann Arbor, MI 48109-1316"
+      },
+      "hours": {
+        "monday-friday": "08:30-12:00 and 13:00-16:30",
+        "special_closure": "Closed 08:30-11:00 on the fourth Tuesday of each month for staff meetings",
+        "holidays": "Closed on official U-M holidays and season days"
+      },
+      "appointment": "Most requests should be submitted through M-Passport; requests that cannot be submitted there may be submitted in person during open office hours.",
+      "what_to_bring": [
+        "Passport.",
+        "Most recent I-94.",
+        "I-20 (F-1) or DS-2019 (J-1), when relevant to the request.",
+        "Any task-specific documents or forms requested in M-Passport."
+      ],
+      "notes": [
+        "ISSS is U-M's main point of contact for F-1 and J-1 student issues.",
+        "For Fall 2026 new students, the mandatory immigration check-in is virtual: complete the International Center Canvas check-in course and submit scanned immigration documents.",
+        "Do not assume an in-person visit is necessary; check M-Passport first."
+      ],
+      "source_urls": [
+        "https://internationalcenter.umich.edu/isss",
+        "https://internationalcenter.umich.edu/about/contact",
+        "https://internationalcenter.umich.edu/isss/new-transfer-students/check-in"
+      ]
+    },
+    {
+      "id": "medical",
+      "task": "U-M University Health Service (UHS / UHC Medical Services)",
+      "required": true,
+      "campus_area": "CENTRAL CAMPUS",
+      "where": {
+        "name": "UHC Medical Services (University Health Service / UHS)",
+        "address": "207 Fletcher Street, Ann Arbor, MI 48109-1050"
+      },
+      "hours": {
+        "monday-wednesday": "08:00-17:00",
+        "thursday": "09:00-17:00",
+        "friday": "08:00-16:30",
+        "saturday": "09:00-12:00 (closed during spring/summer terms)"
+      },
+      "appointment": "Appointments are required for both in-person and virtual clinician visits.",
+      "what_to_bring": [
+        "MCard / student ID and your relevant insurance information, if applicable.",
+        "For the first clinician appointment, UHC says it is helpful to hand-carry a hard copy of your health history.",
+        "Do not email health-history documents in advance unless UHC specifically asks; the UHC records page says to hand-carry a hard copy to the first appointment."
+      ],
+      "notes": [
+        "Most medical services are free for enrolled U-M students, though not every service is free.",
+        "Use the patient portal to self-schedule or request appointments; call 734-764-8320 if needed.",
+        "Parking can be difficult during the school year; the closest parking structures include Fletcher Street Structure and Palmer Structure."
+      ],
+      "source_urls": [
+        "https://uhc.umich.edu/how-get-care",
+        "https://uhc.umich.edu/confidentiality-health-records"
+      ]
+    },
+    {
+      "id": "banking",
+      "task": "办理银行 / Credit Union 账户",
+      "required": false,
+      "campus_area": "CENTRAL CAMPUS / NORTH CAMPUS / Ann Arbor",
+      "providers": [
+        {
+          "provider": "University of Michigan Credit Union (UMCU)",
+          "student_relevant": true,
+          "locations": [
+            {
+              "campus_area": "CENTRAL CAMPUS",
+              "name": "Michigan Union Branch",
+              "address": "530 S State Street, Suite G309, Ann Arbor, MI 48109",
+              "hours": "Mon-Fri 09:00-17:30; closed 14:00-14:30",
+              "notes": "Ground floor, across from the Tech Shop. Student account opening available. Walk-ins available."
+            },
+            {
+              "campus_area": "NORTH CAMPUS",
+              "name": "Pierpont Branch",
+              "address": "2101 Bonisteel Blvd, Suite 1212, Ann Arbor, MI 48109",
+              "hours": "Mon-Fri 09:00-17:30; closed 14:00-14:30",
+              "notes": "Inside Pierpont Commons. Student account opening available. Walk-ins available."
+            },
+            {
+              "campus_area": "CENTRAL / DOWNTOWN",
+              "name": "South University Avenue Branch",
+              "address": "1121 South University Avenue, Ann Arbor, MI 48104",
+              "hours": "Mon-Fri 09:00-17:30; closed 14:00-14:30",
+              "notes": "Full-service student banking branch."
+            },
+            {
+              "campus_area": "DOWNTOWN",
+              "name": "Huron Street Branch",
+              "address": "340 E Huron Street, Ann Arbor, MI 48104",
+              "hours": "Mon-Fri 09:00-17:30",
+              "notes": "Full-service branch."
+            },
+            {
+              "campus_area": "SOUTH ANN ARBOR",
+              "name": "South State Street Branch",
+              "address": "2725 S State St, Ann Arbor, MI 48104",
+              "hours": "Mon-Fri 09:00-17:30; Sat 09:00-14:00",
+              "notes": "Full-service branch and ATM."
+            }
+          ],
+          "what_to_bring": [
+            "Government photo ID (passport is the practical choice for an international student).",
+            "MCard / student ID.",
+            "U.S. residential address and phone number.",
+            "SSN/ITIN if you already have one; bank requirements can vary by account and applicant.",
+            "A funding method / opening deposit if required by the account."
+          ],
+          "notes": [
+            "UMCU's location pages explicitly advertise student account opening and in-person service.",
+            "UMCU's public new-member pages retrieved here did not expose a complete international-student document checklist, so call ahead for the exact account you intend to open."
+          ],
+          "source_urls": [
+            "https://www.umcu.org/contact/locations/ann-arbor/michigan-union",
+            "https://www.umcu.org/contact/locations/ann-arbor/pierpont",
+            "https://www.umcu.org/contact/locations/ann-arbor/south-university-avenue",
+            "https://display.umcu.org/contact/locations/ann-arbor/huron-street",
+            "https://www.umcu.org/contact/locations/ann-arbor/south-state-street",
+            "https://www.umcu.org/about/about-us/new-member"
+          ]
+        },
+        {
+          "provider": "Chase",
+          "student_relevant": true,
+          "locations": [
+            {
+              "name": "Chase Bank – Main and Huron",
+              "address": "100 S Main St, Ann Arbor, MI 48104",
+              "hours": "Mon-Fri 09:00-17:00; Sat 09:00-14:00; Sun closed",
+              "notes": "Downtown Ann Arbor branch; in-person account service available."
+            }
+          ],
+          "what_to_bring": [
+            "Passport with photo.",
+            "Proof of U.S. residential address.",
+            "A second/secondary form of identification may be useful.",
+            "SSN is not necessarily required for an international student at Chase, according to Chase's international-student guidance."
+          ],
+          "notes": [
+            "Chase states international students may be able to open a checking account without a U.S. phone number or SSN.",
+            "Exact account eligibility and document requirements can differ by account; confirm with the branch."
+          ],
+          "source_urls": [
+            "https://www.chase.com/personal/banking/education/basics/bank-accounts-for-international-students",
+            "https://www.chase.com/personal/banking/education/basics/what-you-need-to-open-a-bank-account"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mobile",
+      "task": "办理美国手机号码 / SIM / eSIM / 手机套餐",
+      "required": true,
+      "campus_area": "Ann Arbor",
+      "general_prep": [
+        "Ensure the phone is carrier-unlocked if bringing a device from abroad.",
+        "Check whether your phone supports the carrier's U.S. network bands/eSIM.",
+        "Bring passport, visa/immigration document, payment method, and your U.S. address.",
+        "For international students, a U.S. phone number can be useful for banking and account recovery."
+      ],
+      "provider_options": [
+        {
+          "provider": "T-Mobile",
+          "locations": [
+            {
+              "name": "T-Mobile Washtenaw & Pittsfield",
+              "address": "3500 Washtenaw Ave, Suite A, Ann Arbor, MI 48104",
+              "hours": "Mon-Sat 10:00-20:00; Sun 12:00-18:00"
+            }
+          ],
+          "what_to_bring": [
+            "Passport.",
+            "International student visa with passport is explicitly listed by this T-Mobile store as an accepted ID.",
+            "U.S. address and payment method."
+          ],
+          "notes": [
+            "Store offers T-Mobile Prepaid as well as postpaid options.",
+            "T-Mobile's Ann Arbor locator lists additional locations, so you are not limited to this store."
+          ],
+          "source_urls": [
+            "https://www.t-mobile.com/stores/bd/t-mobile-ann-arbor-mi-48104-4354",
+            "https://www.t-mobile.com/stores/mi/ann-arbor"
+          ]
+        },
+        {
+          "provider": "AT&T",
+          "locations": [
+            {
+              "name": "AT&T Store – Ann Arbor Saline Rd",
+              "address": "3157 Ann Arbor Saline Road, Ann Arbor, MI 48103",
+              "hours": "Mon-Sat 10:00-20:00; Sun 11:00-17:00"
+            },
+            {
+              "name": "AT&T Store – Jackson Rd",
+              "address": "5609 Jackson Rd, Unit 105, Ann Arbor, MI 48103",
+              "hours": "Mon-Sat 10:00-20:00; Sun 11:00-17:00"
+            },
+            {
+              "name": "AT&T Store – W Stadium",
+              "address": "2275 West Stadium Blvd, Ann Arbor, MI 48103",
+              "hours": "Mon-Sat 10:00-20:00; Sun 11:00-17:00"
+            }
+          ],
+          "what_to_bring": [
+            "Passport / government ID.",
+            "U.S. address and payment method.",
+            "Bring your current phone if doing a port/upgrade.",
+            "Exact identity/credit requirements vary by plan and whether you choose prepaid or postpaid."
+          ],
+          "notes": [
+            "AT&T's official Ann Arbor store pages advertise wireless plans, setup, phone activation, upgrades, and international plans.",
+            "Appointments can be scheduled."
+          ],
+          "source_urls": [
+            "https://www.att.com/stores/michigan/ann-arbor",
+            "https://www.att.com/stores/michigan/ann-arbor/116152",
+            "https://www.att.com/stores/michigan/ann-arbor/176104"
+          ]
+        },
+        {
+          "provider": "Verizon",
+          "locations": [
+            {
+              "name": "Verizon Company Store",
+              "address": "3143 Ann Arbor Saline Rd, Ann Arbor, MI 48103",
+              "hours": "10:00-20:00 (official locator listing; verify day-specific schedule)"
+            },
+            {
+              "name": "Verizon Authorized Retailer",
+              "address": "3035 Washtenaw Ave, Ann Arbor, MI 48104",
+              "hours": "10:00-20:00 (official locator listing)"
+            },
+            {
+              "name": "Verizon Authorized Retailer",
+              "address": "3389 Plymouth Rd, Ann Arbor, MI 48105",
+              "hours": "10:00-19:00 (official locator listing)"
+            }
+          ],
+          "what_to_bring": [
+            "Passport / government ID.",
+            "U.S. address and payment method.",
+            "Current device if bringing your own phone or porting a number."
+          ],
+          "notes": [
+            "The official Verizon locator distinguishes company stores from authorized retailers; services and hours can vary by location.",
+            "The official locator advises calling to verify some authorized-retailer hours/services."
+          ],
+          "source_urls": [
+            "https://www.verizon.com/nextgendigital/nos/storelocator/michigan/ann-arbor"
+          ]
+        }
+      ],
+      "international_center_note": "U-M International Center recommends checking that an imported phone is unlocked and U.S.-compatible. It notes international students commonly consider prepaid options such as Mint Mobile, Tello, or T-Mobile, and that eSIMs may not provide a U.S. phone number.",
+      "source_url": "https://internationalcenter.umich.edu/resources/arrival/cellphone"
+    },
+    {
+      "id": "ssn",
+      "task": "申请 Social Security Number (SSN) — 仅在符合条件时",
+      "required": false,
+      "eligibility_note": "For an international student, the common student pathway is tied to authorized employment. U-M ISSS says you must have applied for an SSN if you are employed in the U.S. or have received and plan to accept an offer of employment in the U.S.",
+      "campus_area": "CENTRAL CAMPUS → Ann Arbor SSA",
+      "steps": [
+        "1. If you are a U-M F-1/J-1 student with a job, request the Social Security Letter from the International Center.",
+        "2. For the U-M F-1 student SSN letter, employer completes the employer section; bring the original employer letter, photocopies of I-20 pages 1-2, and your most recent I-94 to the International Center.",
+        "3. Allow 5 working days for the U-M SSN letter request to be processed.",
+        "4. Complete the SSA online application and schedule the SSA appointment.",
+        "5. Attend the SSA appointment with original/certified required documents."
+      ],
+      "where": {
+        "international_center_for_letter": "1500 Student Activities Building, 515 E Jefferson St, Ann Arbor, MI 48109",
+        "ssa_office": "3971 Research Park Drive, Ann Arbor, MI 48108"
+      },
+      "hours": {
+        "international_center": "Mon-Fri 08:30-12:00 and 13:00-16:30",
+        "ssa": "Commonly listed as Mon-Fri 09:00-16:00; verify through the SSA Office Locator for the appointment date."
+      },
+      "what_to_bring": [
+        "Original employer letter / U-M SSN letter package as directed.",
+        "Passport.",
+        "Most recent I-94.",
+        "I-20 for F-1 or DS-2019 for J-1, as applicable.",
+        "Any additional original/certified immigration documents requested by SSA."
+      ],
+      "notes": [
+        "SSA says starting the online application before an in-person visit can make the visit faster.",
+        "SSA states original or certified documents are required for the document review.",
+        "The SSN card is mailed after processing; it is not printed at the office.",
+        "SSN is not a prerequisite for every bank account or every phone plan; it is best treated as an employment-related task rather than a universal arrival task."
+      ],
+      "source_urls": [
+        "https://internationalcenter.umich.edu/resources/ssn",
+        "https://internationalcenter.umich.edu/sites/default/files/forms/ssn_F1_request.pdf",
+        "https://internationalcenter.umich.edu/resources/ssn/applying-ssn-card",
+        "https://www.ssa.gov/blog/en/posts/2026-02-23.html",
+        "https://www.ssa.gov/locator"
+      ]
+    },
+    {
+      "id": "mandatory_immigration_checkin",
+      "task": "完成 Fall 2026 Mandatory Immigration Check-in",
+      "required": true,
+      "campus_area": "ONLINE",
+      "where": "International Center Canvas Check-in Course",
+      "steps": [
+        "Enroll in the Fall 2026 International Center Canvas Check-in Course.",
+        "Successfully complete the course.",
+        "Submit scanned copies of the required immigration documents through the course instructions."
+      ],
+      "what_to_bring": [
+        "Passport and immigration documents in digital form, following the course's document list."
+      ],
+      "notes": [
+        "This is virtual for Fall 2026; it is not necessary to travel to the International Center just to complete this check-in."
+      ],
+      "source_url": "https://internationalcenter.umich.edu/isss/new-transfer-students/check-in"
+    }
+  ],
+  "recommended_execution_order": [
+    {
+      "order": 1,
+      "task_id": "mcard",
+      "why": "MCard is useful for campus access, identity, transportation-related services, and many campus transactions."
+    },
+    {
+      "order": 2,
+      "task_id": "mandatory_immigration_checkin",
+      "why": "Complete the Fall 2026 immigration check-in promptly so your immigration-status compliance task is recorded."
+    },
+    {
+      "order": 3,
+      "task_id": "international_center",
+      "why": "Use M-Passport first; visit in person only when the request requires it."
+    },
+    {
+      "order": 4,
+      "task_id": "medical",
+      "why": "Set up UHC/patient-portal access early and know where to go before you become sick."
+    },
+    {
+      "order": 5,
+      "task_id": "mobile",
+      "why": "A U.S. number is useful for banking, account recovery, and everyday services; do this soon after arrival if your current SIM is not practical."
+    },
+    {
+      "order": 6,
+      "task_id": "banking",
+      "why": "Open a checking account after you have a U.S. address; the exact SSN requirement depends on the bank/account."
+    },
+    {
+      "order": 7,
+      "task_id": "tuition",
+      "why": "Check the actual Wolverine Access eBill and payment status; use SFS in person only if account support is needed."
+    },
+    {
+      "order": 8,
+      "task_id": "ssn",
+      "why": "Do this only after you have a qualifying employment situation and the required U-M/SSA paperwork."
+    },
+    {
+      "order": 9,
+      "task_id": "campus_tour",
+      "why": "Useful for orientation, but optional once you are already a U-M student."
+    }
+  ],
+  "source_catalog": {
+    "official_um": [
+      "https://ssc.umich.edu/mcard/get-your-mcard/ann-arbor-campus-mcards/",
+      "https://admissions.umich.edu/explore-visit/visit-campus",
+      "https://enrollmentconnect.umich.edu/portal/campus_tours",
+      "https://umich.edu/facts-figures/",
+      "https://admissions.umich.edu/i-am/international-students",
+      "https://internationalcenter.umich.edu/isss",
+      "https://internationalcenter.umich.edu/about/contact",
+      "https://internationalcenter.umich.edu/isss/new-transfer-students/check-in",
+      "https://uhc.umich.edu/how-get-care",
+      "https://uhc.umich.edu/confidentiality-health-records",
+      "https://finance.umich.edu/finops/faq",
+      "https://finance.umich.edu/finops/collections/payments",
+      "https://internationalcenter.umich.edu/resources/arrival/cellphone",
+      "https://internationalcenter.umich.edu/resources/ssn",
+      "https://internationalcenter.umich.edu/resources/ssn/applying-ssn-card",
+      "https://internationalcenter.umich.edu/sites/default/files/forms/ssn_F1_request.pdf"
+    ],
+    "official_service_providers": [
+      "https://www.umcu.org/contact/locations/ann-arbor/michigan-union",
+      "https://www.umcu.org/contact/locations/ann-arbor/pierpont",
+      "https://www.umcu.org/contact/locations/ann-arbor/south-university-avenue",
+      "https://display.umcu.org/contact/locations/ann-arbor/huron-street",
+      "https://www.umcu.org/contact/locations/ann-arbor/south-state-street",
+      "https://www.chase.com/personal/banking/education/basics/bank-accounts-for-international-students",
+      "https://www.chase.com/personal/banking/education/basics/what-you-need-to-open-a-bank-account",
+      "https://www.t-mobile.com/stores/bd/t-mobile-ann-arbor-mi-48104-4354",
+      "https://www.t-mobile.com/stores/mi/ann-arbor",
+      "https://www.att.com/stores/michigan/ann-arbor",
+      "https://www.att.com/stores/michigan/ann-arbor/116152",
+      "https://www.att.com/stores/michigan/ann-arbor/176104",
+      "https://www.verizon.com/nextgendigital/nos/storelocator/michigan/ann-arbor"
+    ],
+    "government": [
+      "https://www.ssa.gov/blog/en/posts/2026-02-23.html",
+      "https://www.ssa.gov/locator"
+    ]
+  }
+}
