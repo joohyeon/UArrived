@@ -1,7 +1,7 @@
 [project]
 name = "uarrived"
 version = "0.1.0"
-description = "UArrived: first-week journey and student marketplace for Ann Arbor"
+description = "UMadeIt: first-week journey and student marketplace for Ann Arbor"
 entry-point = "main"
 kind = "web-app"
 jac-version = "==0.37.23"

@@ -7,7 +7,7 @@ ui/
 └── copy/           # shared strings (labels, safety text, "AI-generated" label) for translation
 ```
 
-`tokens.jac` follows the **UArrived Figma file**
+`tokens.jac` follows the **UMadeIt Figma file**
 (https://www.figma.com/design/jw2I3dqHMAnZGqKBvDlmyl/UArrived) — change both together. The default
 theme `campus` is the Figma look: stone neutrals (`#F5F5F3` ground, `#1C1917` text, `#E7E5E4`
 hairlines), indigo `#3730A3` action, **Outfit** headings over **Manrope** text, 16px card and button

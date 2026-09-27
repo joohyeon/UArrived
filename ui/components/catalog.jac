@@ -1,4 +1,4 @@
-"""The component inventory from the UArrived Figma file (Whole workflow + Phase 2).
+"""The component inventory from the UMadeIt Figma file (Whole workflow + Phase 2).
 
 One ComponentSpec per variant, resolved against ui/tokens.jac. `built` names the Jac component
 that implements it today (ui/components/base.jac or blocks.jac); an empty `built` is still to do.

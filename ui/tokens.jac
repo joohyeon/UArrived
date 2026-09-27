@@ -1,9 +1,9 @@
-"""UArrived design tokens: the ONLY place colors, type, spacing, radii and breakpoints live.
+"""UMadeIt design tokens: the ONLY place colors, type, spacing, radii and breakpoints live.
 
-The default theme, `campus`, comes from the UArrived Figma file
+The default theme, `campus`, comes from the UMadeIt Figma file
 (https://www.figma.com/design/jw2I3dqHMAnZGqKBvDlmyl/UArrived): stone neutrals, indigo action,
 Outfit headings over Manrope text. `canvas` (warm off-white) and `coral` / `coral-ink` are the
-welcome pages' ground and accent. `harbor`, `arboretum` and `nightfall` are the earlier UArrived
+welcome pages' ground and accent. `harbor`, `arboretum` and `nightfall` are the earlier UMadeIt
 Design System artifact themes (https://claude.ai/artifact/JkrWSa8iv9NXiRKsj9s2Wh), kept as
 alternates. Every theme defines the same color names.
 """
