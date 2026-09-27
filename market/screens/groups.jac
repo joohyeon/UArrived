@@ -434,8 +434,17 @@ impl GroupChat.load -> None {
 impl GroupChat.sendIt(e: MouseEvent) -> None {
     result: GroupPostResult | None = None;
     sending = True;
-    result = await post_in_group(group_id, draft);
-    sending = False;
+    try {
+        result = await post_in_group(group_id, draft);
+    } except Exception {
+        error = "Couldn't send that. Please try again.";
+        return;
+    } finally {
+        sending = False;
+    }
+    if result is None {
+        return;
+    }
     if not result.ok {
         error = result.error;
         return;
