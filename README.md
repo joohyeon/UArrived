@@ -12,6 +12,9 @@ curl -fsSL https://jaclang.org/install.sh | bash -s -- --version 0.37.23   # NOT
 jac run main.jac           # runs the entry point
 ```
 
+Testing on a phone and deploying to make the app public:
+[docs/RUNNING_AND_DEPLOYING.md](docs/RUNNING_AND_DEPLOYING.md).
+
 ## Structure
 
 Web app (mobile-first), all Jac: `core/` shared model · `journey/` Feature A · `market/` Feature B · `ui/` design system · `ai/` · `interop/` · `data/` · `docs/`. Rules: [docs/ENGINEERING_RULES.md](docs/ENGINEERING_RULES.md).
