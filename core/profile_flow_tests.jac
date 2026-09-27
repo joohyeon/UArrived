@@ -2,7 +2,15 @@
 
 import os;
 import tempfile;
+import uuid;
 import from jaclang.testing.testing { JacTestClient }
+import from core.profile {
+    Mailbox,
+    Profile,
+    default_language_from,
+    set_language,
+    sync_mailbox
+}
 
 def served -> JacTestClient {
     os.environ["UARRIVED_DEV_MODE"] = "1";
@@ -131,4 +139,61 @@ test "only a verified student listed in UARRIVED_MODERATORS is a moderator" {
         os.environ["UARRIVED_MODERATORS"] = "";
         client.close();
     }
+}
+
+test "only a pilot language can be chosen, and choosing one marks it chosen (R29)" {
+    client = served();
+    try {
+        client.register_user("mina@umich.edu", "password123");
+        fresh = call(client, "get_my_profile", {});
+        assert fresh["preferred_language"] == "en" and not fresh["language_chosen"];
+        bad = call(
+            client, "update_my_profile", {"changes": {"preferred_language": "xx"}}
+        );
+        assert not bad["ok"] and "Language" in bad["error"];
+        mine = call(client, "get_my_profile", {});
+        assert mine["preferred_language"] == "en" and not mine["language_chosen"];
+        good = call(
+            client, "update_my_profile", {"changes": {"preferred_language": "zh"}}
+        );
+        assert good["ok"];
+        assert good["profile"]["preferred_language"] == "zh"
+            and good["profile"]["language_chosen"];
+    } finally {
+        client.close();
+    }
+}
+
+"""The Mailbox for `p` on the test root (plain tests: the commons is the test's own root)."""
+def box_of(p: Profile) -> Mailbox {
+    found = [
+        m
+        for m in [root-->][?:Mailbox]
+        if m.email == p.umich_email
+    ];
+    assert len(found) == 1;
+    return found[0];
+}
+
+test "a first message's language becomes the default only until the student chooses one" {
+    p = Profile();
+    assert default_language_from("ko", p, root);
+    assert p.preferred_language == "ko" and not p.language_chosen;
+    assert not default_language_from("fr", p, root);
+    assert p.preferred_language == "ko";
+    chose = Profile(preferred_language="en", language_chosen=True);
+    assert not default_language_from("ko", chose, root);
+    assert chose.preferred_language == "en";
+}
+
+test "the mailbox language follows every language change" {
+    p = Profile(umich_email=f"lang-{uuid.uuid4()}@umich.edu", verified=True);
+    sync_mailbox(p, root);
+    assert box_of(p).language == "en";
+    default_language_from("ko", p, root);
+    assert box_of(p).language == "ko";
+    set_language(p, "zh", True, root);
+    assert box_of(p).language == "zh" and p.language_chosen;
+    default_language_from("en", p, root);
+    assert box_of(p).language == "zh";
 }
