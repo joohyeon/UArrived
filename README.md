@@ -25,7 +25,7 @@ Web app (mobile-first), all Jac: `core/` shared model · `journey/` Feature A ·
 bash scripts/check_rules.sh             # Jac share ≥ 40%, boundaries, design tokens — required, CI runs this
 jac fmt --check .                       # formatting (fix with: jac fmt --lintfix <file>) — optional
 jac check .                             # type check — optional
-jac test -d .                           # every test "name" { ... } block in the repo — optional
+bash scripts/test.sh                    # every test "name" { ... } block in the repo — optional
 ```
 
 **Hackathon speed mode:** CI only runs `check_rules.sh`. The other three are optional — run them

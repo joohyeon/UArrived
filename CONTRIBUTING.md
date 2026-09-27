@@ -11,7 +11,7 @@ required reviews once the hackathon is over.
    (`test "what it proves" { ... }` in the same `.jac` file, or a file next to it), but it's not
    required to merge right now.
 3. **Check locally** — `bash scripts/check_rules.sh` must pass (it's the only thing CI enforces).
-   `jac fmt --check .`, `jac check .` and `jac test -d .` (see README.md) are optional but
+   `jac fmt --check .`, `jac check .` and `bash scripts/test.sh` (see README.md) are optional but
    recommended if you have a spare minute. Read [docs/ENGINEERING_RULES.md](docs/ENGINEERING_RULES.md)
    once — it's short.
 4. **Open a PR** (`/ship` does the push + PR body for you). Fill in the template; keep it small
