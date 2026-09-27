@@ -21,6 +21,7 @@ node Profile {
         student_type: str = "",
         preferred_language: str = "en",
         language_chosen: bool = False,
+        language_defaulted: bool = False,
         arrival_date: str = "",
         arrival_time: str = "",
         housing_status: str = "",
@@ -72,6 +73,9 @@ is written when neither the language nor the chosen flag changes; returns whethe
 def set_language(
     profile: Profile, lang: str, chosen: bool, commons: any = None
 ) -> bool {
+    if chosen {
+        profile.language_defaulted = True;
+    }
     if profile.preferred_language == lang and (profile.language_chosen or not chosen) {
         return False;
     }
@@ -84,16 +88,19 @@ def set_language(
 }
 
 """Make `lang` the default language of `profile` (the caller's, if None) unless the student
-already chose one (R29). Only pilot languages apply, and this never sets the chosen flag.
-Returns whether the language was applied."""
+already chose one (R29). Only the first message counts: once a default has been considered (or
+the student chose), later messages never change the language. Only pilot languages apply, and
+this never sets the chosen flag. Returns whether the language was applied."""
 def default_language_from(
     lang: str, profile: Profile | None = None, commons: any = None
 ) -> bool {
     code = lang.strip().lower();
     p = profile if profile is not None else my_profile();
-    if p.language_chosen
-        or code not in PILOT_LANGUAGES
-        or p.preferred_language == code {
+    if p.language_chosen or p.language_defaulted {
+        return False;
+    }
+    p.language_defaulted = True;
+    if code not in PILOT_LANGUAGES or p.preferred_language == code {
         return False;
     }
     set_language(p, code, False, commons);
