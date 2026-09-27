@@ -4,7 +4,7 @@ message. Closed chats are read-only."""
 
 import from ui.tokens { color, space }
 import from ui.components.base { AppShell, Button, Card, Badge, Field }
-import from market.screens.common { MarketTabs, query_param, go, ReportBox }
+import from market.screens.common { MarketTabs, query_param, go, ReportBox, ui_labels }
 import from market.moderation { report_chat, block_in_chat }
 import from market.connect {
     list_my_chats,
@@ -16,6 +16,7 @@ import from market.connect {
     SendResult
 }
 import from market.feed { heartbeat }
+import from core.profile { get_my_profile, ProfileView }
 
 glob THREAD_POLL_MS: int = 4000;
 
@@ -77,18 +78,79 @@ impl ChatList.load -> None {
     loaded = True;
 }
 
+"""One chat bubble. A message shown in the reader's language by AI translation carries the
+AI-translated label and a See original toggle (local state only); `lang` is set to the language
+actually shown."""
+def:pub MessageBubble(m: MessageView) -> JsxElement {
+    has show_original: bool = False;
+
+    L = ui_labels(m.language);
+    <div
+        style={{
+            "alignSelf": "flex-end" if m.mine else "flex-start",
+            "maxWidth": "80%",
+            "display": "flex",
+            "flexDirection": "column",
+            "gap": space("1"),
+            "padding": space("2") + " " + space("3"),
+            "borderRadius": "16px",
+            "background": color("action") if m.mine else color("card"),
+            "color": color("on-action") if m.mine else color("text"),
+            "border": "1px solid " + color("border")
+        }}
+    >
+        <span lang={m.language or None}>{m.text}</span>
+        {(
+            <div
+                style={{
+                    "display": "flex",
+                    "gap": space("2"),
+                    "alignItems": "center",
+                    "flexWrap": "wrap"
+                }}
+            >
+                <Badge kind="ai" label={L["ai_translated"]}/>
+                <Button
+                    label={L["hide_original"] if show_original else L["see_original"]}
+                    variant="text"
+                    onClick={lambda (e: MouseEvent) { show_original = not show_original; }}
+                />
+            </div>
+        )
+            if m.ai_translated
+            else None}
+        {(
+            <span
+                style={{
+                    "paddingLeft": space("2"),
+                    "borderLeft": "3px solid " + color("border-strong")
+                }}
+            >
+                {m.original}
+            </span>
+        )
+            if m.ai_translated and show_original
+            else None}
+    </div>
+}
+
 def:pub ChatScreen -> JsxElement {
     has chat_id: str = "",
         thread: ChatThread | None = None,
         draft: str = "",
-        error: str = "";
+        error: str = "",
+        sending: bool = False,
+        lang: str = "en";
 
     async def load -> None;
     async def sendIt(e: MouseEvent) -> None;
     async def blockThem -> None;
 
+    async def loadLanguage -> None;
+
     can with entry {
         chat_id = query_param("id");
+        loadLanguage();
         load();
         timer = setInterval(lambda { load(); }, THREAD_POLL_MS);  # jac:ignore[W2001]
         return lambda { clearInterval(timer); };  # jac:ignore[W2001]
@@ -114,20 +176,8 @@ def:pub ChatScreen -> JsxElement {
             if thread and thread.ok
             else None}
         {[
-            <div
-                key={str(i)}
-                style={{
-                    "alignSelf": "flex-end" if m.mine else "flex-start",
-                    "maxWidth": "80%",
-                    "padding": space("2") + " " + space("3"),
-                    "borderRadius": "16px",
-                    "background": color("action") if m.mine else color("card"),
-                    "color": color("on-action") if m.mine else color("text"),
-                    "border": "1px solid " + color("border")
-                }}
-            >
-                {m.text}
-            </div> for (i, m) in enumerate(thread.messages if thread else [])
+            <MessageBubble key={str(i)} m={m}/>
+            for (i, m) in enumerate(thread.messages if thread else [])
         ]}
         {(
             <Card>
@@ -136,7 +186,11 @@ def:pub ChatScreen -> JsxElement {
                     value={draft}
                     onChange={lambda (v: str) { draft = v; }}
                 />
-                <Button label="Send" disabled={not draft.strip()} onClick={sendIt}/>
+                <Button
+                    label={ui_labels(lang)["translating"] if sending else "Send"}
+                    disabled={sending or not draft.strip()}
+                    onClick={sendIt}
+                />
                 {<p role="alert" style={{"color": color("danger"), "margin": "0"}}>
                     {error}
                 </p>
@@ -180,9 +234,23 @@ impl ChatScreen.load -> None {
     thread = fresh;
 }
 
+"""The reader's language, for the Send button's "Translating…" label."""
+impl ChatScreen.loadLanguage -> None {
+    me: ProfileView | None = None;
+    me = await get_my_profile();
+    lang = me.preferred_language or "en";
+}
+
+"""Send the draft. The button shows "Translating…" and stays disabled until the server answers,
+so a slow translation cannot send the same message twice."""
 impl ChatScreen.sendIt(e: MouseEvent) -> None {
     result: SendResult | None = None;
+    if sending {
+        return;
+    }
+    sending = True;
     result = await send_message(chat_id, draft);
+    sending = False;
     if not result.ok {
         error = result.error;
         return;

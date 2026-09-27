@@ -3,6 +3,7 @@
 import from ui.tokens { color, space }
 import from ui.components.base { Badge, Button, Field }
 import from market.lifecycle { PostView }
+import from market.constants { LABELS }
 
 glob MARKET_TABS: list[tuple[str, str]] = [
          ("/market", "Matches"),
@@ -24,6 +25,51 @@ def:pub query_param(name: str) -> str {
 
 def:pub go(path: str) {
     window.location.assign(path);  # jac:ignore[E1032,W2001]
+}
+
+"""The draft-card and translation labels for `lang` (English outside the pilot languages).
+Reads the import-free LABELS table directly so the client never needs a server helper."""
+def:pub ui_labels(lang: str) -> dict[str, str] {
+    return LABELS[lang] if lang in LABELS else LABELS["en"];
+}
+
+"""A labeled <select> in the same style as Field."""
+def:pub Choice(
+    label: str,
+    value: str,
+    options: list[tuple[str, str]],
+    onChange: Callable[[str], None],
+    note: str = ""
+) -> JsxElement {
+    <label
+        style={{
+            "display": "flex",
+            "flexDirection": "column",
+            "gap": space("1"),
+            "fontSize": "14px",
+            "fontWeight": "600"
+        }}
+    >
+        {label}
+        <select
+            value={value}
+            onChange={lambda (e: ChangeEvent) { onChange(e.target.value); }}
+            style={{
+                "minHeight": "44px",
+                "padding": "0 " + space("2"),
+                "border": "1px solid " + color("border-strong"),
+                "borderRadius": "8px",
+                "background": color("card"),
+                "color": color("text"),
+                "fontSize": "16px"
+            }}
+        >
+            {[<option key={v} value={v}>{t}</option> for (v, t) in options]}
+        </select>
+        {<span style={{"color": color("warning"), "fontWeight": "400"}}>{note}</span>
+            if note
+            else None}
+    </label>
 }
 
 def price_text(p: PostView) -> str {
@@ -88,13 +134,19 @@ def:pub MarketTabs(active: str, unread: int = 0) -> JsxElement {
 }
 
 """Facts first (title, kind, price, dates, area, arrangement), then the poster's own words
-under "Seller says" (design rule 6), with the AI-generated label when AI wrote them."""
+under "Seller says" (design rule 6), with the AI-generated label when AI wrote them. A post
+shown in the reader's language by AI translation carries the AI-translated label and a See
+original toggle (local state only) revealing the poster's words. Text blocks set `lang` to the
+language actually shown so screen readers pronounce it correctly."""
 def:pub PostSummary(p: PostView) -> JsxElement {
+    has show_original: bool = False;
+
     facts = [
         x
         for x in [price_text(p), when_text(p), p.area]
         if x
     ];
+    L = ui_labels(p.language);
     <div style={{"display": "flex", "flexDirection": "column", "gap": space("1")}}>
         <div
             style={{
@@ -104,7 +156,9 @@ def:pub PostSummary(p: PostView) -> JsxElement {
                 "alignItems": "baseline"
             }}
         >
-            <strong style={{"fontSize": "18px"}}>{p.title}</strong>
+            <strong lang={p.language or None} style={{"fontSize": "18px"}}>
+                {p.title}
+            </strong>
             <span
                 style={{
                     "color": color("sub"),
@@ -133,11 +187,50 @@ def:pub PostSummary(p: PostView) -> JsxElement {
                 <strong>
                     {"Seller says: " if p.kind == "offer" else "They say: "}
                 </strong>
-                {p.description}{" "}
+                <span lang={p.language or None}>{p.description}</span>{" "}
                 {<Badge kind="ai" label="AI-generated"/> if p.ai_generated else None}
             </p>
         )
             if p.description
+            else None}
+        {(
+            <div
+                style={{
+                    "display": "flex",
+                    "gap": space("2"),
+                    "alignItems": "center",
+                    "flexWrap": "wrap"
+                }}
+            >
+                <Badge kind="ai" label={L["ai_translated"]}/>
+                <Button
+                    label={L["hide_original"] if show_original else L["see_original"]}
+                    variant="text"
+                    onClick={lambda (e: MouseEvent) { show_original = not show_original; }}
+                />
+            </div>
+        )
+            if p.ai_translated
+            else None}
+        {(
+            <div
+                lang={p.source_language or None}
+                style={{
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "gap": space("1"),
+                    "padding": space("2"),
+                    "borderLeft": "3px solid " + color("border-strong"),
+                    "color": color("text-2")
+                }}
+            >
+                <strong>{p.original_title}</strong>
+                {<span>{p.original_description}</span>
+                    if p.original_description
+                    else None}
+            </div>
+        )
+            if p.ai_translated and show_original
             else None}
     </div>
 }
