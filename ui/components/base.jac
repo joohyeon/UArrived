@@ -348,58 +348,149 @@ glob NAV_ITEMS: list[tuple[str, str]] = [
          ("events", "Events"),
          ("market", "Market"),
          ("profile", "Profile")
-     ];
+     ],
+     # Stroke icon (24px viewBox path) per nav item; the label always sits beside it.
+     NAV_ICONS: dict[str, str] = {
+         "today": "M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z",
+         "journey": "M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14",
+         "events": "M4 5h16v15H4V5zM4 9h16M8 3v4M16 3v4",
+         "market": "M6 7h12l-1 13H7L6 7zM9 7a3 3 0 0 1 6 0",
+         "profile": "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0"
+     };
 
-"""The app frame: top bar with the wordmark and urgent help, the screen, and bottom navigation.
-`active` is the NAV_ITEMS key of the current section. `wide` raises the content column from the
-default 720px (a single reading/form column) to SIZE["content-max"] (1200px) for screens whose
-content is a grid of cards or a list+detail pair, so tablet/desktop don't sit in a narrow strip
-with empty margins on either side."""
+"""Shell rules inline styles can't express: header links on wide screens, a bottom tab bar with
+icons on phones (kept clear of the home indicator)."""
+def:pub ShellStyles -> JsxElement {
+    css = (
+        ".as-topnav{display:none}"
+        + ".as-tabbar{display:grid}"
+        + ".as-main{padding-bottom:88px}"
+        + "@media (min-width: 900px){"
+        + ".as-topnav{display:flex}"
+        + ".as-tabbar{display:none}"
+        + ".as-main{padding-bottom:48px}"
+        + "}"
+    );
+    <style>{css}</style>
+}
+
+def:pub NavIcon(item: str) -> JsxElement {
+    <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+    >
+        <path d={NAV_ICONS.get(item, "")}/>
+    </svg>
+}
+
+"""The app frame: a header with the wordmark, section links (wide screens) and Urgent help; the
+screen title and content; and a bottom tab bar with icons on phones. `active` is the NAV_ITEMS key
+of the current section. `wide` raises the content column from 760px (a reading/form column) to
+SIZE["content-max"] (1200px) for card grids or list+detail screens; the header aligns to it."""
 def:pub AppShell(
     title: str, active: str, children: any = None, wide: bool = False
 ) -> JsxElement {
+    column = px(SIZE["content-max"]) if wide else "760px";
     <div
         style={{
             "minHeight": "100vh",
             "display": "flex",
             "flexDirection": "column",
-            "background": color("ground")
+            "background": color("canvas")
         }}
     >
         <BaseStyles/>
+        <ShellStyles/>
         <header
             style={{
-                "display": "flex",
-                "alignItems": "center",
-                "justifyContent": "space-between",
-                "padding": space("2") + " " + space("4"),
-                "background": color("ground"),
+                "position": "sticky",
+                "top": "0",
+                "zIndex": "20",
+                "background": color("canvas"),
                 "borderBottom": "1px solid " + color("border")
             }}
         >
-            <span
+            <div
                 style={{
-                    "fontFamily": FONTS["display"],
-                    "fontSize": "22px",
-                    "fontWeight": "700",
-                    "color": color("action")
+                    "maxWidth": column,
+                    "margin": "0 auto",
+                    "padding": space("2") + " " + space("4"),
+                    "boxSizing": "border-box",
+                    "display": "flex",
+                    "alignItems": "center",
+                    "gap": space("6")
                 }}
             >
-                UMadeIt
-            </span>
-            <HelpButton/>
+                <a
+                    href="/today"
+                    style={{
+                        "fontFamily": FONTS["display"],
+                        "fontSize": "22px",
+                        "fontWeight": "700",
+                        "color": color("action"),
+                        "textDecoration": "none",
+                        "marginRight": "auto"
+                    }}
+                >
+                    UMade
+                    <span style={{"color": color("coral-ink")}}>It</span>
+                </a>
+                <nav
+                    aria-label="Main"
+                    className="as-topnav"
+                    style={{"gap": space("1")}}
+                >
+                    {[
+                        <a
+                            key={key}
+                            href={"/" + key}
+                            aria-current={"page" if key == active else None}
+                            style={{
+                                "minHeight": px(SIZE["touch-min"]),
+                                "display": "inline-flex",
+                                "alignItems": "center",
+                                "padding": "0 " + space("3"),
+                                "borderRadius": px(RADIUS["pill"]),
+                                "textDecoration": "none",
+                                "fontSize": "15px",
+                                "fontWeight": "700" if key == active else "500",
+                                "background": color("card")
+                                    if key == active
+                                    else "transparent",
+                                "boxShadow": ("inset 0 0 0 1px " + color("border"))
+                                    if key == active
+                                    else "none",
+                                "color": color("action")
+                                    if key == active
+                                    else color("text-2")
+                            }}
+                        >
+                            {label}
+                        </a> for (key, label) in NAV_ITEMS
+                    ]}
+                </nav>
+                <HelpButton/>
+            </div>
         </header>
         <main
+            className="as-main"
             style={{
                 "flexGrow": "1",
                 "width": "100%",
-                "maxWidth": px(SIZE["content-max"]) if wide else "720px",
+                "maxWidth": column,
                 "margin": "0 auto",
                 "boxSizing": "border-box",
-                "padding": space("4"),
+                "padding": space("6") + " " + space("4"),
                 "display": "flex",
                 "flexDirection": "column",
-                "gap": space("3")
+                "gap": space("4")
             }}
         >
             <h1
@@ -418,11 +509,15 @@ def:pub AppShell(
         </main>
         <nav
             aria-label="Main"
+            className="as-tabbar"
             style={{
-                "position": "sticky",
+                "position": "fixed",
+                "left": "0",
+                "right": "0",
                 "bottom": "0",
-                "display": "grid",
-                "gridTemplateColumns": "repeat(5, minmax(0, 1fr))",
+                "zIndex": "20",
+                "gridTemplateColumns": f"repeat({len(NAV_ITEMS)}, minmax(0, 1fr))",
+                "padding": "0 0 env(safe-area-inset-bottom)",
                 "background": color("card"),
                 "borderTop": "1px solid " + color("border")
             }}
@@ -433,16 +528,21 @@ def:pub AppShell(
                     href={"/" + key}
                     aria-current={"page" if key == active else None}
                     style={{
-                        "minHeight": px(SIZE["touch-min"] + 4),
+                        "minHeight": "60px",
                         "display": "flex",
+                        "flexDirection": "column",
                         "alignItems": "center",
                         "justifyContent": "center",
+                        "gap": "2px",
                         "textDecoration": "none",
                         "fontSize": "12px",
                         "fontWeight": "700" if key == active else "500",
-                        "color": color("action") if key == active else color("sub")
+                        "color": color("action") if key == active else color("sub"),
+                        "borderTop": "3px solid "
+                            + (color("coral") if key == active else "transparent")
                     }}
                 >
+                    <NavIcon item={key}/>
                     {label}
                 </a> for (key, label) in NAV_ITEMS
             ]}

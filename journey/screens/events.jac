@@ -29,11 +29,6 @@ def:pub interest_line(count: int) -> str {
         );
 }
 
-def:pub event_when(e: EventView) -> str {
-    when = e.date + (" " + e.time if e.time else "");
-    return when + (" – " + e.time_end if e.time_end else "");
-}
-
 """The soonest event in `events` whose category is in `interests`, or None if none match. Mirrors
 journey.events.best_match() exactly, but is defined here (not imported): that copy is a plain
 (non-`:pub`) function, so it can't bridge to client code, and journey.events also imports
@@ -69,7 +64,7 @@ def:pub EventHero(
             {<Badge kind="progress" label="Free"/> if e.free else None}
         </div>
         <strong style={text_style("stage-title")}>{tx(e.title)}</strong>
-        <span style={{** small, "color": color("text-2")}}>{event_when(e)}</span>
+        <span style={{** small, "color": color("text-2")}}>{e.when}</span>
         <span style={{** small, "color": color("sub")}}>
             {"Online" if e.virtual else e.location}
         </span>
@@ -138,7 +133,7 @@ def:pub EventCard(
             {<Badge kind="progress" label="Free"/> if e.free else None}
         </div>
         <strong style={text_style("card-title")}>{tx(e.title)}</strong>
-        <span style={{** small, "color": color("text-2")}}>{event_when(e)}</span>
+        <span style={{** small, "color": color("text-2")}}>{e.when}</span>
         <span style={{** small, "color": color("sub")}}>
             {"Online" if e.virtual else e.location}
         </span>

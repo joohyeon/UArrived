@@ -2,6 +2,7 @@
 
 import from ui.tokens { color, space }
 import from ui.components.base { Badge, Button, Field }
+import from ui.components.blocks { TabStrip }
 import from market.lifecycle { PostView }
 import from market.constants { labels_for }
 
@@ -96,34 +97,11 @@ def:pub when_text(p: PostView) -> str {
 
 """The market's own tab bar. Groups is the landing tab; the feed comes last."""
 def:pub MarketTabs(active: str, unread: int = 0) -> JsxElement {
-    <nav
-        aria-label="Market"
-        style={{"display": "flex", "gap": space("2"), "flexWrap": "wrap"}}
-    >
-        {[
-            <a
-                key={path}
-                href={path}
-                aria-current={"page" if path == active else None}
-                style={{
-                    "padding": "6px 12px",
-                    "borderRadius": "999px",
-                    "textDecoration": "none",
-                    "fontWeight": "700" if path == active else "400",
-                    "background": color("card") if path == active else "none",
-                    "border": "1px solid "
-                        + (
-                            color("border-strong")
-                                if path == active
-                                else color("border")
-                        ),
-                    "color": color("text")
-                }}
-            >
-                {label + (f" ({unread})" if path == "/market" and unread > 0 else "")}
-            </a> for (path, label) in MARKET_TABS
-        ]}
-    </nav>
+    items = [
+        (path, label + (f" ({unread})" if path == "/market" and unread > 0 else ""))
+        for (path, label) in MARKET_TABS
+    ];
+    <TabStrip items={items} active={active} label="Market"/>
 }
 
 """The AI-translated label and a See original toggle (local state only) for text shown in `lang`
