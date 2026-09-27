@@ -21,19 +21,19 @@ def my_interests_node -> Interests | None {
 }
 
 """The caller's picked interest categories, or [] if they've never set any."""
-def my_interests -> list[str] {
+def:protect my_interests -> list[str] {
     rec = my_interests_node();
     return rec.categories if rec else [];
 }
 
 """True once the caller has picked interests."""
-def has_interests -> bool {
+def:protect has_interests -> bool {
     return my_interests_node() is not None;
 }
 
 """Set the caller's interests to `categories` (filtered to known EVENT_CATEGORIES), overwriting
 any previous pick rather than accumulating a second node. Returns what was actually saved."""
-def set_interests(categories: list[str]) -> list[str] {
+def:protect set_interests(categories: list[str]) -> list[str] {
     valid = [
         c
         for c in categories

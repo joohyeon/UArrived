@@ -23,6 +23,7 @@ import from journey.walkers {
 }
 import from journey.events { upcoming_events, preview_events }
 import from journey.events_refresh { scheduled_events_refresh }
+import from journey.interests { my_interests, has_interests, set_interests }
 import from journey.guide { ask_about_task, translate_journey_texts }
 import from market.decide { help_me_decide }
 import from market.themes {
@@ -100,6 +101,7 @@ import from journey.screens.task { TaskDetail }
 import from journey.screens.ask { AskGuide }
 import from journey.screens.events { Events }
 import from journey.screens.onboarding { Onboarding }
+import from journey.screens.interests { InterestsGate }
 
 """Path-based routing; every market page also works as a direct link (e.g. from an email)."""
 def:pub app -> JsxElement {
@@ -113,7 +115,7 @@ def:pub app -> JsxElement {
     if (
         path.startswith("/market")
         or path.startswith("/journey")
-        or path in ["/today", "/profile", "/onboarding"]
+        or path in ["/today", "/profile", "/onboarding", "/interests"]
     )
         and not jacIsLoggedIn() {
         return <Welcome/>;
@@ -132,6 +134,9 @@ def:pub app -> JsxElement {
     }
     if path == "/onboarding" {
         return <Onboarding/>;
+    }
+    if path == "/interests" {
+        return <InterestsGate/>;
     }
     if path == "/journey" {
         return <JourneyHome/>;

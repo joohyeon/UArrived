@@ -10,6 +10,7 @@ import from journey.walkers { my_journey, JourneySummary }
 import from journey.screens.journey { TaskListCard }
 import from core.profile { get_my_profile, ProfileView }
 import from journey.screens.common { go }
+import from journey.interests { has_interests }
 
 def:pub same_text(s: str) -> str {
     return s;
@@ -93,11 +94,20 @@ def:pub Today -> JsxElement {
     </AppShell>
 }
 
+"""Gated in sequence, not concurrently: the arrival wizard first (onboarding_done), then the
+one-time interest pick (has_interests) once that's done. Running both checks concurrently (each
+its own fire-and-forget async call) would race two navigations against each other for a brand new
+student who needs both."""
 impl Today.load -> None {
     profile: ProfileView | None = None;
     profile = await get_my_profile();
     if not profile.onboarding_done {
         go("/onboarding");
+        return;
+    }
+    got_interests: bool = await has_interests();
+    if not got_interests {
+        go("/interests?next=/today");
         return;
     }
     fresh: list[JourneyPrompt] = [];
