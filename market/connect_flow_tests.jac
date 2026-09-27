@@ -188,18 +188,14 @@ test "a chat closes when its post expires, with nothing written to the chat" {
         call(client, "connect", {"suggestion_id": sid});
         act_as(client, "mina@umich.edu");
         chat_id = call(client, "connect", {"suggestion_id": sid})["chat_id"];
-        act_as(client, "jae@umich.edu");
-        yesterday = (date.today() - timedelta(days=1)).isoformat();
-        assert call(
-            client,
-            "edit_post",
-            {"post_id": post_id, "changes": {"available_from": yesterday}}
-        )["ok"];
-        act_as(client, "mina@umich.edu");
+        os.environ["UARRIVED_TODAY"] = "2099-08-22";
         assert not call(client, "send_message", {"chat_id": chat_id, "text": "?"})[
             "ok"
         ];
+        chats = call(client, "list_my_chats", {});
+        assert len(chats) == 1 and not chats[0]["open"];
     } finally {
+        os.environ["UARRIVED_TODAY"] = "";
         client.close();
     }
 }

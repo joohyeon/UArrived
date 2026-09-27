@@ -32,8 +32,10 @@ jac guide                            # current, version-matched Jac reference gu
   in a `.jac` file passed to `jac test` explicitly.
 - Entry code goes in `with entry { ... }`.
 - **macOS: `jac install` fails with `_posixsubprocess ... symbol not found '_PyExc_MemoryError'`.** The
-  bundled Python exports no C-API symbols, so it can't build a venv. Create it first with
-  `python3.14 -m venv .jac/venv` (Homebrew), then `jac install` works. Linux/CI is unaffected.
+  bundled Python exports no C-API symbols, so it can't build a venv. `bash scripts/setup.sh` handles it
+  (creates `.jac/venv` with Homebrew Python 3.14, then `jac install`). Linux/CI is unaffected.
+- **Dates in tests:** server code gets today from `core/clock.jac`; set `UARRIVED_TODAY=YYYY-MM-DD` to move
+  time forward (e.g. to expire a post) instead of publishing past dates, which are refused.
 - Endpoints: `def:protect` / `walker:protect` = login required, runs on the caller's root; `:pub` = no
   login; `:priv` = not served at all. Only modules imported by `main.jac` are served.
 - **Endpoint gotcha: an omitted `str | None = None` parameter arrives as the string `"None"`** (bools are

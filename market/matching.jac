@@ -19,7 +19,8 @@ import from market.graph {
     all_posts,
     all_suggestions,
     blocked_keys,
-    pair_key
+    pair_key,
+    suspended_roots
 }
 
 glob MAX_SUGGESTIONS_PER_POST: int = 10,
@@ -40,10 +41,14 @@ def is_ride(p: Post) -> bool {
     return p.category == "service" and p.route_from != "" and p.route_to != "";
 }
 
-"""Canonical place name so 'DTW', 'Detroit Metro Airport' and 'the airport' compare equal."""
+"""Canonical place name so 'DTW' and 'Detroit Metro Airport' compare equal. Other airports stay
+distinct: a bare 'airport' is not assumed to be DTW."""
 def place(text: str) -> str {
     t = text.strip().lower();
-    if "dtw" in t or "detroit metro" in t or "airport" in t {
+    if "dtw" in t.split()
+        or "detroit metro" in t
+        or "detroit airport" in t
+        or "detroit wayne" in t {
         return "dtw";
     }
     if "ann arbor" in t or "campus" in t or "a2" == t {
@@ -194,10 +199,35 @@ def ordered(x: Post, y: Post) -> tuple[Post, Post] {
     return (x, y) if jid(x) < jid(y) else (y, x);
 }
 
+"""Re-check suggestions for `post` that one side has already accepted but that haven't connected:
+update their score and reasons to the current facts, or withdraw them if the pair no longer
+matches. Pending ones are rebuilt by run_matching; connected ones keep their open chat."""
+def recheck_half_accepted(post: Post, today: str) {
+    post_id = jid(post);
+    posts: dict[str, Post] = {jid(p): p for p in all_posts()};
+    for s in all_suggestions() {
+        if not involves(s, post_id) or s.withdrawn or s.declined or pending(s) {
+            continue;
+        }
+        if s.accepted_a and s.accepted_b {
+            continue;
+        }
+        other = posts.get(s.post_b if s.post_a == post_id else s.post_a);
+        m = match_pair(post, other, today) if other is not None else None;
+        if m is None {
+            s.withdrawn = True;
+        } else {
+            s.score = m.score;
+            s.reasons = m.reasons;
+        }
+    }
+}
+
 """Re-match `post` against every live post and create suggestions. Returns those created."""
 def run_matching(post: Post, today: str) -> list[Suggestion] {
     post_id = jid(post);
     withdraw_pending(post_id);
+    recheck_half_accepted(post, today);
     if post.suggestions_stopped or post_status(post, today) != "live" {
         return [];
     }
@@ -208,12 +238,14 @@ def run_matching(post: Post, today: str) -> list[Suggestion] {
         }
     }
     blocked = blocked_keys();
+    suspended = suspended_roots();
     found: list[tuple[int, str, Post, Match]] = [];
     for other in all_posts() {
         oid = jid(other);
         if oid == post_id
             or oid in taken
             or other.suggestions_stopped
+            or other.owner_root in suspended
             or pair_key(post.owner_root, other.owner_root) in blocked {
             continue;
         }
@@ -509,4 +541,11 @@ test "every reason is a fact present on the posts" {
     for r in m.reasons {
         assert r in ["Dates overlap", "$25 is within the $50 budget"];
     }
+}
+
+test "only DTW names count as DTW; other airports stay distinct" {
+    assert place("DTW") == "dtw" and place("Detroit Metro Airport") == "dtw";
+    assert place("O'Hare airport") != "dtw";
+    assert place("the airport") != "dtw";
+    assert place("Ann Arbor") == "ann arbor";
 }

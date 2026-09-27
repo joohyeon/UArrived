@@ -4,6 +4,7 @@ A suggestion's status is derived on read from its posts: if either post is done 
 suggestion is closed, with nothing written to it (the doc-review expiry-cascade fix).
 """
 
+import from core.clock { today_iso as clock_today }
 import from datetime { date }
 import from core.auth { verified_profile }
 import from market.graph { Post, Suggestion, post_status, all_posts, all_suggestions }
@@ -94,9 +95,9 @@ def:protect list_my_suggestions -> list[SuggestionView] {
     if verified_profile() is None {
         return [];
     }
-    return my_suggestions(date.today().isoformat());
+    return my_suggestions(clock_today());
 }
 
 def:protect stop_suggestions(post_id: str) -> bool {
-    return stop_for(post_id);
+    return verified_profile() is not None and stop_for(post_id);
 }

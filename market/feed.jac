@@ -3,10 +3,11 @@ requests and offers, using the same deterministic match score as suggestions. Se
 matches inbox; posts that fit nothing fall back to newest first.
 """
 
+import from core.clock { today_iso as clock_today }
 import from datetime { date, datetime, timezone }
 import from core.auth { verified_profile }
 import from core.profile { my_profile }
-import from market.graph { Post, post_status, all_posts }
+import from market.graph { Post, post_status, all_posts, visible_to }
 import from market.lifecycle { PostView, view_of }
 import from market.matching { match_pair }
 
@@ -45,8 +46,11 @@ def:protect for_you_feed -> list[PostView] {
     if verified_profile() is None {
         return [];
     }
-    today = date.today().isoformat();
-    return [view_of(p, today) for p in rank_feed(all_posts(), jid(root), today)];
+    today = clock_today();
+    return [
+        view_of(p, today)
+        for p in rank_feed(visible_to(all_posts(), jid(root)), jid(root), today)
+    ];
 }
 
 """A tiny write the client calls before each poll. Writes invalidate the client's 60-second read

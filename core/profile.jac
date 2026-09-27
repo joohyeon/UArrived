@@ -5,6 +5,9 @@ reads them to prompt and pre-fill posts (R12). Nothing here is marketplace-speci
 """
 
 import os;
+import from datetime { date }
+import from uuid { UUID }
+import from jaclang { JacRuntime as Jac }
 import from core.constants { ANN_ARBOR_AREAS }
 
 glob STUDENT_TYPES: list[str] = ["international", "out-of-state", "in-state"],
@@ -13,6 +16,7 @@ glob STUDENT_TYPES: list[str] = ["international", "out-of-state", "in-state"],
 node Profile {
     has display_name: str = "",
         umich_email: str = "",
+        pending_email: str = "",
         verified: bool = False,
         student_type: str = "",
         preferred_language: str = "en",
@@ -91,40 +95,54 @@ def my_profile -> Profile {
     return root ++> Profile();
 }
 
-"""A public record that this root belongs to a moderator, so new posts and reports can be shared
-with every moderator (U11). Readable by everyone; holds only a root id."""
-node ModeratorSeat {
-    has moderator_root: str;
-
+"""The moderators, as one access group (U11). Posts and reports are shared with the group once,
+at creation, and a moderator joins by an edge, so moderators added later (or re-listed) see every
+earlier post and report. Anyone may connect to it; membership is checked against
+UARRIVED_MODERATORS on every moderator call (sync_moderator_membership)."""
+node ModeratorGroup {
     def __jac_access__ -> AccessLevel | None {
-        return AccessLevel.READ;
+        return AccessLevel.CONNECT;
     }
 }
 
-"""Every moderator's root id, as seen from the commons."""
-def moderator_roots(commons: any = None) -> list[str] {
+edge ModeratorOf: Root --> ModeratorGroup {}
+
+def moderator_groups(commons: any = None) -> list[ModeratorGroup] {
     shared = commons if commons is not None else root.shared;
-    return list(
-        dict.fromkeys([m.moderator_root for m in [shared-->][?:ModeratorSeat]])
-    );
+    return [shared-->][?:ModeratorGroup];
 }
 
-"""Make sure the caller has a seat if (and only if) they are a moderator now."""
-def sync_moderator_seat(profile: Profile) {
-    me = jid(root);
-    seats = [
-        m
-        for m in [root.shared-->][?:ModeratorSeat]
-        if m.moderator_root == me
-    ];
-    if is_moderator(profile) and not seats {
-        root.shared ++> ModeratorSeat(moderator_root=me);
+"""The moderator group(s), creating one if none exists yet. Normally exactly one; if two
+requests race to create it, both are used everywhere so nothing is lost."""
+def ensure_moderator_groups -> list[ModeratorGroup] {
+    groups = moderator_groups();
+    if not groups {
+        root.shared ++> ModeratorGroup();
+        groups = moderator_groups();
     }
-    if not is_moderator(profile) {
-        for s in seats {
-            del s;
+    return groups;
+}
+
+"""Share `target` with every moderator, present and future."""
+def share_with_moderators(target: any, level: AccessLevel = AccessLevel.WRITE) {
+    for g in ensure_moderator_groups() {
+        Jac.allow_group(target, UUID(jid(g)), level);  # jac:ignore[E1053]
+    }
+}
+
+"""Join the moderator group(s) if the caller is a moderator now; leave them if not."""
+def sync_moderator_membership(profile: Profile) -> bool {
+    moderator = is_moderator(profile);
+    joined = [jid(g) for g in [root->:ModeratorOf:->]];
+    for g in ensure_moderator_groups() {
+        if moderator and jid(g) not in joined {
+            root +>:ModeratorOf():+> g;
+        }
+        if not moderator and jid(g) in joined {
+            del [edge root->:ModeratorOf:->g];
         }
     }
+    return moderator;
 }
 
 """Moderators are verified students whose email is listed in UARRIVED_MODERATORS (comma-separated)."""
@@ -162,18 +180,15 @@ def valid_date(value: str) -> bool {
     if value == "" {
         return True;
     }
-    parts = value.split("-");
-    if len(parts) != 3
-        or len(parts[0]) != 4
-        or len(parts[1]) != 2
-        or len(parts[2]) != 2 {
+    if len(value) != 10 or value[4] != "-" or value[7] != "-" {
         return False;
     }
-    if not (parts[0].isdigit() and parts[1].isdigit() and parts[2].isdigit()) {
+    try {
+        date.fromisoformat(value);
+    } except ValueError {
         return False;
     }
-    (month, day) = (int(parts[1]), int(parts[2]));
-    return 1 <= month <= 12 and 1 <= day <= 31;
+    return True;
 }
 
 """True for "" (unset) or a 24-hour time written HH:MM."""
@@ -315,6 +330,9 @@ def:protect update_my_profile(changes: dict[str, any]) -> ProfileUpdateResult {
 }
 
 test "dates and times accept only well-formed values or empty" {
+    assert not valid_date("2026-02-30")
+        and not valid_date("2026-04-31")
+        and valid_date("2028-02-29");
     assert valid_date("") and valid_date("2026-08-20");
     assert not valid_date("2026-8-20");
     assert not valid_date("2026-13-01");

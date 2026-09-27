@@ -8,6 +8,7 @@ come from Mailbox records on the commons, so the sweep never reads private profi
 The sweep only fires under `jac run --serve` with [scale.scheduler] enabled.
 """
 
+import from core.clock { today_iso as clock_today }
 import os;
 import from datetime { date }
 import from interop.email_sender { send }
@@ -87,7 +88,7 @@ def digest_body(items: list[Pending]) -> str {
     lines.extend(
         [
             "",
-            f"Open your matches to connect: {base}/",
+            f"Open your matches to connect: {base}/market",
             "",
             "Turn these emails off in Profile."
         ]
@@ -140,7 +141,7 @@ def sweep(today: str, commons: any = None) -> int {
 
 @schedule(trigger=ScheduleTrigger.STATIC, interval=NOTIFY_INTERVAL_SECONDS)
 def email_sweep {
-    sweep(date.today().isoformat());
+    sweep(clock_today());
 }
 
 """How many of the caller's suggestions are unread (the inbox badge)."""
@@ -184,9 +185,12 @@ def:protect unread_suggestions -> int {
     if verified_profile() is None {
         return 0;
     }
-    return unread_count(date.today().isoformat());
+    return unread_count(clock_today());
 }
 
 def:protect mark_suggestions_seen(suggestion_ids: list[str]) -> int {
+    if verified_profile() is None {
+        return 0;
+    }
     return mark_seen(suggestion_ids);
 }

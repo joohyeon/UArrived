@@ -5,10 +5,7 @@ Hackathon project, built mostly in [Jac](https://jaclang.org/) (with Python wher
 ## Setup
 
 ```bash
-# macOS only, once per clone: jac 0.37.23's bundled Python can't create venvs
-# (`_posixsubprocess ... symbol not found`), so create it with Homebrew Python 3.14 first:
-python3.14 -m venv .jac/venv
-jac install                # npm + Python deps for the web app
+bash scripts/setup.sh      # installs deps; on macOS also works around jac 0.37's venv bug
 UARRIVED_DEV_MODE=1 jac run main.jac   # app on :8000, API on :8001; dev mode skips email
 
 curl -fsSL https://jaclang.org/install.sh | bash -s -- --version 0.37.23   # NOT pip: PyPI stops at 0.16

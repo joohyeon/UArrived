@@ -101,7 +101,9 @@ def:pub MatchesInbox -> JsxElement {
                     )}
                 <div style={{"display": "flex", "gap": space("2"), "flexWrap": "wrap"}}>
                     <ReportBox
-                        onSubmit={lambda (r: str) { report_post(s.other_post.id, r); }}
+                        onSubmit={lambda (r: str) { return report_post(
+                            s.other_post.id, r
+                        ); }}
                     />
                     <Button
                         label="Block"

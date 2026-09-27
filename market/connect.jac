@@ -9,6 +9,7 @@ A chat is closed whenever its suggestion is (either post done or expired): read-
 read, nothing written.
 """
 
+import from core.clock { today_iso as clock_today }
 import from datetime { date, datetime, timezone }
 import from uuid { UUID }
 import from jaclang { JacRuntime as Jac }
@@ -63,7 +64,7 @@ obj SendResult {
 }
 
 def today_iso -> str {
-    return date.today().isoformat();
+    return clock_today();
 }
 
 def now_iso -> str {
@@ -259,7 +260,7 @@ def:protect connect(suggestion_id: str) -> ConnectResult {
 }
 
 def:protect decline(suggestion_id: str) -> bool {
-    return decline_suggestion(suggestion_id);
+    return verified_profile() is not None and decline_suggestion(suggestion_id);
 }
 
 def:protect list_my_chats -> list[ChatView] {
@@ -270,9 +271,19 @@ def:protect list_my_chats -> list[ChatView] {
 }
 
 def:protect read_chat(chat_id: str) -> ChatThread {
+    if verified_profile() is None {
+        return ChatThread(
+            ok=False, error="Verify your UMich email to use the marketplace."
+        );
+    }
     return read_thread(chat_id);
 }
 
 def:protect send_message(chat_id: str, text: str) -> SendResult {
+    if verified_profile() is None {
+        return SendResult(
+            ok=False, error="Verify your UMich email to use the marketplace."
+        );
+    }
     return send(chat_id, text);
 }
