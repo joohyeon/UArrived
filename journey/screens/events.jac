@@ -9,6 +9,7 @@ import from ui.components.blocks { Chip, SegmentedControl, SectionLabel }
 import from ui.components.map { MapCanvas }
 import from journey.constants { EVENT_CATEGORIES, ANN_ARBOR_BOUNDS, CAMPUS_CENTER }
 import from journey.events { upcoming_events, EventView }
+import from journey.interests { my_interests }
 import from journey.guide { translate_journey_texts }
 import from journey.screens.common { query_param }
 
@@ -17,10 +18,92 @@ def:pub event_when(e: EventView) -> str {
     return when + (" – " + e.time_end if e.time_end else "");
 }
 
-def:pub EventCard(e: EventView, tx: Callable[[str], str]) -> JsxElement {
+"""The soonest event in `events` whose category is in `interests`, or None if none match. Mirrors
+journey.events.best_match() exactly, but is defined here (not imported) because that module also
+carries server-private globals (EVENT_FILE's clock/venue-map imports); importing any plain value
+from it into client code would pull the whole module into the browser bundle and fail to build
+(the E5082 client-bundle rule -- see CLAUDE.md)."""
+def:pub best_match(events: list[EventView], interests: list[str]) -> EventView | None {
+    for e in events {
+        if e.category in interests {
+            return e;
+        }
+    }
+    return None;
+}
+
+"""The soonest matching pick for the student, shown above the list. `is_match` is False when
+nothing matched their interests and this is just the soonest event overall -- no "For you" badge
+in that case (AE2)."""
+def:pub EventHero(
+    e: EventView, tx: Callable[[str], str], is_match: bool
+) -> JsxElement {
     small = text_style("small");
     <Card>
         <div style={{"display": "flex", "gap": space("2"), "flexWrap": "wrap"}}>
+            {<Badge kind="action" label="For you"/> if is_match else None}
+            <Badge kind="neutral" label={tx(e.category)}/>
+            {<Badge kind="progress" label="Free"/> if e.free else None}
+        </div>
+        <strong style={text_style("stage-title")}>{tx(e.title)}</strong>
+        <span style={{** small, "color": color("text-2")}}>{event_when(e)}</span>
+        <span style={{** small, "color": color("sub")}}>
+            {"Online" if e.virtual else e.location}
+        </span>
+        {(
+            <details>
+                <summary
+                    style={{
+                        ** text_style("meta"),
+                        "cursor": "pointer",
+                        "minHeight": "44px"
+                    }}
+                >
+                    About this event
+                </summary>
+                <p
+                    style={{
+                        ** small,
+                        "color": color("text-2"),
+                        "whiteSpace": "pre-wrap"
+                    }}
+                >
+                    {e.summary}
+                </p>
+                {<p style={{** small, "color": color("sub")}}>{"Cost: " + e.cost}</p>
+                    if e.cost
+                    else None}
+                {<p style={{** small, "color": color("sub")}}>{e.sponsor}</p>
+                    if e.sponsor
+                    else None}
+            </details>
+        )
+            if e.summary
+            else None}
+        {(
+            <a
+                href={e.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={text_style("meta")}
+            >
+                Official event page
+            </a>
+        )
+            if e.url
+            else None}
+    </Card>
+}
+
+def:pub EventCard(
+    e: EventView, tx: Callable[[str], str], interests: list[str]
+) -> JsxElement {
+    small = text_style("small");
+    <Card>
+        <div style={{"display": "flex", "gap": space("2"), "flexWrap": "wrap"}}>
+            {<Badge kind="action" label="For you"/>
+                if e.category in interests
+                else None}
             <Badge kind="neutral" label={tx(e.category)}/>
             {<Badge kind="progress" label="Free"/> if e.free else None}
         </div>
@@ -76,6 +159,8 @@ def:pub EventCard(e: EventView, tx: Callable[[str], str]) -> JsxElement {
 
 def:pub Events -> JsxElement {
     has events: list[EventView] = [],
+        all_upcoming: list[EventView] = [],
+        interests: list[str] = [],
         loaded: bool = False,
         category: str = "All",
         free_only: bool = False,
@@ -84,10 +169,12 @@ def:pub Events -> JsxElement {
         words: dict[str, str] = {};
 
     async def load(cat: str, free: bool) -> None;
+    async def load_personalization -> None;
 
     can with entry {
         venue = query_param("venue");
         load("All", False);
+        load_personalization();
     }
 
     def tx(s: str) -> str {
@@ -106,10 +193,18 @@ def:pub Events -> JsxElement {
         load(category, now);
     }
 
+    # The hero is a fixed personalized spotlight, independent of the category/free filters below
+    # it -- computed from all_upcoming (always "All"/not-free-only), not the filtered `events`.
+    hero: EventView | None = best_match(all_upcoming, interests);
+    if hero is None and len(all_upcoming) > 0 {
+        hero = all_upcoming[0];
+    }
+    hero_is_match = hero is not None and hero.category in interests;
+
     shown = [
         e
         for e in events
-        if venue == "" or e.venue == venue
+        if (venue == "" or e.venue == venue) and (hero is None or e.eid != hero.eid)
     ];
     online = len(
         [
@@ -143,6 +238,9 @@ def:pub Events -> JsxElement {
     }
 
     <AppShell title="Events" active="events" wide={True}>
+        {<EventHero e={hero} tx={tx} is_match={hero_is_match}/>
+            if hero is not None
+            else None}
         <div
             role="group"
             aria-label="Category"
@@ -221,7 +319,10 @@ def:pub Events -> JsxElement {
             else None}
         {(
             <ResponsiveGrid min="300px">
-                {[<EventCard key={e.eid} e={e} tx={tx}/> for e in shown]}
+                {[
+                    <EventCard key={e.eid} e={e} tx={tx} interests={interests}/>
+                    for e in shown
+                ]}
             </ResponsiveGrid>
         )
             if view == "list"
@@ -247,4 +348,13 @@ impl Events.load(cat: str, free: bool) -> None {
         }
     }
     words = found;
+}
+
+impl Events.load_personalization -> None {
+    picks: list[str] = [];
+    picks = await my_interests();
+    interests = picks;
+    upcoming: list[EventView] = [];
+    upcoming = await upcoming_events("All", False);
+    all_upcoming = upcoming;
 }

@@ -269,6 +269,19 @@ def:pub preview_events(count: int = 3) -> list[EventView] {
     return preview_of(all_events(today_iso()), count);
 }
 
+"""The soonest event in `events` whose category is one of `interests`, or None if none match.
+`events` must already be date-sorted (as all_events()/upcoming_events() return them) -- the first
+match is therefore the soonest one. Deterministic tag matching, no ranking model (U5, plan
+2026-09-27-003)."""
+def best_match(events: list[EventView], interests: list[str]) -> EventView | None {
+    for e in events {
+        if e.category in interests {
+            return e;
+        }
+    }
+    return None;
+}
+
 test "events file parses into upcoming, deduplicated events in date order" {
     events = all_events("2026-09-27");
     assert len(events) > 20;
@@ -341,4 +354,33 @@ test "the public preview lists only in-person events with a source link, capped 
     assert [e.title for e in preview_of(events, 3)] == ["Film night"];
     assert len(preview_of(all_events("2026-09-27"), 50)) == 6;
     assert preview_of(events, -1) == [];
+}
+
+test "best_match picks the soonest event in an interest category, or None if none match" {
+    doc = {
+        "1": {
+            "event_title": "Film night",
+            "event_type": "Film",
+            "date_start": "2026-10-01",
+            "location_name": "Michigan Theater"
+        },
+        "2": {
+            "event_title": "Career Fair",
+            "event_type": "Career",
+            "date_start": "2026-10-02",
+            "location_name": "Pierpont Commons"
+        },
+        "3": {
+            "event_title": "Second Film",
+            "event_type": "Film",
+            "date_start": "2026-10-03",
+            "location_name": "State Theatre"
+        }
+    };
+    events = parse_events(doc, "2026-09-27");
+    arts_match = best_match(events, ["Arts"]);
+    careers_match = best_match(events, ["Careers"]);
+    assert arts_match is not None and arts_match.title == "Film night";
+    assert careers_match is not None and careers_match.title == "Career Fair";
+    assert best_match(events, ["Sports"]) is None;
 }
