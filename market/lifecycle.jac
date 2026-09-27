@@ -10,7 +10,7 @@ import from datetime { date, timedelta }
 import from core.auth { verified_profile }
 import from core.constants { ANN_ARBOR_AREAS }
 import from core.profile { valid_date, valid_time }
-import from market.constants { ARRANGEMENTS }
+import from market.constants { ARRANGEMENTS, CONDITIONS, GUESSABLE_FIELDS }
 import from market.graph {
     Post,
     KINDS,
@@ -310,6 +310,18 @@ def fields_of(post: Post) -> dict[str, any] {
     };
 }
 
+"""Pickup terms stated in a post's conditions ("Pickup only", "Can deliver"), or "" if none."""
+def pickup_from(constraints: list[str]) -> str {
+    text = " ".join(constraints).lower();
+    if "deliver" in text {
+        return "can deliver";
+    }
+    if "pickup" in text or "pick up" in text or "pick-up" in text {
+        return "pickup only";
+    }
+    return "";
+}
+
 """The caller's own post with this id, or None (unknown id, or someone else's post)."""
 def own_post(post_id: str) -> Post | None {
     for p in all_posts() {
@@ -376,6 +388,15 @@ def publish(
     # Checked here, against the final category, so an answer that changes the category can't
     # keep an item from another category's list. Not in EDITABLE: clients can't set it.
     post.item = standard_item(post.category, post.title, str(fields.get("item", "")));
+    condition = str(fields.get("condition", "")).strip().lower();
+    post.condition = condition if condition in CONDITIONS else "";
+    post.pickup = pickup_from(post.constraints);
+    # Remember which details the AI only inferred, so they show as guesses until confirmed.
+    post.inferred = [
+        f
+        for f in fields.get("inferred", [])
+        if f in GUESSABLE_FIELDS and fields_of(post).get(f, post.condition if f == "condition" else "")
+    ];
     grant(post, level=AccessLevel.READ);
     share_with_moderators(post);
     run_matching(post, today);

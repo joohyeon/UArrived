@@ -1,6 +1,9 @@
-"""Chats (R9, R11, R16): the list of connected pairs and one thread. Threads poll every few
-seconds through `heartbeat` (a write) so the client's 60-second read cache never hides a new
-message. Closed chats are read-only."""
+"""Private match threads (plan 2026-09-27-003): the list of the student's threads with their state,
+and one thread. A thread shows who can see it, the group message it came from, its status, and a
+labelled assistant panel: what each side offers or wants (AI guesses marked), what fits, what's
+still unknown, and suggested replies that only fill the composer. Reserving, marking sold, closing
+a request and leaving a thread each ask for confirmation first. Threads poll through `heartbeat`,
+paused while a send is in flight so the write can't conflict with it."""
 
 import from ui.tokens { color, space }
 import from ui.components.base { AppShell, Button, Card, Badge, Field, ResponsiveGrid }
@@ -11,23 +14,37 @@ import from market.screens.common {
     ReportBox,
     TranslatedNote
 }
-import from market.constants { labels_for }
 import from market.moderation { report_chat, block_in_chat }
-import from market.connect {
-    list_my_chats,
-    read_chat,
-    send_message,
-    ChatView,
-    ChatThread,
-    MessageView,
-    SendResult
+import from market.connect { MessageView, SendResult }
+import from market.threads {
+    list_threads,
+    get_thread,
+    thread_send,
+    thread_action,
+    ThreadItem,
+    ThreadView,
+    SideSummary,
+    ThreadResult
 }
 import from market.feed { heartbeat }
 
 glob THREAD_POLL_MS: int = 4000;
 
+def:pub state_badge(state: str) -> str {
+    if state == "completed" {
+        return "progress";
+    }
+    if state == "unavailable" or state == "reserved_other" {
+        return "neutral";
+    }
+    if state == "reserved" {
+        return "action";
+    }
+    return "warning" if state == "your_turn" else "neutral";
+}
+
 def:pub ChatList -> JsxElement {
-    has chats: list[ChatView] = [],
+    has threads: list[ThreadItem] = [],
         loaded: bool = False;
 
     async def load -> None;
@@ -38,20 +55,23 @@ def:pub ChatList -> JsxElement {
 
     <AppShell title="Chats" active="market" wide={True}>
         <MarketTabs active="/market/chats"/>
+        <p style={{"margin": "0", "color": color("sub")}}>
+            Private threads about a single item. Each one is visible only to you and the other student.
+        </p>
         {(
             <Card>
                 <p style={{"margin": "0"}}>
-                    No chats yet. A chat opens when you and another student both tap Connect on a match.
+                    No threads yet. Tap "I'm interested" on a Selling message or a match to start one.
                 </p>
             </Card>
         )
-            if loaded and len(chats) == 0
+            if loaded and len(threads) == 0
             else None}
         <ResponsiveGrid min="320px">
             {[
                 <a
-                    key={c.id}
-                    href={"/market/chat?id=" + c.id}
+                    key={t.id}
+                    href={"/market/chat?id=" + t.id}
                     style={{"textDecoration": "none", "color": color("text")}}
                 >
                     <Card>
@@ -62,39 +82,34 @@ def:pub ChatList -> JsxElement {
                                 "gap": space("2")
                             }}
                         >
-                            <strong>{c.other_post_title}</strong>
-                            {<Badge kind="warning" label="Closed"/>
-                                if not c.open
-                                else None}
+                            <strong>{t.title}</strong>
+                            <span style={{"color": color("sub"), "fontSize": "14px"}}>
+                                {"🔒 with " + t.other_name}
+                            </span>
                         </div>
-                        <span style={{"color": color("sub")}}>
-                            {("For your post: " + c.my_post_title)
-                                if c.my_post_title
-                                else "About their post"}
-                        </span>
+                        <Badge kind={state_badge(t.state)} label={t.state_label}/>
                         {<span style={{"color": color("text-2")}}>
-                            {c.last_message}
+                            {t.last_message}
                         </span>
-                            if c.last_message
+                            if t.last_message
                             else None}
                     </Card>
-                </a> for c in chats
+                </a> for t in threads
             ]}
         </ResponsiveGrid>
     </AppShell>
 }
 
 impl ChatList.load -> None {
-    fresh: list[ChatView] = [];
+    fresh: list[ThreadItem] = [];
     await heartbeat();
-    fresh = await list_my_chats();
-    chats = fresh;
+    fresh = await list_threads();
+    threads = fresh;
     loaded = True;
 }
 
 """One chat bubble. A message shown in the reader's language by AI translation carries the
-AI-translated label and a See original toggle (TranslatedNote); `lang` is set to the language
-actually shown."""
+AI-translated label and a See original toggle (TranslatedNote)."""
 def:pub MessageBubble(m: MessageView) -> JsxElement {
     <div
         style={{
@@ -121,15 +136,66 @@ def:pub MessageBubble(m: MessageView) -> JsxElement {
     </div>
 }
 
+"""One side of the deal as the assistant reads it: confirmed facts, AI guesses, unknowns."""
+def:pub SideBlock(s: SideSummary) -> JsxElement {
+    <div style={{"display": "flex", "flexDirection": "column", "gap": space("1")}}>
+        <span>
+            <strong>{s.name + " · " + s.role + ": "}</strong>
+            {s.title}
+        </span>
+        {<span style={{"fontSize": "14px"}}>{"Stated: " + s.confirmed}</span>
+            if s.confirmed
+            else None}
+        {(
+            <span style={{"fontSize": "14px", "color": color("sub")}}>
+                {"AI guess, not confirmed: " + s.guesses}
+            </span>
+        )
+            if s.guesses
+            else None}
+    </div>
+}
+
+"""The confirmation text for a thread action (M-R8): who gets told what."""
+def:pub confirm_text(action: str, t: ThreadView) -> str {
+    if action == "reserve" {
+        return f"Reserve \"{t.title}\" for {t.other_name}? {t.other_name} will see it's held for them. Other interested students will only see \"Reserved for another student\".";
+    }
+    if action == "release" {
+        return f"Release the reservation? \"{t.title}\" shows as available again.";
+    }
+    if action == "sell" {
+        return f"Mark \"{t.title}\" sold to {t.other_name}? This completes the thread. Other interested students will see \"Sold to another student\".";
+    }
+    if action == "found" {
+        return f"Close your request as found with {t.other_name}?";
+    }
+    return f"Close this thread? {t.other_name} won't be able to message you here any more.";
+}
+
+def:pub action_label(action: str, other: str) -> str {
+    return {
+        "reserve": "Reserve for " + other,
+        "release": "Release reservation",
+        "sell": "Mark sold to " + other,
+        "found": "I found it here",
+        "withdraw": "Close thread"
+    }.get(
+        action, action
+    );
+}
+
 def:pub ChatScreen -> JsxElement {
     has chat_id: str = "",
-        thread: ChatThread | None = None,
+        thread: ThreadView | None = None,
         draft: str = "",
         error: str = "",
-        sending: bool = False;
+        sending: bool = False,
+        confirming: str = "";
 
     async def load -> None;
     async def sendIt(e: MouseEvent) -> None;
+    async def doAction(e: MouseEvent) -> None;
     async def blockThem -> None;
 
     can with entry {
@@ -139,63 +205,179 @@ def:pub ChatScreen -> JsxElement {
         return lambda { clearInterval(timer); };  # jac:ignore[W2001]
     }
 
-    <AppShell
-        title={thread.chat.other_post_title if thread and thread.chat else "Chat"}
-        active="market"
-    >
+    t = thread if thread is not None else ThreadView(ok=False);
+    ok = t.ok;
+
+    <AppShell title={t.title if ok else "Thread"} active="market">
         <MarketTabs active="/market/chats"/>
         {<Card>
-            <p style={{"margin": "0"}}>{thread.error}</p>
+            <p style={{"margin": "0"}}>{t.error}</p>
         </Card>
-            if thread and not thread.ok
+            if thread is not None and not t.ok
             else None}
         {(
             <Card>
-                <p style={{"margin": "0", "color": color("sub"), "fontSize": "14px"}}>
-                    Meet somewhere public, bring a friend if you can, and never pay a deposit before you've seen a room or item. For rides, share your trip with someone you trust.
-                </p>
+                <strong>{"🔒 " + t.privacy}</strong>
+                <span style={{"color": color("sub"), "fontSize": "14px"}}>
+                    Other group members and other interested students can't see it.
+                </span>
+                {(
+                    <a
+                        href={"/market/g?id=" + t.group_id}
+                        style={{"color": color("text"), "fontSize": "14px"}}
+                    >
+                        {"From " + t.group_name + ": \"" + t.origin_text + "\""}
+                    </a>
+                )
+                    if t.group_id and t.origin_text
+                    else None}
+                <Badge kind={state_badge(t.state)} label={t.state_label}/>
             </Card>
         )
-            if thread and thread.ok
+            if ok
+            else None}
+        {(
+            <div
+                style={{
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "gap": space("2"),
+                    "padding": space("3"),
+                    "borderRadius": "16px",
+                    "background": color("ai-bg"),
+                    "border": "1px solid " + color("border")
+                }}
+            >
+                <Badge kind="ai" label="Assistant · for you only"/>
+                {<SideBlock s={t.offer}/> if t.offer else None}
+                {<SideBlock s={t.request}/> if t.request else None}
+                {(
+                    <div>
+                        <strong style={{"fontSize": "14px"}}>Why it fits</strong>
+                        <ul style={{"margin": "0", "paddingLeft": "20px"}}>
+                            {[<li key={f}>{f}</li> for f in t.fits]}
+                        </ul>
+                    </div>
+                )
+                    if len(t.fits) > 0
+                    else None}
+                {(
+                    <div>
+                        <strong style={{"fontSize": "14px"}}>Still unknown</strong>
+                        <ul style={{"margin": "0", "paddingLeft": "20px"}}>
+                            {[<li key={q}>{q}</li> for q in t.open_questions]}
+                        </ul>
+                    </div>
+                )
+                    if len(t.open_questions) > 0
+                    else None}
+                {(
+                    <div
+                        style={{
+                            "display": "flex",
+                            "flexDirection": "column",
+                            "gap": space("1")
+                        }}
+                    >
+                        <span style={{"fontSize": "14px", "color": color("sub")}}>
+                            Suggested replies: tap to edit, then send yourself.
+                        </span>
+                        <div
+                            style={{
+                                "display": "flex",
+                                "gap": space("1"),
+                                "flexWrap": "wrap"
+                            }}
+                        >
+                            {[
+                                <Button
+                                    key={r}
+                                    label={r}
+                                    variant="secondary"
+                                    onClick={lambda (e: MouseEvent) { draft = r; }}
+                                /> for r in t.suggestions
+                            ]}
+                        </div>
+                    </div>
+                )
+                    if len(t.suggestions) > 0 and t.can_send
+                    else None}
+            </div>
+        )
+            if ok
             else None}
         {[
             <MessageBubble key={str(i)} m={m}/>
-            for (i, m) in enumerate(thread.messages if thread else [])
+            for (i, m) in enumerate(t.messages if ok else [])
         ]}
         {(
             <Card>
                 <Field
-                    label="Message"
+                    label={"Message " + t.other_name}
                     value={draft}
                     onChange={lambda (v: str) { draft = v; }}
                 />
                 <Button
-                    label={labels_for(thread.language)["translating"]
-                        if sending
-                        else "Send"}
+                    label={"Sending..." if sending else "Send"}
                     disabled={sending or not draft.strip()}
                     onClick={sendIt}
                 />
-                {<p role="alert" style={{"color": color("danger"), "margin": "0"}}>
-                    {error}
-                </p>
-                    if error
-                    else None}
             </Card>
         )
-            if thread and thread.ok and thread.chat and thread.chat.open
+            if ok and t.can_send
+            else None}
+        {<p role="alert" style={{"color": color("danger"), "margin": "0"}}>{error}</p>
+            if error
             else None}
         {(
             <Card>
-                <p style={{"margin": "0"}}>
-                    This post is closed, so the chat is read-only.
-                </p>
+                {(
+                    <div
+                        style={{
+                            "display": "flex",
+                            "flexDirection": "column",
+                            "gap": space("2")
+                        }}
+                    >
+                        <span>{confirm_text(confirming, t)}</span>
+                        <div style={{"display": "flex", "gap": space("2")}}>
+                            <Button label="Confirm" onClick={doAction}/>
+                            <Button
+                                label="Cancel"
+                                variant="text"
+                                onClick={lambda (e: MouseEvent) { confirming = ""; }}
+                            />
+                        </div>
+                    </div>
+                )
+                    if confirming
+                    else (
+                        <div
+                            style={{
+                                "display": "flex",
+                                "gap": space("2"),
+                                "flexWrap": "wrap"
+                            }}
+                        >
+                            {[
+                                <Button
+                                    key={a}
+                                    label={action_label(a, t.other_name)}
+                                    variant={"text" if a == "withdraw" else "secondary"}
+                                    onClick={lambda (e: MouseEvent) { confirming = a; }}
+                                /> for a in t.actions
+                            ]}
+                        </div>
+                    )}
             </Card>
         )
-            if thread and thread.ok and thread.chat and not thread.chat.open
+            if ok and len(t.actions) > 0
             else None}
         {(
             <Card>
+                <p style={{"margin": "0", "color": color("sub"), "fontSize": "14px"}}>
+                    Meet somewhere public, bring a friend if you can, and never pay before you've seen the item. For rides, share your trip with someone you trust.
+                </p>
                 <ReportBox
                     onSubmit={lambda (r: str) { return report_chat(chat_id, r); }}
                     label="Report this conversation"
@@ -207,20 +389,21 @@ def:pub ChatScreen -> JsxElement {
                 />
             </Card>
         )
-            if thread and thread.ok
+            if ok
             else None}
     </AppShell>
 }
 
 impl ChatScreen.load -> None {
-    fresh: ChatThread | None = None;
+    fresh: ThreadView | None = None;
+    if sending {
+        return;
+    }
     await heartbeat();
-    fresh = await read_chat(chat_id);
+    fresh = await get_thread(chat_id);
     thread = fresh;
 }
 
-"""Send the draft. The button shows "Translating…" and stays disabled until the server answers,
-so a slow translation cannot send the same message twice."""
 impl ChatScreen.sendIt(e: MouseEvent) -> None {
     result: SendResult | None = None;
     if sending {
@@ -228,7 +411,7 @@ impl ChatScreen.sendIt(e: MouseEvent) -> None {
     }
     sending = True;
     try {
-        result = await send_message(chat_id, draft);
+        result = await thread_send(chat_id, draft);
     } except Exception {
         error = "Couldn't send that. Please try again.";
         return;
@@ -244,6 +427,18 @@ impl ChatScreen.sendIt(e: MouseEvent) -> None {
     }
     draft = "";
     error = "";
+    await load();
+}
+
+impl ChatScreen.doAction(e: MouseEvent) -> None {
+    result: ThreadResult | None = None;
+    action = confirming;
+    confirming = "";
+    result = await thread_action(chat_id, action);
+    if result is None {
+        return;
+    }
+    error = "" if result.ok else result.error;
     await load();
 }
 

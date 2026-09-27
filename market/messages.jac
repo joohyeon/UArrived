@@ -211,7 +211,10 @@ def fields_from(card: DraftCard, known: dict[str, str], text: str) -> dict[str, 
         "arrangement": known.get("arrangement", card.arrangement),
         "constraints": card.constraints,
         "language": card.language,
-        "item": card.item
+        "item": card.item,
+        "condition": card.condition,
+        # Fields the model inferred rather than read; the post keeps them marked as guesses.
+        "inferred": [g for g in card.guessed if g not in known] if card.ai_generated else []
     };
 }
 

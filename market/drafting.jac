@@ -51,7 +51,8 @@ obj DraftCard {
         description_en: str = "",
         constraints: list[str] = [],
         about_market: bool = True,
-        item: str = "";
+        item: str = "",
+        condition: str = "";
 }
 
 """`language` is the detected (or, for non-AI cards, the poster's profile) language; `draft`
@@ -216,7 +217,10 @@ def normalize(d: PostDraft) -> DraftCard {
             if c.strip()
         ][:5],
         about_market=d.about_market,
-        item=d.item.strip().lower()
+        item=d.item.strip().lower(),
+        condition=d.condition.strip().lower()
+            if d.condition.strip().lower() in ["new", "like new", "good", "fair"]
+            else ""
     );
 }
 
