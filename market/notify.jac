@@ -6,8 +6,8 @@ their new, unread, open suggestions (titles and reasons, never chat text), then 
 emailed. The student whose own post created a suggestion is never emailed about it. Addresses
 come from Mailbox records on the commons, so the sweep never reads private profiles; reasons are
 listed in the language copied onto each Mailbox (the student's profile language).
-Topic-group invites (plan 004 G-R8) count in the badge until answered and are emailed once, with
-the group's name and the reason; group chat messages never email.
+A suggestion notifies only when it rests on a fact (plan 2026-09-27-002 R14): at least one stated
+reason, or both posts are the same standard item. Group chat messages never email.
 The sweep only fires under `jac run --serve` with [scale.scheduler] enabled.
 """
 
@@ -28,8 +28,7 @@ import from market.graph {
     Reply
 }
 import from market.suggestions { suggestion_status }
-import from core.groups { ChatGroup }
-import from market.topics { Invite }
+import from market.items { standard_item }
 
 glob NOTIFY_INTERVAL_SECONDS: float = float(
          os.environ.get("UARRIVED_NOTIFY_INTERVAL", "600")
@@ -45,13 +44,27 @@ obj Pending {
         reason_codes: list[dict[str, any]] = [];
 }
 
+"""Whether a suggestion is worth telling anyone about (R14): a stated reason, or the same standard
+item on both posts. "Both are furniture" alone isn't."""
+def notifies(s: Suggestion, a: Post, b: Post) -> bool {
+    if s.reasons {
+        return True;
+    }
+    item = a.item or standard_item(a.category, a.title);
+    return item not in ["", "other"]
+        and item == (b.item or standard_item(b.category, b.title));
+}
+
 """Unread, un-emailed, open suggestions grouped by the student to notify, as of `today`."""
 def pending_by_student(today: str, commons: any = None) -> dict[str, list[Pending]] {
     posts: dict[str, Post] = {jid(p): p for p in all_posts(commons)};
     out: dict[str, list[Pending]] = {};
     for s in all_suggestions(commons) {
         (a, b) = (posts.get(s.post_a), posts.get(s.post_b));
-        if a is None or b is None or suggestion_status(s, a, b, today) != "open" {
+        if a is None
+            or b is None
+            or suggestion_status(s, a, b, today) != "open"
+            or not notifies(s, a, b) {
             continue;
         }
         if not (s.emailed_a or s.seen_a) {
@@ -215,60 +228,10 @@ def reply_sweep(commons: any = None) -> int {
     return sent;
 }
 
-"""One email per student listing new topic-group invites (group name and why they were invited)."""
-def invite_sweep(commons: any = None) -> int {
-    shared = commons_or_shared(commons);
-    boxes: dict[str, Mailbox] = {m.owner_root: m for m in [shared-->][?:Mailbox]};
-    names: dict[str, str] = {jid(g): g.name for g in [shared-->][?:ChatGroup]};
-    pending: dict[str, list[Invite]] = {};
-    for i in [shared-->][?:Invite] {
-        if i.status == "pending" and not i.emailed {
-            pending.setdefault(i.invitee_root, []).append(i);
-        }
-    }
-    base = os.environ.get("UARRIVED_PUBLIC_URL", "http://localhost:8000");
-    sent = 0;
-    for (student, items) in pending.items() {
-        box = boxes.get(student);
-        ok = False;
-        if box is not None and box.enabled {
-            lines = ["The UArrived assistant invited you to a group:", ""];
-            for i in items {
-                lines.append(f"- \"{names.get(i.group_id, 'A group')}\"");
-                lines.append(f"  {i.reason}");
-            }
-            lines.extend(
-                [
-                    "",
-                    f"Join or dismiss: {base}/market",
-                    "",
-                    "Turn these emails off in Profile."
-                ]
-            );
-            subject = "You're invited to a group on UArrived"
-                if len(items) == 1
-                else f"{len(items)} group invites on UArrived";
-            try {
-                ok = send(box.email, subject, "\n".join(lines));
-            } except Exception {
-                ok = False;
-            }
-            sent += 1 if ok else 0;
-        }
-        if ok or box is None or not box.enabled {
-            for i in items {
-                i.emailed = True;
-            }
-        }
-    }
-    return sent;
-}
-
 @schedule(trigger=ScheduleTrigger.STATIC, interval=NOTIFY_INTERVAL_SECONDS)
 def email_sweep {
     sweep(clock_today());
     reply_sweep();
-    invite_sweep();
 }
 
 """How many of the caller's suggestions are unread (the inbox badge)."""
@@ -277,8 +240,11 @@ def unread_count(today: str) -> int {
     posts: dict[str, Post] = {jid(p): p for p in all_posts()};
     n = 0;
     for s in all_suggestions() {
-        if suggestion_status(s, posts.get(s.post_a), posts.get(s.post_b), today)
-            != "open" {
+        (a, b) = (posts.get(s.post_a), posts.get(s.post_b));
+        if a is None
+            or b is None
+            or suggestion_status(s, a, b, today) != "open"
+            or not notifies(s, a, b) {
             continue;
         }
         if (s.root_a == me and not s.seen_a) or (s.root_b == me and not s.seen_b) {
@@ -290,13 +256,6 @@ def unread_count(today: str) -> int {
             r
             for r in all_replies()
             if r.to_root == me and r.kind in NOTIFY_REPLY_KINDS and not r.seen_by_to
-        ]
-    );
-    n += len(
-        [
-            i
-            for i in [root.shared-->][?:Invite]
-            if i.invitee_root == me and i.status == "pending"
         ]
     );
     return n;

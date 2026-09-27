@@ -1,5 +1,5 @@
 """Matches inbox: the market's landing screen (R8, R13, R21, R29). Suggestions with fact-only
-reasons (already in the reader's language), Connect / Not interested, and an unread badge. Polls
+reasons (already in the reader's language), Message privately / Not interested, and an unread badge. Polls
 while open. The language picker here stands in for a Profile screen setting until one exists: it
 saves `preferred_language`, which also clears the client read cache so the reload is localized."""
 
@@ -15,7 +15,8 @@ import from core.profile {
 import from market.screens.common { MarketTabs, PostSummary, go, ReportBox, Choice }
 import from market.moderation { report_post, block_in_suggestion }
 import from market.suggestions { list_my_suggestions, SuggestionView }
-import from market.connect { connect, decline, ConnectResult }
+import from market.connect { decline }
+import from market.themes { message_poster, ActionOutcome }
 import from market.notify { mark_suggestions_seen }
 import from market.feed { heartbeat }
 
@@ -28,7 +29,7 @@ def:pub MatchesInbox -> JsxElement {
         lang: str = "en";
 
     async def load -> None;
-    async def accept(sid: str) -> None;
+    async def accept(post_id: str) -> None;
     async def pass_on(sid: str) -> None;
     async def blockThem(sid: str) -> None;
     async def loadLanguage -> None;
@@ -102,8 +103,10 @@ def:pub MatchesInbox -> JsxElement {
                     {(
                         <div style={{"display": "flex", "gap": space("2")}}>
                             <Button
-                                label="Connect"
-                                onClick={lambda (e: MouseEvent) { accept(s.id); }}
+                                label="Message privately"
+                                onClick={lambda (e: MouseEvent) { accept(
+                                    s.other_post.id
+                                ); }}
                             />
                             <Button
                                 label="Not interested"
@@ -112,14 +115,8 @@ def:pub MatchesInbox -> JsxElement {
                             />
                         </div>
                     )
-                        if not s.i_accepted
-                        else (
-                            <p style={{"margin": "0", "color": color("sub")}}>
-                                {"You're connected: open Chats."
-                                    if s.status == "connected"
-                                    else "Waiting for them to connect too."}
-                            </p>
-                        )}
+                        if s.status == "open" or s.status == "connected"
+                        else None}
                     <div
                         style={{
                             "display": "flex",
@@ -180,18 +177,16 @@ impl MatchesInbox.chooseLanguage(code: str) -> None {
     await load();
 }
 
-impl MatchesInbox.accept(sid: str) -> None {
-    result: ConnectResult | None = None;
-    result = await connect(sid);
+"""Open a private chat with the other post's owner (plan 2026-09-27-002 R13)."""
+impl MatchesInbox.accept(post_id: str) -> None {
+    result: ActionOutcome | None = None;
+    result = await message_poster(post_id);
     if not result.ok {
         status = result.error;
-    } elif result.connected {
-        go("/market/chat?id=" + result.chat_id);
+        await load();
         return;
-    } else {
-        status = "Sent. You'll be able to chat once they connect too.";
     }
-    await load();
+    go("/market/chat?id=" + result.chat_id);
 }
 
 impl MatchesInbox.pass_on(sid: str) -> None {

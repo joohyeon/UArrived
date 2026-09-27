@@ -24,16 +24,16 @@ import from journey.walkers {
 import from journey.events { upcoming_events }
 import from journey.guide { ask_about_task, translate_journey_texts }
 import from market.decide { help_me_decide }
-import from market.topics {
-    my_groups,
-    my_group_invites,
+import from market.themes {
+    list_groups_for_me,
     group_view,
     post_in_group,
     answer_group_followup,
-    join_topic_group,
-    dismiss_topic_invite,
+    join_group,
+    leave_group,
+    untag_group_message,
     close_group_post,
-    leave_topic_group
+    message_poster
 }
 import from market.messages {
     send_market_message,
