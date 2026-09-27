@@ -121,7 +121,8 @@ node Suggestion {
         reply_id: str = "",
         open_token: str = "",
         language_a: str = "",
-        language_b: str = "";
+        language_b: str = "",
+        from_name: str = "";
 }
 
 """The private chat for one connected suggestion. Shared WRITE with exactly its two students;

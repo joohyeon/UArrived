@@ -1,34 +1,16 @@
-"""Group chats (plan 004 G1-G2): cohort groups every verified student belongs to, and topic groups
-the marketplace creates. Shared by both features, so it lives in core/.
+"""Group chats (plan 2026-09-27-002): the themed groups students browse and join. Shared by both
+features, so it lives in core/.
 
-Access: a group is a Jac access group. Members connect to it with a `MemberOf` edge, and each
-message is shared with the group once (`allow_group`), so joining or leaving touches no message.
-Non-members can't read a group's messages. A student can only see their own `MemberOf` edge, so
-each join also leaves a public `Membership` record: that is how anyone counts a group's members.
+Access: members connect to a group with a `MemberOf` edge; only members post (checked by callers).
+Every message is readable by every signed-in student (read-only preview), like posts. A student
+can only see their own `MemberOf` edge, so each join also leaves a public `Membership` record: that
+is how anyone counts a group's members.
 """
 
-import from uuid { UUID }
-import from jaclang { JacRuntime as Jac }
 import from core.clock { now_iso, now_precise }
-import from core.profile { Profile, my_profile }
+import from core.profile { my_profile }
 
-glob MONTHS: list[str] = [
-         "Jan",
-         "Feb",
-         "Mar",
-         "Apr",
-         "May",
-         "Jun",
-         "Jul",
-         "Aug",
-         "Sep",
-         "Oct",
-         "Nov",
-         "Dec"
-     ],
-     NEW_ARRIVALS_KEY: str = "cohort:new";
-
-"""A group chat. `kind` is "cohort" or "topic"; `key` identifies it for reuse."""
+"""A group chat. `kind` is "theme"; `key` identifies it for reuse ("theme:furniture")."""
 node ChatGroup {
     has kind: str,
         key: str,
@@ -53,19 +35,9 @@ node Membership {
     }
 }
 
-"""Public, content-free record that `member_root` left `group_id` at `left_at`. Lets the next
-matching post invite them back once (market/topics.jac)."""
-node LeftGroup {
-    has group_id: str,
-        member_root: str,
-        left_at: str;
-
-    def __jac_access__ -> AccessLevel | None {
-        return AccessLevel.READ;
-    }
-}
-
-"""One message in a group. `ai` marks the assistant's messages; `post_id` links a market post."""
+"""One message in a group. `ai` marks the assistant's messages. `post_ids` are the market posts
+filed from this message (its Buying/Selling tags) or, on an assistant note, the posts it points
+to. `untagged` is set when the author says the message was just chat."""
 node GroupMessage {
     has group_id: str,
         author_root: str,
@@ -74,21 +46,8 @@ node GroupMessage {
         created_at: str,
         ai: bool = False,
         post_id: str = "",
-        post_ids: list[str] = [];
-}
-
-def cohort_key(p: Profile) -> str {
-    return f"cohort:{p.arrival_date[:7]}"
-        if len(p.arrival_date) >= 7
-        else NEW_ARRIVALS_KEY;
-}
-
-def cohort_name(key: str) -> str {
-    if key == NEW_ARRIVALS_KEY or not key.startswith("cohort:") {
-        return "New arrivals";
-    }
-    (year, month) = key[7:].split("-");
-    return f"Arriving {MONTHS[int(month) - 1]} {year}";
+        post_ids: list[str] = [],
+        untagged: bool = False;
 }
 
 def all_groups(commons: any = None) -> list[ChatGroup] {
@@ -149,17 +108,6 @@ def leave(g: ChatGroup) {
             del m;
         }
     }
-    root.shared ++> LeftGroup(group_id=jid(g), member_root=me, left_at=now_precise());
-}
-
-"""When `member_root` last left `group_id` ("" if never)."""
-def last_left(group_id: str, member_root: str) -> str {
-    times = [
-        l.left_at
-        for l in [root.shared-->][?:LeftGroup]
-        if l.group_id == group_id and l.member_root == member_root
-    ];
-    return max(times) if times else "";
 }
 
 """Root ids of the group's members."""
@@ -182,20 +130,7 @@ def ensure_group(kind: str, key: str, name: str, reason: str = "") -> ChatGroup 
     );
 }
 
-"""Put the caller in their cohort group (by arrival month) and out of any other cohort group."""
-def sync_cohort(p: Profile) -> ChatGroup {
-    key = cohort_key(p);
-    for g in [root->:MemberOf:->] {
-        if g.kind == "cohort" and g.key != key {
-            leave(g);
-        }
-    }
-    g = ensure_group("cohort", key, cohort_name(key));
-    join(g);
-    return g;
-}
-
-"""Post a message in `g` as the caller, shared with the group's members. `post_ids` links several
+"""Post a message in `g` as the caller, readable by every signed-in student. `post_ids` links several
 posts (the first is also kept as `post_id`)."""
 def add_message(
     g: ChatGroup,
@@ -216,7 +151,7 @@ def add_message(
         post_id=ids[0] if ids else "",
         post_ids=ids
     );
-    Jac.allow_group(msg, UUID(jid(g)), AccessLevel.READ);  # jac:ignore[E1053]
+    grant(msg, level=AccessLevel.READ);
     return msg;
 }
 
@@ -228,11 +163,4 @@ def messages_in(group_id: str) -> list[GroupMessage] {
     ];
     msgs.sort(key=lambda (m: GroupMessage) -> str { return m.created_at; });
     return msgs;
-}
-
-test "cohorts follow the arrival month, or fall back to new arrivals" {
-    assert cohort_key(Profile(arrival_date="2026-08-20")) == "cohort:2026-08";
-    assert cohort_name("cohort:2026-08") == "Arriving Aug 2026";
-    assert cohort_key(Profile()) == "cohort:new"
-        and cohort_name("cohort:new") == "New arrivals";
 }

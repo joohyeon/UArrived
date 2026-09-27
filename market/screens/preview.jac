@@ -6,7 +6,7 @@ seeding the dev database. Same purpose as `ui/components/gallery.jac`'s `/ui`; r
 import from ui.components.base { AppShell, Card, Badge, ResponsiveGrid }
 import from market.screens.common { PostSummary }
 import from market.lifecycle { PostView }
-import from market.topics { GroupSummary, InviteView }
+import from market.themes { GroupSummary }
 import from market.connect { ChatView }
 import from market.suggestions { SuggestionView }
 import from market.moderation { ReportView }
@@ -83,38 +83,40 @@ glob PREVIEW_POSTS: list[PostView] = [
              "Kerrytown"
          )
      ],
-     PREVIEW_INVITES: list[InviteView] = [
-         InviteView(
-             id="inv1",
-             group_id="g1",
-             group_name="Fall '26 CS Majors",
-             reason="You both listed Computer Science as your major.",
-             members=14,
-             created_at="2026-09-01"
-         )
-     ],
      PREVIEW_GROUPS: list[GroupSummary] = [
          GroupSummary(
              id="g0",
-             kind="cohort",
-             name="Ann Arbor Fall '26 Arrivals",
+             key="furniture",
+             name="Furniture",
+             icon="🪑",
+             description="Desks, beds, mattresses, chairs, shelves and sofas.",
              members=212,
-             last_message="Anyone else landing at DTW on the 25th?",
+             member=True,
+             suggested=False,
+             last_message="Selling my IKEA desk, $30, pickup in Kerrytown",
              last_at="2026-09-20"
          ),
          GroupSummary(
              id="g1",
-             kind="topic",
-             name="Fall '26 CS Majors",
-             members=14,
-             last_message="Selling my old CS textbooks if anyone needs them.",
-             last_at="2026-09-19"
+             key="textbooks",
+             name="Textbooks",
+             icon="📚",
+             description="Course books, readers and study guides.",
+             members=48,
+             member=False,
+             suggested=False,
+             last_message="",
+             last_at=""
          ),
          GroupSummary(
              id="g2",
-             kind="topic",
-             name="South Quad Movers",
-             members=6,
+             key="moveout",
+             name="Move-out sales",
+             icon="📦",
+             description="Leaving Ann Arbor? Sell or give away everything in one place.",
+             members=96,
+             member=False,
+             suggested=True,
              last_message="",
              last_at=""
          )
@@ -173,18 +175,15 @@ def:pub MarketPreview -> JsxElement {
         <p style={{"margin": "0"}}>
             Mock data only, for checking the tablet/desktop grid layouts without a seeded database. Resize the window to see the column count change.
         </p>
-        <Section title="Groups (invites + groups)">
+        <Section title="Groups">
             <ResponsiveGrid min="320px">
                 {[
-                    <Card key={inv.id}>
-                        <strong>{inv.group_name}</strong>
-                        <Badge kind="ai" label="Assistant invite"/>
-                        <span>{inv.reason}</span>
-                    </Card> for inv in PREVIEW_INVITES
-                ]}{[
                     <Card key={g.id}>
-                        <strong>{g.name}</strong>
-                        <span>{g.last_message or "No messages yet."}</span>
+                        <strong>{g.icon + " " + g.name}</strong>
+                        {<Badge kind="action" label="Suggested for you"/>
+                            if g.suggested
+                            else None}
+                        <span>{g.last_message or g.description}</span>
                     </Card> for g in PREVIEW_GROUPS
                 ]}
             </ResponsiveGrid>

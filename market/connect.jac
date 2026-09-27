@@ -217,6 +217,19 @@ def chat_view(c: Chat, s: Suggestion, posts: dict[str, Post]) -> ChatView {
     mine_is_a = jid(root) == s.root_a;
     (a, b) = (posts.get(s.post_a), posts.get(s.post_b));
     msgs = sorted_messages(c);
+    if s.origin == "direct" {
+        # Started from "Message privately" on the poster's post (root_a); the asker has no post.
+        return ChatView(
+            id=jid(c),
+            open=suggestion_status(s, a, b, today_iso()) == "connected",
+            my_post_title=a.title if a and mine_is_a else "",
+            other_post_title=f"{s.from_name or 'A student'} messaged you"
+                if mine_is_a
+                else (a.title if a else ""),
+            last_message=message_view(msgs[-1], jid(root)).text if msgs else "",
+            last_at=msgs[-1].sent_at if msgs else c.created_on
+        );
+    }
     return ChatView(
         id=jid(c),
         open=suggestion_status(s, a, b, today_iso()) == "connected",

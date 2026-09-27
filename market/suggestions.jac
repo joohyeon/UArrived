@@ -35,7 +35,7 @@ def suggestion_status(
     if s.declined {
         return "declined";
     }
-    if s.origin == "reply" {
+    if s.origin in ["reply", "direct"] {
         if a is None or post_status(a, today) != "live" {
             return "closed";
         }
@@ -60,7 +60,7 @@ def my_suggestions(today: str, reader: str = "") -> list[SuggestionView] {
             continue;
         }
         (a, b) = (posts.get(s.post_a), posts.get(s.post_b));
-        if s.origin == "reply" {
+        if s.origin in ["reply", "direct"] {
             continue;
         }
         status = suggestion_status(s, a, b, today);
