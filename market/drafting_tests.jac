@@ -195,3 +195,29 @@ test "an unverified student cannot draft" {
         client.close();
     }
 }
+
+test "the ride prefill needs a verified student and returns a reviewable draft (AE4)" {
+    os.environ["UARRIVED_DEV_MODE"] = "1";
+    client = JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp());
+    try {
+        client.register_user("mina@umich.edu", "password123");
+        denied = client.post(
+            "/function/ride_prefill", json={"day": "2099-08-20", "time": "15:00"}
+        ).json()["data"]["result"];
+        assert not denied["ok"];
+        token = client.post(
+            "/function/start_verification", json={"email": "mina@umich.edu"}
+        ).json()["data"]["result"]["dev_token"];
+        client.post("/function/confirm_verification", json={"token": token});
+        got = client.post(
+            "/function/ride_prefill", json={"day": "2099-08-20", "time": "15:00"}
+        ).json()["data"]["result"];
+        assert got["ok"]
+            and got["draft"]["route_from"] == "DTW"
+            and got["draft"]["time_to"] == "17:00";
+        assert client.post("/function/list_my_posts", json={}).json()["data"]["result"]
+            == [];
+    } finally {
+        client.close();
+    }
+}
