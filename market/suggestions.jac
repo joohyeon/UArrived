@@ -7,6 +7,7 @@ suggestion is closed, with nothing written to it (the doc-review expiry-cascade 
 import from core.clock { today_iso as clock_today }
 import from datetime { date }
 import from core.auth { verified_profile }
+import from market.constants { reasons_for }
 import from market.graph { Post, Suggestion, post_status, all_posts, all_suggestions }
 import from market.lifecycle { PostView, view_of, own_post, reader_of }
 import from market.matching { withdraw_pending }
@@ -42,7 +43,7 @@ def suggestion_status(
     return "connected" if s.accepted_a and s.accepted_b else "open";
 }
 
-"""The caller's suggestions, best first, with the other post in the `reader` language. Declined
+"""The caller's suggestions, best first, with the posts and reasons in the `reader` language. Declined
 and withdrawn ones never show (AE3); closed ones show only if the pair had connected, so the chat
 stays findable."""
 def my_suggestions(today: str, reader: str = "") -> list[SuggestionView] {
@@ -69,7 +70,7 @@ def my_suggestions(today: str, reader: str = "") -> list[SuggestionView] {
                 id=jid(s),
                 status=status,
                 score=s.score,
-                reasons=s.reasons,
+                reasons=reasons_for(s.reasons, s.reason_codes, reader),
                 my_post=view_of(a if mine_is_a else b, today, reader),
                 other_post=view_of(b if mine_is_a else a, today, reader),
                 i_accepted=s.accepted_a if mine_is_a else s.accepted_b,

@@ -12,6 +12,7 @@ survives an edit.
 import from uuid { UUID }
 import from jaclang { JacRuntime as Jac }
 import from jaclang.server.identity.app_tokens { token_create }
+import from market.constants { REASON_PHRASES, phrase }
 import from market.graph {
     Post,
     Suggestion,
@@ -28,9 +29,19 @@ glob MAX_SUGGESTIONS_PER_POST: int = 10,
      CHAT_OPEN_TTL_SECONDS: int = 90 * 86400,
      RIDE_GAP_MINUTES: int = 120;
 
+"""A match: its score, the English reasons, and one {"code", "values"} entry per reason (same
+order) so the reasons can be rendered in any reader's language (market/constants.jac)."""
 obj Match {
     has score: int,
-        reasons: list[str];
+        reasons: list[str],
+        codes: list[dict[str, any]] = [];
+}
+
+"""Append reason `code` with `values` to `m`: the English text and the code entry."""
+def add_reason(m: Match, code: str, values: dict[str, str] | None = None) {
+    vals: dict[str, str] = values if values is not None else {};
+    m.reasons.append(phrase(REASON_PHRASES, code, "en", vals));
+    m.codes.append({"code": code, "values": vals});
 }
 
 def money(x: float) -> str {
@@ -111,21 +122,23 @@ def match_pair(a: Post, b: Post, today: str) -> Match | None {
     }
     offer = a if a.kind == "offer" else b;
     request = b if offer is a else a;
-    score = 50;
-    reasons: list[str] = [];
+    m = Match(score=50, reasons=[], codes=[]);
     if rides {
-        reasons.append(f"Same route: {a.route_from} to {a.route_to}");
+        add_reason(
+            m, "same_route", {"route_from": a.route_from, "route_to": a.route_to}
+        );
     }
     (wa, wb) = (window(a), window(b));
     if wa and wb {
         if wa[0] > wb[1] or wb[0] > wa[1] {
             return None;
         }
-        score += 20;
-        reasons.append(
-            "Same day"
+        m.score += 20;
+        add_reason(
+            m,
+            "same_day"
                 if rides and wa[0] == wa[1] == wb[0] == wb[1]
-                else "Dates overlap"
+                else "dates_overlap"
         );
     }
     gap = time_gap(a, b);
@@ -133,25 +146,29 @@ def match_pair(a: Post, b: Post, today: str) -> Match | None {
         if gap > RIDE_GAP_MINUTES {
             return None;
         }
-        score += 15;
-        reasons.append(
-            "Times overlap" if gap == 0 else f"Times are {gap} minutes apart"
-        );
+        m.score += 15;
+        if gap == 0 {
+            add_reason(m, "times_overlap");
+        } else {
+            add_reason(m, "times_apart", {"minutes": str(gap)});
+        }
     }
     if not share {
         if offer.free {
-            score += 15;
-            reasons.append("Free");
+            m.score += 15;
+            add_reason(m, "free");
         } elif offer.price is not None and request.price is not None {
             if offer.price > request.price {
                 return None;
             }
-            score += 10
+            m.score += 10
                 + min(
                     5, int((request.price - offer.price) / max(request.price, 1.0) * 10)
                 );
-            reasons.append(
-                f"{money(offer.price)} is within the {money(request.price)} budget"
+            add_reason(
+                m,
+                "within_budget",
+                {"price": money(offer.price), "budget": money(request.price)}
             );
         }
         if a.category == "housing"
@@ -163,14 +180,14 @@ def match_pair(a: Post, b: Post, today: str) -> Match | None {
         if a.category == "housing"
             and offer.arrangement
             and offer.arrangement == request.arrangement {
-            reasons.append(f"Both want a {offer.arrangement}");
+            add_reason(m, "same_arrangement", {"arrangement": offer.arrangement});
         }
     }
     if a.area and b.area and a.area == b.area and a.area != "Other" {
-        score += 15;
-        reasons.append(f"Both in {a.area}");
+        m.score += 15;
+        add_reason(m, "same_area", {"area": a.area});
     }
-    return Match(score=score, reasons=reasons);
+    return m;
 }
 
 def involves(s: Suggestion, post_id: str) -> bool {
@@ -219,6 +236,7 @@ def recheck_half_accepted(post: Post, today: str) {
         } else {
             s.score = m.score;
             s.reasons = m.reasons;
+            s.reason_codes = m.codes;
         }
     }
 }
@@ -270,6 +288,7 @@ def run_matching(post: Post, today: str) -> list[Suggestion] {
             root_b=b.owner_root,
             score=score,
             reasons=m.reasons,
+            reason_codes=m.codes,
             created_on=today,
             emailed_a=a.owner_root == post.owner_root,
             emailed_b=b.owner_root == post.owner_root,

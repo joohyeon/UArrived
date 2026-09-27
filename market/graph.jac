@@ -87,6 +87,8 @@ def all_posts(commons: any = None) -> list[Post] {
 
 `post_a` is the offer (or, for two ride requests, the one with the smaller id); `post_b` the
 other. Acceptance is per side (U6). `withdrawn` means matching replaced or stopped it.
+`reasons` is the English text; `reason_codes` holds one {"code", "values"} entry per reason so
+readers see them in their language (suggestions made before that have none and show English).
 """
 node Suggestion {
     has post_a: str,
@@ -96,6 +98,7 @@ node Suggestion {
         score: int,
         reasons: list[str],
         created_on: str,
+        reason_codes: list[dict[str, any]] = [],
         accepted_a: bool = False,
         accepted_b: bool = False,
         declined: bool = False,

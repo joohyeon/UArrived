@@ -7,9 +7,17 @@ import ai.translate;
 import from jaclang.byllm.lib { MockLLM, MockError, AuthenticationError }
 import from jaclang.testing.testing { JacTestClient }
 import from ai.decide { DecideNotes }
-import from ai.translate { PostText, PostTranslations }
+import from ai.translate { PostText, PostTranslations, Translation }
 import from market.graph { Post }
-import from market.decide { missing_info, risk_flags, clean_notes }
+import from market.decide {
+    missing_info,
+    missing_codes,
+    risk_flags,
+    risk_codes,
+    clean_notes,
+    notes_for,
+    BANNED_CLAIMS
+}
 
 test "a sublet with no lease dates lists them as missing (AE6)" {
     sublet = Post(
@@ -95,6 +103,34 @@ test "a ko sublet whose English copy asks to wire the deposit gets the payment f
     assert any(["deposit" in f for f in flags]);
     sublet.texts = {};
     assert risk_flags(sublet) == [];
+}
+
+test "a ko reader sees the deposit-before-viewing flag and missing lease dates in Korean" {
+    sublet = Post(
+        owner_root="jae",
+        kind="offer",
+        category="housing",
+        title="Room",
+        price=780.0,
+        arrangement="sublet",
+        area="Kerrytown",
+        description="Send the deposit before viewing"
+    );
+    assert missing_codes(sublet) == ["lease_dates"];
+    assert missing_info(sublet) == ["lease dates"];
+    assert missing_info(sublet, "ko") == ["계약 기간"];
+    assert risk_codes(sublet) == ["deposit_pressure"];
+    assert risk_flags(sublet, "ko") == ["보증금이나 빠른 결정을 요구해요. 직접 보기 전일 수도 있어요"];
+    assert risk_flags(sublet)
+        == ["Asks for a deposit or quick decision, possibly before viewing"];
+}
+
+test "English notes stay as they are; failed translations fall back to English" {
+    ai.translate.translator = MockLLM(outputs=[Translation(text="방을 먼저 볼 수 있나요?")]);
+    assert notes_for(["Can I see the room first?"], "en")
+        == ["Can I see the room first?"];
+    assert notes_for(["Can I see the room first?", "Ask for the lease."], "ko")
+        == ["방을 먼저 볼 수 있나요?", "Ask for the lease."];
 }
 
 test "AI notes that call a post safe or legit are dropped" {
@@ -290,6 +326,59 @@ test "help me decide shows a ko sublet in the reader's language and advises on i
         assert shown["original_title"] == "방 양도";
         assert any(["payment method" in f for f in r["posts"][1]["flags"]]);
         assert "wire the deposit" in str(advisor.sent("messages")[0]);
+    } finally {
+        client.close();
+    }
+}
+
+test "a ko reader comparing two sublets gets Korean labels and notes, filtered first (AE11)" {
+    os.environ["UARRIVED_DEV_MODE"] = "1";
+    os.environ["ANTHROPIC_API_KEY"] = "";
+    translator = MockLLM(
+        outputs=[
+            PostTranslations(items=[]),
+            PostTranslations(items=[]),
+            Translation(text="임대 기간은 언제 시작하고 끝나나요?"),
+            Translation(text="B 방은 되돌리기 어려운 송금을 요구해요.")
+        ]
+    );
+    ai.translate.translator = translator;
+    ai.decide.advisor = MockLLM(
+        outputs=[
+            DecideNotes(
+                questions=["When does the lease start and end?"],
+                risk_notes=[
+                    "This listing is safe.",
+                    "Room B asks for a wire transfer, which is hard to reverse."
+                ]
+            )
+        ]
+    );
+    client = JacTestClient.from_file("main.jac", base_path=tempfile.mkdtemp());
+    try {
+        ids = two_sublets(client);
+        assert call(
+            client, "update_my_profile", {"changes": {"preferred_language": "ko"}}
+        )["ok"];
+        r = call(client, "help_me_decide", {"post_ids": ids});
+        assert r["ok"] and r["ai_generated"];
+        assert r["posts"][0]["missing"] == ["계약 기간", "지역"];
+        assert r["posts"][0]["missing_codes"] == ["lease_dates", "area"];
+        assert r["posts"][1]["flag_codes"]
+            == ["hard_to_reverse_payment", "deposit_pressure", "low_rent"];
+        assert "되돌리기 어려운 결제 방법을 언급해요 (송금, 기프트 카드, 앱 송금)" in r["posts"][1]["flags"];
+        assert r["questions"] == ["임대 기간은 언제 시작하고 끝나나요?"];
+        assert r["risk_notes"] == ["B 방은 되돌리기 어려운 송금을 요구해요."];
+        sent = str(translator.sent("messages"));
+        assert "This listing is safe" not in sent;
+        shown = str(
+            [
+                r["questions"],
+                r["risk_notes"],
+                [c["flags"] + c["missing"] for c in r["posts"]]
+            ]
+        ).lower();
+        assert not any([w in shown for w in BANNED_CLAIMS]);
     } finally {
         client.close();
     }

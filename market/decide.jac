@@ -3,6 +3,10 @@
 Deterministic first: the facts side by side, what each post is missing, and known risk patterns.
 Then optional AI phrasing (ai/decide.jac), labeled AI-generated and filtered so it never calls a
 post safe or legitimate. If the AI fails, the facts and flags still show.
+
+Native language (U6): missing info and flags are rule codes rendered through the phrase tables in
+market/constants.jac for the reader; the advisor still reads and writes English, its notes are
+filtered in English first and only then translated for a non-English reader.
 """
 
 import from core.clock { today_iso as clock_today }
@@ -11,7 +15,9 @@ import from datetime { date }
 import from jaclang.byllm.lib { ByLLMError }
 import from ai.decide { advise, DecideNotes }
 import from core.auth { verified_profile }
+import from market.constants { MISSING_INFO_PHRASES, RISK_FLAG_PHRASES, phrase }
 import from market.graph { Post, post_status, all_posts, visible_to }
+import from market.translation { translate_text }
 import from market.lifecycle { PostView, view_of, reader_of }
 
 glob MIN_COMPARE: int = 2,
@@ -48,10 +54,14 @@ glob MIN_COMPARE: int = 2,
          "no risk"
      ];
 
+"""One compared post. `missing` and `flags` are in the reader's language; `missing_codes` and
+`flag_codes` are the rule codes behind them (MISSING_INFO_PHRASES, RISK_FLAG_PHRASES)."""
 obj Compared {
     has post: PostView,
         missing: list[str],
-        flags: list[str];
+        flags: list[str],
+        missing_codes: list[str] = [],
+        flag_codes: list[str] = [];
 }
 
 obj DecideResult {
@@ -64,8 +74,9 @@ obj DecideResult {
         ai_note: str = "";
 }
 
-"""What a student would want to know before meeting, that this post doesn't say."""
-def missing_info(p: Post) -> list[str] {
+"""Codes (MISSING_INFO_PHRASES) for what a student would want to know before meeting, that this
+post doesn't say."""
+def missing_codes(p: Post) -> list[str] {
     out: list[str] = [];
     if p.kind == "offer"
         and p.price is None
@@ -74,20 +85,23 @@ def missing_info(p: Post) -> list[str] {
         out.append("price");
     }
     if not (p.available_from or p.available_until) {
-        out.append("dates" if p.category != "housing" else "lease dates");
+        out.append("dates" if p.category != "housing" else "lease_dates");
     }
     if not p.area and p.category != "service" {
         out.append("area");
     }
     if p.category == "housing" and not p.arrangement {
-        out.append(
-            "arrangement (sublet, roommate opening, lease assignment or new lease)"
-        );
+        out.append("arrangement");
     }
     if p.category == "service" and p.route_from and not p.time_from {
         out.append("time");
     }
     return out;
+}
+
+"""What this post doesn't say, in `lang` (English by default)."""
+def missing_info(p: Post, lang: str = "en") -> list[str] {
+    return [phrase(MISSING_INFO_PHRASES, c, lang) for c in missing_codes(p)];
 }
 
 """Whether `phrase` appears in `text` as whole words ("wire" matches "wire it", not "wireless")."""
@@ -98,7 +112,7 @@ def has_word(text: str, phrase: str) -> bool {
 """Known risk patterns, by rule. A flag is a reason to ask, not a verdict. The poster's words
 and the post's stored English copy (U5) are both scanned, so a Korean or Chinese post whose
 English translation mentions a wire transfer is flagged too."""
-def risk_flags(p: Post) -> list[str] {
+def risk_codes(p: Post) -> list[str] {
     english = p.texts.get("en", {});
     text = " ".join(
         [
@@ -110,20 +124,23 @@ def risk_flags(p: Post) -> list[str] {
     ).lower();
     out: list[str] = [];
     if any([has_word(text, w) for w in PAYMENT_WORDS]) {
-        out.append(
-            "Mentions a payment method that is hard to reverse (wire, gift card, app transfer)"
-        );
+        out.append("hard_to_reverse_payment");
     }
     if any([has_word(text, w) for w in PRESSURE_WORDS]) {
-        out.append("Asks for a deposit or quick decision, possibly before viewing");
+        out.append("deposit_pressure");
     }
     if p.category == "housing"
         and p.kind == "offer"
         and p.price is not None
         and p.price < LOW_RENT {
-        out.append("Rent is far below usual Ann Arbor prices");
+        out.append("low_rent");
     }
     return out;
+}
+
+"""Known risk patterns for `p`, in `lang` (English by default)."""
+def risk_flags(p: Post, lang: str = "en") -> list[str] {
+    return [phrase(RISK_FLAG_PHRASES, c, lang) for c in risk_codes(p)];
 }
 
 """Drop any AI sentence that makes a safety or legitimacy claim (R14)."""
@@ -142,6 +159,15 @@ def clean_notes(lines: list[str]) -> list[str] {
     return out;
 }
 
+"""Already-filtered English AI notes for a `reader`: translated when the reader isn't English,
+each note falling back to its English text if its translation fails."""
+def notes_for(notes: list[str], reader: str) -> list[str] {
+    if not reader or reader == "en" {
+        return notes;
+    }
+    return [translate_text(n, "en", reader).text for n in notes];
+}
+
 def summary_of(items: list[Compared]) -> str {
     parts: list[str] = [];
     for (i, c) in enumerate(items) {
@@ -158,8 +184,9 @@ def summary_of(items: list[Compared]) -> str {
 }
 
 """Compare the posts with these ids, as of `today`, shown in the `reader` language. Only posts
-the caller can see count. The advisor always gets the English copy (the banned-claim filter is
-English); its notes and the flags are not localized yet (U6)."""
+the caller can see count. The advisor always gets the English copy and English flags (the
+banned-claim filter is English); the reader gets missing info and flags from the phrase tables
+and the filtered notes translated."""
 def compare(post_ids: list[str], today: str, reader: str = "") -> DecideResult {
     wanted = list(dict.fromkeys(post_ids));
     if len(wanted) < MIN_COMPARE {
@@ -178,15 +205,21 @@ def compare(post_ids: list[str], today: str, reader: str = "") -> DecideResult {
                 ok=False, error="One of those posts isn't available any more."
             );
         }
-        (missing, flags) = (missing_info(p), risk_flags(p));
+        (missing, flags) = (missing_codes(p), risk_codes(p));
         items.append(
-            Compared(post=view_of(p, today, reader), missing=missing, flags=flags)
+            Compared(
+                post=view_of(p, today, reader),
+                missing=missing_info(p, reader),
+                flags=risk_flags(p, reader),
+                missing_codes=missing,
+                flag_codes=flags
+            )
         );
         for_advisor.append(
             Compared(
                 post=view_of(p, today, "en", own_original=False),
-                missing=missing,
-                flags=flags
+                missing=missing_info(p),
+                flags=risk_flags(p)
             )
         );
     }
@@ -202,8 +235,8 @@ def compare(post_ids: list[str], today: str, reader: str = "") -> DecideResult {
     return DecideResult(
         ok=True,
         posts=items,
-        questions=clean_notes(notes.questions)[:5],
-        risk_notes=clean_notes(notes.risk_notes)[:3],
+        questions=notes_for(clean_notes(notes.questions)[:5], reader),
+        risk_notes=notes_for(clean_notes(notes.risk_notes)[:3], reader),
         ai_generated=True
     );
 }

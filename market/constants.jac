@@ -186,3 +186,28 @@ def phrase(
     }
     return text;
 }
+
+"""Match reasons as a `lang` reader sees them. `reasons` are the stored English strings and
+`codes` their {"code", "values"} entries (market/matching.jac), in the same order. Each code is
+rendered from REASON_PHRASES, with an arrangement shown in the reader's language (areas and
+routes stay as written); an unknown code keeps its English reason. English readers, and
+suggestions stored without codes, get the stored English unchanged."""
+def reasons_for(
+    reasons: list[str], codes: list[dict[str, any]], lang: str
+) -> list[str] {
+    if not lang or lang == "en" or not codes or len(codes) != len(reasons) {
+        return reasons;
+    }
+    out: list[str] = [];
+    for (i, item) in enumerate(codes) {
+        values: dict[str, str] = dict(item.get("values", {}) or {});
+        chosen = values.get("arrangement", "");
+        if chosen in ARRANGEMENT_NAMES {
+            names = ARRANGEMENT_NAMES[chosen];
+            values["arrangement"] = names[lang] if lang in names else chosen;
+        }
+        text = phrase(REASON_PHRASES, item.get("code", ""), lang, values);
+        out.append(text or reasons[i]);
+    }
+    return out;
+}
