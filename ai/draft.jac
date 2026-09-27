@@ -42,8 +42,8 @@ obj PostDraft {
         price_reason: str = "";
 }
 
-sem PostDraft.title = "Short title, at most 8 words, in the student's own language.";
-sem PostDraft.description = "One or two plain sentences restating only what the student said. Never invent condition, brand or features.";
+sem PostDraft.title = "The item or need itself in a few words, like 'Bike', 'Wooden desk' or 'Ride from DTW', in the student's own language. Never start with 'Selling', 'Looking for' or 'Need'; the post type already says that.";
+sem PostDraft.description = "One or two plain sentences in the student's own voice (first person, e.g. 'I need a desk near campus this weekend.'), restating only what they said. Never invent condition, brand or features.";
 sem PostDraft.price = "For an offer: the asking price in US dollars. For a request: the maximum budget. None if not stated.";
 sem PostDraft.free = "True only if the student says it is free or a giveaway.";
 sem PostDraft.available_from = "First date it is available or needed, YYYY-MM-DD, resolved against today. Empty if unknown.";

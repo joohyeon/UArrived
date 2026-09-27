@@ -26,7 +26,7 @@ def:pub Today -> JsxElement {
                 </p>
             </Card>
         )
-            if loaded and not prompts
+            if loaded and len(prompts) == 0
             else None}{[
             <Card key={p.key}>
                 <strong style={{"fontSize": "18px"}}>{p.title}</strong>

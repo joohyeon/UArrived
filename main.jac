@@ -52,6 +52,8 @@ import from "@jac/runtime" { jacIsLoggedIn }
 import from core.screens.welcome { Welcome }
 import from ui.components.gallery { Gallery }
 import from market.screens.inbox { MatchesInbox }
+import from market.screens.stream { MarketStream }
+import from market.screens.thread { MessageThread }
 import from market.screens.compose { Compose }
 import from market.screens.chats { ChatList, ChatScreen }
 import from market.screens.mine { MyPosts, ForYou }
@@ -73,6 +75,12 @@ def:pub app -> JsxElement {
         return <Today/>;
     }
     if path == "/market" {
+        return <MarketStream/>;
+    }
+    if path == "/market/m" {
+        return <MessageThread/>;
+    }
+    if path == "/market/matches" {
         return <MatchesInbox/>;
     }
     if path == "/market/new" {

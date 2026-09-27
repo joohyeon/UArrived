@@ -41,7 +41,7 @@ def:pub MyPosts -> JsxElement {
         {<Card>
             <p style={{"margin": "0"}}>You haven't posted anything yet.</p>
         </Card>
-            if loaded and not posts
+            if loaded and len(posts) == 0
             else None}
         {[
             <Card key={p.id}>
@@ -149,7 +149,7 @@ def:pub ForYou -> JsxElement {
                 No live posts yet. Be the first: drop a message.
             </p>
         </Card>
-            if loaded and not posts
+            if loaded and len(posts) == 0
             else None}
         {[
             <Card key={p.id}>
@@ -181,7 +181,7 @@ def:pub ForYou -> JsxElement {
                 ); }}
             />
         )
-            if posts
+            if len(posts) > 0
             else None}
     </AppShell>
 }
