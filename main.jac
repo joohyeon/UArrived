@@ -98,6 +98,7 @@ import from journey.screens.journey { JourneyHome }
 import from journey.screens.task { TaskDetail }
 import from journey.screens.ask { AskGuide }
 import from journey.screens.events { Events }
+import from journey.screens.onboarding { Onboarding }
 
 """Path-based routing; every market page also works as a direct link (e.g. from an email)."""
 def:pub app -> JsxElement {
@@ -111,7 +112,7 @@ def:pub app -> JsxElement {
     if (
         path.startswith("/market")
         or path.startswith("/journey")
-        or path in ["/today", "/profile"]
+        or path in ["/today", "/profile", "/onboarding"]
     )
         and not jacIsLoggedIn() {
         return <Welcome/>;
@@ -127,6 +128,9 @@ def:pub app -> JsxElement {
     }
     if path == "/today" {
         return <Today/>;
+    }
+    if path == "/onboarding" {
+        return <Onboarding/>;
     }
     if path == "/journey" {
         return <JourneyHome/>;

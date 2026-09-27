@@ -18,6 +18,11 @@ def:pub query_param(name: str) -> str {
     return params.get(name) or "";  # jac:ignore[E1032,E1002]
 }
 
+"""Full-page client navigation (a hard redirect, not a client-side route change)."""
+def:pub go(path: str) {
+    window.location.assign(path);  # jac:ignore[E1032,W2001]
+}
+
 def:pub JourneyTabs(active: str) -> JsxElement {
     <nav
         aria-label="Journey"

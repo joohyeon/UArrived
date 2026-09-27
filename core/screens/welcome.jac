@@ -9,6 +9,7 @@ a campus photo beside the form on wide screens and after it on phones.
 
 import from "@jac/runtime" { SignupResult, jacLogin, jacSignup, jacIsLoggedIn }
 import from core.auth { claim_umich_account, VerifyResult }
+import from core.profile { get_my_profile, ProfileView }
 import from ui.tokens { color, space, text_style, RADIUS, SIZE, FONTS }
 import from ui.components.base { BaseStyles, Button, Field, PasswordField }
 
@@ -55,11 +56,12 @@ def:pub Welcome -> JsxElement {
             mode = "signup";
         }
         if jacIsLoggedIn() {
-            go_to(next_path());
+            routeAfterAuth();
         }
     }
 
     async def submit(e: FormEvent) -> None;
+    async def routeAfterAuth -> None;
 
     def switchTo(m: str) {
         mode = m;
@@ -416,5 +418,12 @@ impl Welcome.submit(e: FormEvent) -> None {
         error = claimed.error;
         return;
     }
-    go_to(next_path());
+    await routeAfterAuth();
+}
+
+"""Go to `next_path()`, or /onboarding first if the student hasn't finished the arrival wizard."""
+impl Welcome.routeAfterAuth -> None {
+    profile: ProfileView | None = None;
+    profile = await get_my_profile();
+    go_to(next_path() if profile.onboarding_done else "/onboarding");
 }

@@ -121,3 +121,95 @@ test "upcoming events hide past events and filter by category and cost" {
         del os.environ["UARRIVED_TODAY"];
     }
 }
+
+test "onboarding can self-report a task already finished, bypassing the step check" {
+    client = served();
+    try {
+        client.register_user("mina@umich.edu", "password123");
+        blocked = call(client, "mark_task_done", {"tid": "banking"});
+        assert not blocked["ok"] and "step" in blocked["error"];
+        early = call(
+            client, "mark_task_done", {"tid": "banking", "skip_step_check": True}
+        );
+        assert early["ok"] and early["task"]["status"] == "done";
+        after = call(client, "my_journey", {});
+        assert task_of(after, "banking")["status"] == "done";
+        undone = call(client, "reopen_task", {"tid": "banking"});
+        assert undone["ok"] and undone["task"]["status"] == "started";
+    } finally {
+        client.close();
+    }
+}
+
+test "skip_step_check never bypasses task applicability" {
+    client = served();
+    try {
+        client.register_user("sam@umich.edu", "password123");
+        call(client, "update_my_profile", {"changes": {"student_type": "in-state"}});
+        blocked = call(
+            client,
+            "mark_task_done",
+            {"tid": "international_center", "skip_step_check": True}
+        );
+        assert not blocked["ok"];
+    } finally {
+        client.close();
+    }
+}
+
+test "the arrival wizard's calls round-trip: fill some steps, self-report a task, finish" {
+    client = served();
+    try {
+        client.register_user("mina@umich.edu", "password123");
+        step1 = call(
+            client,
+            "update_my_profile",
+            {"changes": {"arrival_date": "2026-08-28", "arrival_time": "15:00"}}
+        );
+        assert step1["ok"];
+        step2 = call(
+            client,
+            "update_my_profile",
+            {"changes": {"area": "Central Campus", "housing_status": "have-housing"}}
+        );
+        assert step2["ok"];
+        step3 = call(
+            client, "update_my_profile", {"changes": {"preferred_language": "zh"}}
+        );
+        assert step3["ok"] and step3["profile"]["language_chosen"];
+        step4 = call(
+            client, "mark_task_done", {"tid": "mcard", "skip_step_check": True}
+        );
+        assert step4["ok"];
+        finish = call(
+            client, "update_my_profile", {"changes": {"onboarding_done": True}}
+        );
+        assert finish["ok"] and finish["profile"]["onboarding_done"];
+        mine = call(client, "get_my_profile", {});
+        assert mine["arrival_date"] == "2026-08-28"
+            and mine["area"] == "Central Campus";
+        after = call(client, "my_journey", {});
+        assert task_of(after, "mcard")["status"] == "done";
+    } finally {
+        client.close();
+    }
+}
+
+test "skipping every step still reaches onboarding_done with nothing else changed" {
+    client = served();
+    try {
+        client.register_user("mina@umich.edu", "password123");
+        before = call(client, "get_my_profile", {});
+        finish = call(
+            client, "update_my_profile", {"changes": {"onboarding_done": True}}
+        );
+        assert finish["ok"];
+        after = call(client, "get_my_profile", {});
+        assert after["onboarding_done"];
+        assert after["arrival_date"] == before["arrival_date"] == "";
+        assert after["area"] == before["area"] == "";
+        assert after["preferred_language"] == before["preferred_language"] == "en";
+    } finally {
+        client.close();
+    }
+}

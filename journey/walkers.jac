@@ -236,14 +236,19 @@ def:protect toggle_task_step(tid: str, index: int) -> TaskResult {
     return TaskResult(ok=True, task=task_view(tid));
 }
 
-"""Mark a task done. Every step must be ticked first."""
-def:protect mark_task_done(tid: str) -> TaskResult {
+"""Mark a task done. Every step must be ticked first, unless `skip_step_check` — used only by the
+arrival wizard's self-report of a task finished before the student arrived."""
+def:protect mark_task_done(tid: str, skip_step_check: bool = False) -> TaskResult {
     task = task_by_id(tid);
     if task is None or not applies(task, my_profile().student_type) {
         return TaskResult(ok=False, error="No such task.");
     }
     p = progress_for(tid);
-    if not all(checked_for(task, p)) {
+    # An omitted bool parameter arrives as the string "False" (the same jaclang 0.37 quirk
+    # CLAUDE.md documents for `str | None = None`, generalized): coerce instead of trusting
+    # Python truthiness, which treats the non-empty string "False" as truthy.
+    bypass = str(skip_step_check).strip().lower() == "true";
+    if not bypass and not all(checked_for(task, p)) {
         return TaskResult(ok=False, error="Tick every step first.");
     }
     p.checked = [True for _ in task.steps];
