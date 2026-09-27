@@ -400,6 +400,31 @@ test "a first draft sets an unchosen profile language, never a chosen one (R29)"
     assert other.preferred_language == "en";
 }
 
+test "with AI switched off, drafting over the served endpoint gives a manual card in the profile's language" {
+    client = served();
+    try {
+        client.register_user("mina@umich.edu", "password123");
+        token = client.post(
+            "/function/start_verification", json={"email": "mina@umich.edu"}
+        ).json()["data"]["result"]["dev_token"];
+        client.post("/function/confirm_verification", json={"token": token});
+        client.post(
+            "/function/update_my_profile",
+            json={"changes": {"preferred_language": "ko"}}
+        );
+        result = client.post(
+            "/function/draft_from_message", json={"message": "책상 팝니다 $40"}
+        ).json()["data"]["result"];
+        assert result["ok"] and "fill in the details yourself" in result["notice"];
+        assert result["language"] == "ko" and len(result["drafts"]) == 1;
+        card = result["drafts"][0];
+        assert card["language"] == "ko" and not card["ai_generated"];
+        assert card["title"] == "책상 팝니다 $40";
+    } finally {
+        client.close();
+    }
+}
+
 test "an unverified student cannot draft" {
     client = served();
     try {

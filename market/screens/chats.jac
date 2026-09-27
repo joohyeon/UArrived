@@ -219,8 +219,17 @@ impl ChatScreen.sendIt(e: MouseEvent) -> None {
         return;
     }
     sending = True;
-    result = await send_message(chat_id, draft);
-    sending = False;
+    try {
+        result = await send_message(chat_id, draft);
+    } except Exception {
+        error = "Couldn't send that. Please try again.";
+        return;
+    } finally {
+        sending = False;
+    }
+    if result is None {
+        return;
+    }
     if not result.ok {
         error = result.error;
         return;

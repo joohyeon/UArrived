@@ -445,8 +445,17 @@ impl Compose.publish(i: int) -> None {
     out["price"] = float(text) if text else None;
     posting = i;
     putCardError(i, "");
-    result = await publish_post(out);
-    posting = -1;
+    try {
+        result = await publish_post(out);
+    } except Exception {
+        putCardError(i, "Couldn't post that. Please try again.");
+        return;
+    } finally {
+        posting = -1;
+    }
+    if result is None {
+        return;
+    }
     if not result.ok {
         putCardError(i, result.error);
         return;

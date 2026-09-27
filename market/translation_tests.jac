@@ -10,6 +10,8 @@ import from market.testkit { ai_off }
 import from ai.models { model_ready }
 import from market.translation {
     digits_preserved,
+    digit_groups,
+    acceptable,
     translate_text,
     translate_texts,
     translate_post_texts,
@@ -69,6 +71,17 @@ test "an English month name counts as its number" {
     assert digits_preserved("책상 $40, 8월 21–25일", "Desk $40, Aug 21–25");
     assert not digits_preserved("10월 25일", "November 25");
     assert not digits_preserved("10월 25일", "the 25th");
+    assert digits_preserved("8月 20日", "20 Aug")
+        and digits_preserved("10월 25일", "October 25");
+}
+
+test "a month word counts only next to a day number, never as an ordinary word" {
+    assert acceptable("You may pick it up at 3pm", "오후 3시에 가져가셔도 돼요");
+    assert digit_groups("You may pick it up at 3pm") == {"3"};
+    assert digit_groups("march") == set() and digit_groups("may") == set();
+    assert digit_groups("We may march on Monday") == set();
+    assert digit_groups("Pick up Aug 21–25") == {"8", "21", "25"};
+    assert "5" in digit_groups("May 5") and "12" in digit_groups("pick up 12 dec");
 }
 
 test "an AI outage returns the original with ok false, without raising" {

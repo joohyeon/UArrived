@@ -85,14 +85,16 @@ glob MONTH_NUMBERS: dict[str, int] = {
 
 """Digit groups in `text` as plain numbers: thousands commas are dropped ("1,200" -> "1200"),
 full-width digits and leading zeros normalise ("８" and "08" -> "8"). An English month name
-counts as its number, so "10월 25일" is preserved by "October 25"."""
+counts as its number only next to a 1-2 digit day ("Aug 20", "20 Aug"), so "10월 25일" is preserved by "October 25"."""
 def digit_groups(text: str) -> set[str] {
     joined = re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", text);
     groups = {str(int(g)) for g in re.findall(r"\d+", joined)};
-    for word in re.findall(r"[A-Za-z]+", text) {
-        month = MONTH_NUMBERS.get(word.lower());
-        if month is not None {
-            groups.add(str(month));
+    names = "|".join(sorted(MONTH_NUMBERS.keys(), key=len, reverse=True));
+    before = rf"(?<![A-Za-z])({names})\.?\s*(?<!\d)\d{{1,2}}(?!\d)";
+    after = rf"(?<!\d)\d{{1,2}}(?:st|nd|rd|th)?\s+({names})(?![A-Za-z])";
+    for pattern in [before, after] {
+        for hit in re.finditer(pattern, text, re.IGNORECASE) {
+            groups.add(str(MONTH_NUMBERS[hit.group(1).lower()]));
         }
     }
     return groups;

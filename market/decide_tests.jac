@@ -243,6 +243,22 @@ test "when AI fails the facts and flags still show, without AI notes" {
     }
 }
 
+test "with AI switched off and no advisor, facts and flags render with the unavailable note" {
+    client = served();
+    try {
+        ids = two_sublets(client);
+        r = call(client, "help_me_decide", {"post_ids": ids});
+        assert r["ok"] and not r["ai_generated"];
+        assert "aren't available" in r["ai_note"];
+        assert r["questions"] == [] and r["risk_notes"] == [];
+        assert [c["post"]["title"] for c in r["posts"]] == ["Room A", "Room B"];
+        assert "lease dates" in r["posts"][0]["missing"];
+        assert len(r["posts"][1]["flags"]) == 3;
+    } finally {
+        client.close();
+    }
+}
+
 test "one post, four posts, or a closed post cannot be compared" {
     client = served();
     try {
