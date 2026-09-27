@@ -199,6 +199,7 @@ def:pub GroupChat -> JsxElement {
         sending: bool = False,
         asked: FollowUp | None = None,
         asked_message: str = "",
+        notice: str = "",
         answers: str = "";
 
     async def load -> None;
@@ -320,6 +321,14 @@ def:pub GroupChat -> JsxElement {
         {(
             <Card>
                 <Badge kind="ai" label="Assistant · only you see this"/>
+                <span>{notice}</span>
+            </Card>
+        )
+            if notice
+            else None}
+        {(
+            <Card>
+                <Badge kind="ai" label="Assistant · only you see this"/>
                 <span>{asked.question}</span>
                 <div style={{"display": "flex", "gap": space("2"), "flexWrap": "wrap"}}>
                     {[
@@ -401,6 +410,7 @@ impl GroupChat.choose(value: str) -> None {
 
 """After a send or an answer: keep asking if the assistant still needs something, else refresh."""
 impl GroupChat.settle(result: GroupPostResult) -> None {
+    notice = result.notice;
     asked = result.follow_up;
     await load();
 }
