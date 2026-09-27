@@ -10,6 +10,14 @@ import from market.drafting { draft_from_message }
 import from market.suggestions { list_my_suggestions, stop_suggestions }
 import from market.feed { for_you_feed, heartbeat }
 import from journey.prompts { my_journey_prompts }
+import from journey.walkers {
+    my_journey,
+    toggle_task_step,
+    mark_task_done,
+    reopen_task
+}
+import from journey.events { upcoming_events }
+import from journey.guide { ask_about_task, translate_journey_texts }
 import from market.decide { help_me_decide }
 import from market.topics {
     my_groups,
@@ -72,6 +80,10 @@ import from market.screens.decide { Compare }
 import from market.screens.moderate { Moderate }
 import from market.screens.common { current_path }
 import from journey.screens.today { Today }
+import from journey.screens.journey { JourneyHome }
+import from journey.screens.task { TaskDetail }
+import from journey.screens.ask { AskGuide }
+import from journey.screens.events { Events }
 
 """Path-based routing; every market page also works as a direct link (e.g. from an email)."""
 def:pub app -> JsxElement {
@@ -82,11 +94,24 @@ def:pub app -> JsxElement {
     if path == "/market/preview" {
         return <MarketPreview/>;
     }
-    if (path.startswith("/market") or path == "/today") and not jacIsLoggedIn() {
+    if (path.startswith("/market") or path.startswith("/journey") or path == "/today")
+        and not jacIsLoggedIn() {
         return <Welcome/>;
     }
     if path == "/today" {
         return <Today/>;
+    }
+    if path == "/journey" {
+        return <JourneyHome/>;
+    }
+    if path == "/journey/task" {
+        return <TaskDetail/>;
+    }
+    if path == "/journey/ask" {
+        return <AskGuide/>;
+    }
+    if path == "/journey/events" {
+        return <Events/>;
     }
     if path == "/market" {
         return <GroupList/>;
