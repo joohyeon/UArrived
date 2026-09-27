@@ -22,6 +22,7 @@ import from journey.walkers {
     reopen_task
 }
 import from journey.events { upcoming_events, preview_events }
+import from journey.events_refresh { scheduled_events_refresh }
 import from journey.guide { ask_about_task, translate_journey_texts }
 import from market.decide { help_me_decide }
 import from market.themes {
