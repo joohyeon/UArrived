@@ -5,9 +5,12 @@ reads them to prompt and pre-fill posts (R12). Nothing here is marketplace-speci
 """
 
 import os;
+import time;
+import random;
 import from datetime { date }
 import from uuid { UUID }
 import from jaclang { JacRuntime as Jac }
+import from jaclang.data.pgwire { PgWireError }
 import from core.constants { ANN_ARBOR_AREAS, PILOT_LANGUAGES }
 
 glob STUDENT_TYPES: list[str] = ["international", "out-of-state", "in-state"],
@@ -44,27 +47,80 @@ node Mailbox {
         language: str = "en";
 }
 
-"""Create or update the caller's Mailbox from their profile. Only verified addresses get one."""
+"""Postgres SQLSTATE for "could not serialize access due to read/write dependencies among
+transactions" - the error the server itself tells you retrying may fix (`jaclang.data.pgwire`
+raises `PgWireError` with this in its `'C'` field; see `is_serialization_conflict`)."""
+glob SERIALIZATION_SQLSTATE: str = "40001";
+
+"""True when `err` is the Postgres serialization-conflict error above. `PgWireError` carries no
+typed attribute for it - the runtime itself detects it the same way (`jaclang.server.session`'s
+`_is_serialization_conflict`): a dict argument with a `'C'` field equal to the SQLSTATE."""
+def is_serialization_conflict(err: PgWireError) -> bool {
+    for arg in err.args {
+        if isinstance(arg, dict) and arg.get("C") == SERIALIZATION_SQLSTATE {
+            return True;
+        }
+    }
+    return False;
+}
+
+"""Call `fn()`, retrying up to `attempts` total tries when it raises a serialization-conflict
+`PgWireError` (SQLSTATE 40001) - the collision a wide, whole-collection scan like
+`sync_mailbox`'s can hit under SERIALIZABLE isolation when something else writes under `shared`
+at the same time. Any other error, and the error on the last attempt, propagate unchanged so a
+persistent failure is never silently swallowed. Backoff is small and jittered (tens of
+milliseconds) so a retry barely moves request latency; `sleep` is injectable so tests run
+instantly and deterministically instead of actually waiting."""
+def retry_on_conflict(
+    fn: Callable[[], any],
+    attempts: int = 3,
+    sleep: Callable[[float], None] = time.sleep
+) -> any {
+    tried = 0;
+    while True {
+        tried += 1;
+        try {
+            return fn();
+        } except PgWireError as err {
+            if tried >= attempts or not is_serialization_conflict(err) {
+                raise;
+            }
+            sleep(0.02 * tried + random.uniform(0, 0.02));
+        }
+    }
+}
+
+"""Create or update the caller's Mailbox from their profile. Only verified addresses get one.
+
+The scan below reads every Mailbox node under `shared` inside one SERIALIZABLE transaction, so
+any concurrent write anywhere under `shared` can collide with it and raise a serialization-
+conflict `PgWireError` (see `retry_on_conflict`) - common now that `default_language_from` calls
+this on nearly every first draft. Retrying the read+write a few times absorbs a normal collision
+instead of surfacing it as an error."""
 def sync_mailbox(profile: Profile, commons: any = None) -> None {
     if not profile.verified {
         return;
     }
     shared: Root = commons if commons is not None else root.shared;
     me = jid(root);
-    for m in [shared-->][?:Mailbox] {
-        if m.owner_root == me {
-            m.email = profile.umich_email;
-            m.enabled = profile.email_notifications;
-            m.language = profile.preferred_language;
-            return;
+
+    def attempt -> None {
+        for m in [shared-->][?:Mailbox] {
+            if m.owner_root == me {
+                m.email = profile.umich_email;
+                m.enabled = profile.email_notifications;
+                m.language = profile.preferred_language;
+                return;
+            }
         }
+        shared ++> Mailbox(
+            owner_root=me,
+            email=profile.umich_email,
+            enabled=profile.email_notifications,
+            language=profile.preferred_language
+        );
     }
-    shared ++> Mailbox(
-        owner_root=me,
-        email=profile.umich_email,
-        enabled=profile.email_notifications,
-        language=profile.preferred_language
-    );
+    retry_on_conflict(attempt);
 }
 
 """Set `profile`'s language to `lang` (already validated) and keep its Mailbox in step.
