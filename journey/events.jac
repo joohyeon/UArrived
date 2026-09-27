@@ -254,6 +254,21 @@ def:protect upcoming_events(
     ][:MAX_EVENTS];
 }
 
+"""In-person events with an official page link, soonest first, at most `count` (0-6)."""
+def preview_of(events: list[EventView], count: int) -> list[EventView] {
+    return [
+        e
+        for e in events
+        if not e.virtual and e.url and e.location
+    ][:max(0, min(count, 6))];
+}
+
+"""A few upcoming in-person events for the public landing page: public U-M Happening data, no
+login needed."""
+def:pub preview_events(count: int = 3) -> list[EventView] {
+    return preview_of(all_events(today_iso()), count);
+}
+
 test "events file parses into upcoming, deduplicated events in date order" {
     events = all_events("2026-09-27");
     assert len(events) > 20;
@@ -297,4 +312,33 @@ test "a venue keyword places an event on the map; virtual events are list-only" 
     assert events[1].virtual
         and events[1].lat == 0.0
         and events[1].category == "Learning";
+}
+
+test "the public preview lists only in-person events with a source link, capped at six" {
+    doc = {
+        "1": {
+            "event_title": "Film night",
+            "event_type": "Film",
+            "date_start": "2026-10-01",
+            "location_name": "Michigan Theater",
+            "permalink": "https://events.umich.edu/event/1"
+        },
+        "2": {
+            "event_title": "Webinar",
+            "event_type": "Workshop",
+            "date_start": "2026-10-01",
+            "location_name": "Zoom",
+            "permalink": "https://events.umich.edu/event/2"
+        },
+        "3": {
+            "event_title": "No link",
+            "event_type": "Lecture",
+            "date_start": "2026-10-02",
+            "location_name": "Rackham"
+        }
+    };
+    events = parse_events(doc, "2026-09-27");
+    assert [e.title for e in preview_of(events, 3)] == ["Film night"];
+    assert len(preview_of(all_events("2026-09-27"), 50)) == 6;
+    assert preview_of(events, -1) == [];
 }
