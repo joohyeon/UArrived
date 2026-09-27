@@ -4,7 +4,7 @@ while open. The language picker here stands in for a Profile screen setting unti
 saves `preferred_language`, which also clears the client read cache so the reload is localized."""
 
 import from ui.tokens { color, space }
-import from ui.components.base { AppShell, Button, Card, Badge }
+import from ui.components.base { AppShell, Button, Card, Badge, ResponsiveGrid }
 import from core.constants { PILOT_LANGUAGES, LANGUAGE_NAMES }
 import from core.profile {
     get_my_profile,
@@ -41,7 +41,7 @@ def:pub MatchesInbox -> JsxElement {
         return lambda { clearInterval(timer); };  # jac:ignore[W2001]
     }
 
-    <AppShell title="Matches" active="market">
+    <AppShell title="Matches" active="market" wide={True}>
         <MarketTabs
             active="/market/matches"
             unread={len(
@@ -73,66 +73,74 @@ def:pub MatchesInbox -> JsxElement {
         )
             if loaded and len(items) == 0
             else None}
-        {[
-            <Card key={s.id}>
-                <div
-                    style={{
-                        "display": "flex",
-                        "gap": space("2"),
-                        "alignItems": "center"
-                    }}
-                >
-                    {<Badge kind="progress" label="New"/> if s.unread else None}
-                    <span style={{"color": color("sub"), "fontSize": "14px"}}>
-                        {"For your post: " + s.my_post.title}
-                    </span>
-                </div>
-                <PostSummary p={s.other_post}/>
-                <ul
-                    lang={lang}
-                    style={{
-                        "margin": "0",
-                        "paddingLeft": "20px",
-                        "color": color("progress")
-                    }}
-                >
-                    {[<li key={r}>{r}</li> for r in s.reasons]}
-                </ul>
-                {(
-                    <div style={{"display": "flex", "gap": space("2")}}>
-                        <Button
-                            label="Connect"
-                            onClick={lambda (e: MouseEvent) { accept(s.id); }}
+        <ResponsiveGrid min="340px">
+            {[
+                <Card key={s.id}>
+                    <div
+                        style={{
+                            "display": "flex",
+                            "gap": space("2"),
+                            "alignItems": "center"
+                        }}
+                    >
+                        {<Badge kind="progress" label="New"/> if s.unread else None}
+                        <span style={{"color": color("sub"), "fontSize": "14px"}}>
+                            {"For your post: " + s.my_post.title}
+                        </span>
+                    </div>
+                    <PostSummary p={s.other_post}/>
+                    <ul
+                        lang={lang}
+                        style={{
+                            "margin": "0",
+                            "paddingLeft": "20px",
+                            "color": color("progress")
+                        }}
+                    >
+                        {[<li key={r}>{r}</li> for r in s.reasons]}
+                    </ul>
+                    {(
+                        <div style={{"display": "flex", "gap": space("2")}}>
+                            <Button
+                                label="Connect"
+                                onClick={lambda (e: MouseEvent) { accept(s.id); }}
+                            />
+                            <Button
+                                label="Not interested"
+                                variant="secondary"
+                                onClick={lambda (e: MouseEvent) { pass_on(s.id); }}
+                            />
+                        </div>
+                    )
+                        if not s.i_accepted
+                        else (
+                            <p style={{"margin": "0", "color": color("sub")}}>
+                                {"You're connected: open Chats."
+                                    if s.status == "connected"
+                                    else "Waiting for them to connect too."}
+                            </p>
+                        )}
+                    <div
+                        style={{
+                            "display": "flex",
+                            "gap": space("2"),
+                            "flexWrap": "wrap"
+                        }}
+                    >
+                        <ReportBox
+                            onSubmit={lambda (r: str) { return report_post(
+                                s.other_post.id, r
+                            ); }}
                         />
                         <Button
-                            label="Not interested"
-                            variant="secondary"
-                            onClick={lambda (e: MouseEvent) { pass_on(s.id); }}
+                            label="Block"
+                            variant="text"
+                            onClick={lambda (e: MouseEvent) { blockThem(s.id); }}
                         />
                     </div>
-                )
-                    if not s.i_accepted
-                    else (
-                        <p style={{"margin": "0", "color": color("sub")}}>
-                            {"You're connected: open Chats."
-                                if s.status == "connected"
-                                else "Waiting for them to connect too."}
-                        </p>
-                    )}
-                <div style={{"display": "flex", "gap": space("2"), "flexWrap": "wrap"}}>
-                    <ReportBox
-                        onSubmit={lambda (r: str) { return report_post(
-                            s.other_post.id, r
-                        ); }}
-                    />
-                    <Button
-                        label="Block"
-                        variant="text"
-                        onClick={lambda (e: MouseEvent) { blockThem(s.id); }}
-                    />
-                </div>
-            </Card> for s in items
-        ]}
+                </Card> for s in items
+            ]}
+        </ResponsiveGrid>
     </AppShell>
 }
 

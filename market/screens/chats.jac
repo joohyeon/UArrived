@@ -3,7 +3,7 @@ seconds through `heartbeat` (a write) so the client's 60-second read cache never
 message. Closed chats are read-only."""
 
 import from ui.tokens { color, space }
-import from ui.components.base { AppShell, Button, Card, Badge, Field }
+import from ui.components.base { AppShell, Button, Card, Badge, Field, ResponsiveGrid }
 import from market.screens.common {
     MarketTabs,
     query_param,
@@ -36,7 +36,7 @@ def:pub ChatList -> JsxElement {
         load();
     }
 
-    <AppShell title="Chats" active="market">
+    <AppShell title="Chats" active="market" wide={True}>
         <MarketTabs active="/market/chats"/>
         {(
             <Card>
@@ -47,34 +47,40 @@ def:pub ChatList -> JsxElement {
         )
             if loaded and len(chats) == 0
             else None}
-        {[
-            <a
-                key={c.id}
-                href={"/market/chat?id=" + c.id}
-                style={{"textDecoration": "none", "color": color("text")}}
-            >
-                <Card>
-                    <div
-                        style={{
-                            "display": "flex",
-                            "justifyContent": "space-between",
-                            "gap": space("2")
-                        }}
-                    >
-                        <strong>{c.other_post_title}</strong>
-                        {<Badge kind="warning" label="Closed"/> if not c.open else None}
-                    </div>
-                    <span style={{"color": color("sub")}}>
-                        {("For your post: " + c.my_post_title)
-                            if c.my_post_title
-                            else "About their post"}
-                    </span>
-                    {<span style={{"color": color("text-2")}}>{c.last_message}</span>
-                        if c.last_message
-                        else None}
-                </Card>
-            </a> for c in chats
-        ]}
+        <ResponsiveGrid min="320px">
+            {[
+                <a
+                    key={c.id}
+                    href={"/market/chat?id=" + c.id}
+                    style={{"textDecoration": "none", "color": color("text")}}
+                >
+                    <Card>
+                        <div
+                            style={{
+                                "display": "flex",
+                                "justifyContent": "space-between",
+                                "gap": space("2")
+                            }}
+                        >
+                            <strong>{c.other_post_title}</strong>
+                            {<Badge kind="warning" label="Closed"/>
+                                if not c.open
+                                else None}
+                        </div>
+                        <span style={{"color": color("sub")}}>
+                            {("For your post: " + c.my_post_title)
+                                if c.my_post_title
+                                else "About their post"}
+                        </span>
+                        {<span style={{"color": color("text-2")}}>
+                            {c.last_message}
+                        </span>
+                            if c.last_message
+                            else None}
+                    </Card>
+                </a> for c in chats
+            ]}
+        </ResponsiveGrid>
     </AppShell>
 }
 

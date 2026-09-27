@@ -10,7 +10,7 @@ disabled so a slow translation cannot produce a duplicate post. `?text=` pre-fil
 """
 
 import from ui.tokens { color, space }
-import from ui.components.base { AppShell, Button, Card, Badge, Field }
+import from ui.components.base { AppShell, Button, Card, Badge, Field, ResponsiveGrid }
 import from core.constants { ANN_ARBOR_AREAS }
 import from market.screens.common { MarketTabs, query_param, go, Choice }
 import from market.drafting { draft_from_message, ride_prefill, DraftResult, DraftCard }
@@ -333,73 +333,77 @@ def:pub Compose -> JsxElement {
         errors = updated;
     }
 
-    <AppShell title="New post" active="market">
+    <AppShell title="New post" active="market" wide={True}>
         <MarketTabs active="/market/new"/>
-        <Card>
-            <Field
-                label="What are you offering or looking for?"
-                value={message}
-                multiline={True}
-                placeholder="selling a desk $25, pickup by Aug 25 · arriving DTW Aug 20 3pm, anyone sharing a ride?"
-                onChange={lambda (v: str) { message = v; }}
-            />
-            <Button
-                label={"Drafting..."
-                    if busy
-                    else ("Draft again" if drafts else "Draft my post")}
-                variant={"secondary" if drafts else "primary"}
-                disabled={busy or posting >= 0 or not message.strip()}
-                onClick={makeDraft}
-            />
-            {<p role="status" aria-live="polite">Reading your message...</p>
-                if busy
-                else None}
-            {<p role="alert" style={{"color": color("danger"), "margin": "0"}}>
-                {error}
-            </p>
-                if error
-                else None}
-            {<p role="status" style={{"color": color("warning"), "margin": "0"}}>
-                {notice}
-            </p>
-                if notice
-                else None}
-        </Card>
-        {[
-            (
-                <DraftForm
-                    key={str(i)}
-                    card={c}
-                    fields={forms[i]}
-                    onField={lambda (n: str, v: any) { setField(i, n, v); }}
-                    onPost={lambda (e: MouseEvent) { publish(i); }}
-                    onDiscard={lambda (e: MouseEvent) { putCardState(i, "discarded"); }}
-                    posting={posting == i}
-                    locked={busy or posting >= 0}
-                    error={errors[i]}
-                    number={i + 1}
-                    count={len(drafts)}
+        <ResponsiveGrid min="360px">
+            <Card>
+                <Field
+                    label="What are you offering or looking for?"
+                    value={message}
+                    multiline={True}
+                    placeholder="selling a desk $25, pickup by Aug 25 · arriving DTW Aug 20 3pm, anyone sharing a ride?"
+                    onChange={lambda (v: str) { message = v; }}
                 />
-            )
-                if states[i] == ""
-                else (
-                    <Card key={str(i)}>
-                        <p role="status" style={{"margin": "0"}}>
-                            <strong lang={c.language or None}>
-                                {forms[i]["title"]}
-                            </strong>
-                            {" is posted."}
-                        </p>
-                        <Button
-                            label="See My posts"
-                            variant="text"
-                            onClick={lambda (e: MouseEvent) { go("/market/mine"); }}
-                        />
-                    </Card>
+                <Button
+                    label={"Drafting..."
+                        if busy
+                        else ("Draft again" if drafts else "Draft my post")}
+                    variant={"secondary" if drafts else "primary"}
+                    disabled={busy or posting >= 0 or not message.strip()}
+                    onClick={makeDraft}
+                />
+                {<p role="status" aria-live="polite">Reading your message...</p>
+                    if busy
+                    else None}
+                {<p role="alert" style={{"color": color("danger"), "margin": "0"}}>
+                    {error}
+                </p>
+                    if error
+                    else None}
+                {<p role="status" style={{"color": color("warning"), "margin": "0"}}>
+                    {notice}
+                </p>
+                    if notice
+                    else None}
+            </Card>
+            {[
+                (
+                    <DraftForm
+                        key={str(i)}
+                        card={c}
+                        fields={forms[i]}
+                        onField={lambda (n: str, v: any) { setField(i, n, v); }}
+                        onPost={lambda (e: MouseEvent) { publish(i); }}
+                        onDiscard={lambda (e: MouseEvent) { putCardState(
+                            i, "discarded"
+                        ); }}
+                        posting={posting == i}
+                        locked={busy or posting >= 0}
+                        error={errors[i]}
+                        number={i + 1}
+                        count={len(drafts)}
+                    />
                 )
-                    if states[i] == "posted"
-                    else None for (i, c) in enumerate(drafts)
-        ]}
+                    if states[i] == ""
+                    else (
+                        <Card key={str(i)}>
+                            <p role="status" style={{"margin": "0"}}>
+                                <strong lang={c.language or None}>
+                                    {forms[i]["title"]}
+                                </strong>
+                                {" is posted."}
+                            </p>
+                            <Button
+                                label="See My posts"
+                                variant="text"
+                                onClick={lambda (e: MouseEvent) { go("/market/mine"); }}
+                            />
+                        </Card>
+                    )
+                        if states[i] == "posted"
+                        else None for (i, c) in enumerate(drafts)
+            ]}
+        </ResponsiveGrid>
     </AppShell>
 }
 
