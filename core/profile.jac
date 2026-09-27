@@ -11,7 +11,7 @@ import from datetime { date }
 import from uuid { UUID }
 import from jaclang { JacRuntime as Jac }
 import from jaclang.data.pgwire { PgWireError }
-import from core.constants { ANN_ARBOR_AREAS, PILOT_LANGUAGES }
+import from core.constants { ANN_ARBOR_AREAS, PILOT_LANGUAGES, CLASS_YEARS }
 
 glob STUDENT_TYPES: list[str] = ["international", "out-of-state", "in-state"],
      HOUSING_STATUSES: list[str] = ["have-housing", "looking", "temporary"];
@@ -22,6 +22,8 @@ node Profile {
         pending_email: str = "",
         verified: bool = False,
         student_type: str = "",
+        major: str = "",
+        class_year: str = "",
         preferred_language: str = "en",
         language_chosen: bool = False,
         language_defaulted: bool = False,
@@ -170,6 +172,8 @@ obj ProfileView {
         umich_email: str,
         verified: bool,
         student_type: str,
+        major: str,
+        class_year: str,
         preferred_language: str,
         language_chosen: bool,
         arrival_date: str,
@@ -275,6 +279,8 @@ def view_of(profile: Profile) -> ProfileView {
         umich_email=profile.umich_email,
         verified=profile.verified,
         student_type=profile.student_type,
+        major=profile.major,
+        class_year=profile.class_year,
         preferred_language=profile.preferred_language,
         language_chosen=profile.language_chosen,
         arrival_date=profile.arrival_date,
@@ -324,6 +330,7 @@ def profile_error(
     student_type: str,
     housing_status: str,
     area: str,
+    class_year: str,
     arrival_date: str,
     arrival_time: str,
     move_in_date: str
@@ -336,6 +343,9 @@ def profile_error(
     }
     if area and area not in ANN_ARBOR_AREAS {
         return f"Area must be one of: {', '.join(ANN_ARBOR_AREAS)}.";
+    }
+    if class_year and class_year not in CLASS_YEARS {
+        return f"Class year must be one of: {', '.join(CLASS_YEARS)}.";
     }
     if not valid_date(arrival_date) or not valid_date(move_in_date) {
         return "Dates must be written YYYY-MM-DD.";
@@ -354,6 +364,8 @@ def:protect get_my_profile -> ProfileView {
 glob TEXT_FIELDS: list[str] = [
          "display_name",
          "student_type",
+         "major",
+         "class_year",
          "preferred_language",
          "arrival_date",
          "arrival_time",
@@ -397,6 +409,7 @@ def:protect update_my_profile(changes: dict[str, any]) -> ProfileUpdateResult {
         text.get("student_type", p.student_type),
         text.get("housing_status", p.housing_status),
         text.get("area", p.area),
+        text.get("class_year", p.class_year),
         text.get("arrival_date", p.arrival_date),
         text.get("arrival_time", p.arrival_time),
         text.get("move_in_date", p.move_in_date)
@@ -414,6 +427,12 @@ def:protect update_my_profile(changes: dict[str, any]) -> ProfileUpdateResult {
     }
     if "student_type" in text {
         p.student_type = text["student_type"];
+    }
+    if "major" in text {
+        p.major = text["major"][:80];
+    }
+    if "class_year" in text {
+        p.class_year = text["class_year"];
     }
     if "arrival_date" in text {
         p.arrival_date = text["arrival_date"];
@@ -468,14 +487,21 @@ test "dates and times accept only well-formed values or empty" {
 }
 
 test "profile values outside the allowed lists are rejected with a reason" {
-    assert profile_error("", "", "", "", "", "") == "";
+    assert profile_error("", "", "", "", "", "", "") == "";
     assert profile_error(
-        "international", "looking", "North Campus", "2026-08-20", "15:00", "2026-08-22"
+        "international",
+        "looking",
+        "North Campus",
+        "junior",
+        "2026-08-20",
+        "15:00",
+        "2026-08-22"
     )
         == "";
-    assert "Student type" in profile_error("tourist", "", "", "", "", "");
-    assert "Housing status" in profile_error("", "homeless-ish", "", "", "", "");
-    assert "Area" in profile_error("", "", "Detroit", "", "", "");
-    assert "YYYY-MM-DD" in profile_error("", "", "", "20/08/2026", "", "");
-    assert "HH:MM" in profile_error("", "", "", "", "3pm", "");
+    assert "Student type" in profile_error("tourist", "", "", "", "", "", "");
+    assert "Housing status" in profile_error("", "homeless-ish", "", "", "", "", "");
+    assert "Area" in profile_error("", "", "Detroit", "", "", "", "");
+    assert "Class year" in profile_error("", "", "", "freshperson", "", "", "");
+    assert "YYYY-MM-DD" in profile_error("", "", "", "", "20/08/2026", "", "");
+    assert "HH:MM" in profile_error("", "", "", "", "", "3pm", "");
 }

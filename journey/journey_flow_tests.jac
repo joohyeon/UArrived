@@ -170,17 +170,23 @@ test "the arrival wizard's calls round-trip: fill some steps, self-report a task
         step2 = call(
             client,
             "update_my_profile",
-            {"changes": {"area": "Central Campus", "housing_status": "have-housing"}}
+            {"changes": {"major": "Computer Science", "class_year": "sophomore"}}
         );
         assert step2["ok"];
         step3 = call(
+            client,
+            "update_my_profile",
+            {"changes": {"area": "Central Campus", "housing_status": "have-housing"}}
+        );
+        assert step3["ok"];
+        step4 = call(
             client, "update_my_profile", {"changes": {"preferred_language": "zh"}}
         );
-        assert step3["ok"] and step3["profile"]["language_chosen"];
-        step4 = call(
+        assert step4["ok"] and step4["profile"]["language_chosen"];
+        step5 = call(
             client, "mark_task_done", {"tid": "mcard", "skip_step_check": True}
         );
-        assert step4["ok"];
+        assert step5["ok"];
         finish = call(
             client, "update_my_profile", {"changes": {"onboarding_done": True}}
         );
@@ -188,6 +194,7 @@ test "the arrival wizard's calls round-trip: fill some steps, self-report a task
         mine = call(client, "get_my_profile", {});
         assert mine["arrival_date"] == "2026-08-28"
             and mine["area"] == "Central Campus";
+        assert mine["major"] == "Computer Science" and mine["class_year"] == "sophomore";
         after = call(client, "my_journey", {});
         assert task_of(after, "mcard")["status"] == "done";
     } finally {
@@ -208,6 +215,8 @@ test "skipping every step still reaches onboarding_done with nothing else change
         assert after["onboarding_done"];
         assert after["arrival_date"] == before["arrival_date"] == "";
         assert after["area"] == before["area"] == "";
+        assert after["major"] == before["major"] == "";
+        assert after["class_year"] == before["class_year"] == "";
         assert after["preferred_language"] == before["preferred_language"] == "en";
     } finally {
         client.close();
