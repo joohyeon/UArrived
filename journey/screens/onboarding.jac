@@ -102,7 +102,7 @@ def:pub Onboarding -> JsxElement {
                 <Button
                     label="Continue"
                     onClick={lambda (e: MouseEvent) { saveArrival(); }}
-                    disabled={saving}
+                    disabled={saving or arrival_date == ""}
                     full={True}
                 />
                 <Button
@@ -312,8 +312,14 @@ impl Onboarding.toggleTask(tid: str, done: bool) -> None {
 }
 
 impl Onboarding.finish -> None {
+    result: ProfileUpdateResult | None = None;
     saving = True;
-    await update_my_profile({"onboarding_done": True});
+    result = await update_my_profile({"onboarding_done": True});
     saving = False;
-    go("/today");
+    if result.ok {
+        error = "";
+        go("/today");
+    } else {
+        error = result.error;
+    }
 }
