@@ -5,17 +5,9 @@ reads them to prompt and pre-fill posts (R12). Nothing here is marketplace-speci
 """
 
 import os;
+import from core.constants { ANN_ARBOR_AREAS }
 
-glob ANN_ARBOR_AREAS: list[str] = [
-         "Central Campus",
-         "North Campus",
-         "South Campus",
-         "Kerrytown",
-         "Old West Side",
-         "Downtown",
-         "Other"
-     ],
-     STUDENT_TYPES: list[str] = ["international", "out-of-state", "in-state"],
+glob STUDENT_TYPES: list[str] = ["international", "out-of-state", "in-state"],
      HOUSING_STATUSES: list[str] = ["have-housing", "looking", "temporary"];
 
 node Profile {
@@ -32,7 +24,8 @@ node Profile {
         needs_airport_ride: bool = False,
         has_us_phone: bool = False,
         has_us_bank: bool = False,
-        email_notifications: bool = True;
+        email_notifications: bool = True,
+        last_seen: str = "";
 }
 
 """Where to email a student, kept on the commons so the system user's notification sweep can

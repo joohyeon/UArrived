@@ -6,8 +6,9 @@ is trusted. Only the poster's calls may change a post (owner check here, plus Ja
 
 import from datetime { date, timedelta }
 import from core.auth { verified_profile }
-import from core.profile { ANN_ARBOR_AREAS, valid_date, valid_time }
-import from market.drafting { ARRANGEMENTS }
+import from core.constants { ANN_ARBOR_AREAS }
+import from core.profile { valid_date, valid_time }
+import from market.constants { ARRANGEMENTS }
 import from market.graph { Post, KINDS, CATEGORIES, post_status, all_posts }
 import from market.matching { run_matching }
 
@@ -360,7 +361,10 @@ def today_iso -> str {
 }
 
 def:protect publish_post(fields: dict[str, any]) -> PostResult {
-    return publish(fields, today_iso());
+    ai = fields.get("ai_generated", True);
+    return publish(
+        fields, today_iso(), ai_generated=ai if isinstance(ai, bool) else True
+    );
 }
 
 def:protect edit_post(post_id: str, changes: dict[str, any]) -> PostResult {
