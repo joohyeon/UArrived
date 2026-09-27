@@ -21,6 +21,19 @@ sem Category.HOUSING = "Rooms, sublets, roommate openings, lease transfers, apar
 sem Category.VEHICLE = "Cars, bikes, scooters, e-bikes.";
 sem Category.SERVICE = "Rides (including airport rides), help moving, storage, other favors.";
 
+"""Another item in the same message (a moving-out sale lists several)."""
+obj ExtraItem {
+    has title: str,
+        category: Category | None = None,
+        item: str = "",
+        price: float | None = None;
+}
+
+sem ExtraItem.title = "The item in a few words, like 'Floor lamp'.";
+sem ExtraItem.category = "Its own category when it differs from the main item's (a lamp is essentials, a bike is vehicle); None if the same.";
+sem ExtraItem.item = "Its standard name, from the same list as PostDraft.item.";
+sem ExtraItem.price = "Its own price in US dollars if the student gave one for this item; otherwise None.";
+
 obj PostDraft {
     has kind: PostKind,
         category: Category,
@@ -41,8 +54,11 @@ obj PostDraft {
         suggested_price: float | None = None,
         price_reason: str = "",
         about_market: bool = True,
-        item: str = "";
+        item: str = "",
+        extra_items: list[ExtraItem] = [];
 }
+
+sem PostDraft.extra_items = "When the message offers or asks for several different items (e.g. 'selling a bike, a lamp and a mattress'), the main fields describe the first item and this lists all the others in the order written. Only items the student names; never split one item into parts. Empty for a single item.";
 
 sem PostDraft.about_market = "True only if the student says they want to buy, sell, give away, rent, find or offer housing, share a ride, or get moving help. False for greetings, introductions, asking who else is arriving or on a flight, and questions about campus life.";
 sem PostDraft.item = "The item as one standard name. furniture: desk, chair, bed, mattress, sofa, shelf, table, dresser. essentials: lamp, fridge, microwave, kitchenware, bedding, fan, monitor, textbook. vehicle: bike, scooter, car. Map synonyms (study table -> desk, mini fridge -> fridge, bookcase -> shelf). 'other' if none fits; empty for housing and services.";

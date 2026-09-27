@@ -184,11 +184,19 @@ def:pub GroupBubble(m: GroupMessageView) -> JsxElement {
                     else None
             )}
         <span>{m.text}</span>
-        {<a href={"/market/g?id=" + m.topic_group_id} style={{"color": color("text")}}>
-            Open the group
-        </a>
-            if m.ai and m.can_open and m.topic_group_id
-            else None}
+        {[
+            <a
+                key={l.group_id}
+                href={"/market/g?id=" + l.group_id}
+                style={{
+                    "color": color("text"),
+                    "display": "block",
+                    "padding": space("1") + " 0"
+                }}
+            >
+                {"Open " + l.name}
+            </a> for l in m.links
+        ]}
     </div>
 }
 

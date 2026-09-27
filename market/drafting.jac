@@ -7,13 +7,21 @@ looks like lives here, not in the prompt: the AI can guess, but only these check
 import from core.clock { today_iso as clock_today }
 import from datetime { date }
 import from jaclang.byllm.lib { ByLLMError, OutputConversionError }
-import from ai.draft { draft_post, PostDraft, PostKind, Category }
+import from ai.draft { draft_post, PostDraft, PostKind, Category, ExtraItem }
 import from core.auth { verified_profile }
 import from core.constants { ANN_ARBOR_AREAS }
 import from core.profile { valid_date, valid_time }
 import from market.constants { ARRANGEMENTS }
 
 glob MAX_MESSAGE_CHARS: int = 1000;
+
+"""Another item from the same message: its own title, standard item and price."""
+obj ExtraCard {
+    has title: str,
+        category: str = "",
+        item: str = "",
+        price: float | None = None;
+}
 
 """A draft ready for the poster to review. Plain fields so the client can edit every one."""
 obj DraftCard {
@@ -38,7 +46,8 @@ obj DraftCard {
         ai_generated: bool = True,
         constraints: list[str] = [],
         about_market: bool = True,
-        item: str = "";
+        item: str = "",
+        extras: list[ExtraCard] = [];
 }
 
 obj DraftResult {
@@ -85,6 +94,31 @@ def match_area(text: str) -> str {
         }
     }
     return "Other";
+}
+
+"""Extra items as the AI gave them, minus empty titles and repeats of the main item; a negative
+price is dropped. Callers cap how many they file (market/topics.jac)."""
+def clean_extras(extras: list[ExtraItem], main_title: str) -> list[ExtraCard] {
+    out: list[ExtraCard] = [];
+    seen = [main_title.strip().lower()];
+    for x in extras {
+        title = x.title.strip()[:80];
+        if not title or title.lower() in seen {
+            continue;
+        }
+        seen.append(title.lower());
+        price = x.price if x.price is not None and x.price >= 0 else None;
+        category = x.category.name.lower() if x.category is not None else "";
+        if category in ["housing", "service"] {
+            continue;
+        }
+        out.append(
+            ExtraCard(
+                title=title, category=category, item=x.item.strip().lower(), price=price
+            )
+        );
+    }
+    return out;
 }
 
 """Validate and normalize an AI draft. Anything invalid is cleared and marked guessed."""
@@ -178,7 +212,8 @@ def normalize(d: PostDraft) -> DraftCard {
             if c.strip()
         ][:5],
         about_market=d.about_market,
-        item=d.item.strip().lower()
+        item=d.item.strip().lower(),
+        extras=clean_extras(d.extra_items, d.title)
     );
 }
 

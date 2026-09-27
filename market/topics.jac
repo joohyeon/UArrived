@@ -30,6 +30,7 @@ import from core.groups {
     member_ids,
     my_group_ids,
     sync_cohort,
+    all_groups,
     leave,
     last_left
 }
@@ -62,6 +63,8 @@ glob MONTH_NAMES: list[str] = [
          "Nov",
          "Dec"
      ];
+
+glob MAX_ITEMS_PER_MESSAGE: int = 5;
 
 glob MAX_GROUP_MESSAGE_CHARS: int = 1000,
      SKIP_WORDS: list[str] = [
@@ -145,7 +148,14 @@ obj GroupPostResult {
         filed: bool = False,
         topic_group_id: str = "",
         invited: int = 0,
+        filed_count: int = 0,
         follow_up: FollowUp | None = None;
+}
+
+"""A link from an assistant message to a topic group the reader is in."""
+obj GroupLink {
+    has group_id: str,
+        name: str;
 }
 
 obj GroupMessageView {
@@ -157,7 +167,8 @@ obj GroupMessageView {
         ai: bool,
         post_id: str,
         topic_group_id: str = "",
-        can_open: bool = False;
+        can_open: bool = False,
+        links: list[GroupLink] = [];
 }
 
 obj GroupView {
@@ -420,22 +431,85 @@ def file_market(
     if question is not None {
         return GroupPostResult(ok=True, message_id=message_id, follow_up=question);
     }
-    result = publish(
-        fields_from(card, known, text), today, ai_generated=card.ai_generated
-    );
-    if not result.ok or result.post is None {
+    items = [fields_from(card, known, text)];
+    for x in card.extras {
+        one = dict(items[0]);
+        # Shared facts (kind, dates, area, conditions) carry over; title, item and price are the
+        # item's own, and the description is the student's whole message, never the model's
+        # words for another item.
+        one.update(
+            {
+                "title": x.title,
+                "item": x.item,
+                "price": x.price,
+                "description": text[:500],
+                "route_from": "",
+                "route_to": "",
+                "arrangement": ""
+            }
+        );
+        if x.category {
+            one["category"] = x.category;
+        }
+        items.append(one);
+    }
+    if len(items) > 1 {
+        items[0]["description"] = text[:500];
+    }
+    over = max(0, len(items) - MAX_ITEMS_PER_MESSAGE);
+    filed: list[tuple[Post, ChatGroup, int, bool]] = [];
+    failed: list[str] = [];
+    last_error = "";
+    for fields in items[:MAX_ITEMS_PER_MESSAGE] {
+        result = publish(fields, today, ai_generated=card.ai_generated);
+        post = own_post(result.post.id) if result.ok and result.post else None;
+        if post is None {
+            last_error = result.error or "it couldn't be saved";
+            failed.append(f"\"{fields['title']}\" ({last_error})");
+            continue;
+        }
+        (topic, invited, reused) = file_post(post, today);
+        filed.append((post, topic, invited, reused));
+    }
+    notes: list[str] = [];
+    if failed {
+        notes.append("I couldn't file " + "; ".join(failed) + ".");
+    }
+    if over > 0 {
+        notes.append(
+            f"I filed the first {MAX_ITEMS_PER_MESSAGE} items; post the other {over} in another message."
+        );
+    }
+    notice = " ".join(notes);
+    if not filed {
         return GroupPostResult(
             ok=True,
             message_id=message_id,
-            notice=f"Your message is posted, but I couldn't file it for the market: {result.error}"
+            notice=f"Your message is posted, but I couldn't file it for the market: {last_error}"
+                if len(items) == 1
+                else "Your message is posted, but " + notice
         );
     }
-    post = own_post(result.post.id);
-    if post is None {
-        return GroupPostResult(
-            ok=False, message_id=message_id, error="Couldn't file that message."
-        );
-    }
+    add_message(
+        cohort,
+        cohort_reply(filed),
+        ai=True,
+        post_ids=[jid(p) for (p, _, _, _) in filed]
+    );
+    return GroupPostResult(
+        ok=True,
+        message_id=message_id,
+        filed=True,
+        topic_group_id=jid(filed[0][1]),
+        invited=sum([n for (_, _, n, _) in filed]),
+        filed_count=len(filed),
+        notice=notice
+    );
+}
+
+"""File one published post into its topic group: create or reuse the group, join it, announce the
+post there and invite matching students. Returns (group, invited, reused)."""
+def file_post(post: Post, today: str) -> tuple[ChatGroup, int, bool] {
     reused = len(groups_with_key(topic_key(post))) > 0;
     topic = ensure_group(
         "topic", topic_key(post), topic_name(post), reason=facts_line(post)
@@ -448,24 +522,29 @@ def file_market(
         ai=True,
         post_id=jid(post)
     );
-    invited = invite_matches(post, topic, today);
-    people = f"invited {invited} student{'s' if invited != 1 else ''} whose posts fit.";
-    nobody = "Nobody else's posts fit yet; I'll invite people as matching posts come in.";
-    if reused {
-        reply = f"I added this to \"{topic.name}\""
-            + (f" and {people}" if invited > 0 else f". {nobody}");
-    } else {
-        reply = f"I started a group for this, \"{topic.name}\""
+    return (topic, invite_matches(post, topic, today), reused);
+}
+
+"""The assistant's reply in the cohort: where each filed item went and who was invited."""
+def cohort_reply(filed: list[tuple[Post, ChatGroup, int, bool]]) -> str {
+    if len(filed) == 1 {
+        (_, topic, invited, reused) = filed[0];
+        people = f"invited {invited} student{'s'
+            if invited != 1
+            else ''} whose posts fit.";
+        nobody = "Nobody else's posts fit yet; I'll invite people as matching posts come in.";
+        if reused {
+            return f"I added this to \"{topic.name}\""
+                + (f" and {people}" if invited > 0 else f". {nobody}");
+        }
+        return f"I started a group for this, \"{topic.name}\""
             + (f", and {people}" if invited > 0 else f". {nobody}");
     }
-    add_message(cohort, reply, ai=True, post_id=jid(post));
-    return GroupPostResult(
-        ok=True,
-        message_id=message_id,
-        filed=True,
-        topic_group_id=jid(topic),
-        invited=invited
-    );
+    parts = [
+        f"{p.title} → \"{t.name}\"" + (f" (invited {n})" if n > 0 else "")
+        for (p, t, n, _) in filed
+    ];
+    return f"I filed {len(filed)} items: " + "; ".join(parts) + ".";
 }
 
 """Post `text` in a group the caller belongs to. In a cohort group the assistant may file it."""
@@ -517,6 +596,21 @@ def my_invite_for(group_id: str) -> Invite | None {
     return None;
 }
 
+"""Links to the topic groups these posts were filed in, only groups the reader is in (`names`
+holds exactly those), each once, in order."""
+def links_for(
+    post_ids: list[str], topic_of: dict[str, str], names: dict[str, str]
+) -> list[GroupLink] {
+    out: list[GroupLink] = [];
+    for pid in post_ids {
+        gid = topic_of.get(pid, "");
+        if gid in names and gid not in [l.group_id for l in out] {
+            out.append(GroupLink(group_id=gid, name=names[gid]));
+        }
+    }
+    return out;
+}
+
 def view(group_id: str, today: str) -> GroupView {
     g = group_by_id(group_id);
     if g is None {
@@ -543,6 +637,11 @@ def view(group_id: str, today: str) -> GroupView {
     visible = visible_to(all_posts(), me);
     topic_of: dict[str, str] = {jid(p): p.topic_group_id for p in visible};
     mine = my_group_ids();
+    names: dict[str, str] = {
+        jid(x): x.name
+        for x in all_groups()
+        if jid(x) in mine
+    };
     msgs = [
         GroupMessageView(
             id=jid(m),
@@ -553,7 +652,10 @@ def view(group_id: str, today: str) -> GroupView {
             ai=m.ai,
             post_id=m.post_id,
             topic_group_id=topic_of.get(m.post_id, "") if g.kind == "cohort" else "",
-            can_open=topic_of.get(m.post_id, "") in mine
+            can_open=topic_of.get(m.post_id, "") in mine,
+            links=links_for(m.post_ids or [m.post_id], topic_of, names)
+                if g.kind == "cohort" and m.ai
+                else []
         )
         for m in messages_in(group_id)
         if m.ai or m.author_root == me or pair_key(me, m.author_root) not in blocked

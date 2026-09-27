@@ -6,7 +6,7 @@ import tempfile;
 import ai.draft;
 import from jaclang.byllm.lib { MockLLM, MockError, AuthenticationError }
 import from jaclang.testing.testing { JacTestClient }
-import from ai.draft { PostDraft, PostKind, Category }
+import from ai.draft { PostDraft, PostKind, Category, ExtraItem }
 import from market.topics { Invite }
 import from core.groups { ChatGroup }
 import from core.profile { Mailbox }
@@ -947,6 +947,198 @@ test "after leaving, the next matching post invites the student back once" {
             == 0;
         act_as(client, "mina@umich.edu");
         assert len(call(client, "my_group_invites", {})) == 1;
+    } finally {
+        client.close();
+    }
+}
+
+def moving_sale(extras: list[any]) -> PostDraft {
+    return PostDraft(
+        kind=PostKind.OFFER,
+        category=Category.VEHICLE,
+        title="Bike",
+        description="I'm selling my bike.",
+        price=50.0,
+        area="kerrytown",
+        item="bike",
+        extra_items=extras
+    );
+}
+
+test "a moving-out sale becomes one post per item, each in its own group" {
+    client = served();
+    try {
+        cohort = student(client, "kai@umich.edu");
+        ai_says(
+            [
+                moving_sale(
+                    [
+                        ExtraItem(
+                            title="Floor lamp",
+                            category=Category.ESSENTIALS,
+                            item="lamp",
+                            price=10.0
+                        ),
+                        ExtraItem(
+                            title="Twin mattress",
+                            category=Category.FURNITURE,
+                            item="mattress"
+                        )
+                    ]
+                )
+            ]
+        );
+        text = "Moving out - bike $50, lamp $10 and a twin mattress, Kerrytown";
+        sent = call(client, "post_in_group", {"group_id": cohort, "text": text});
+        assert sent["filed"] and sent["filed_count"] == 3 and sent["notice"] == "";
+        mine = {p["title"]: p for p in call(client, "list_my_posts", {})};
+        assert sorted(mine.keys()) == ["Bike", "Floor lamp", "Twin mattress"];
+        assert mine["Bike"]["price"] == 50.0 and mine["Floor lamp"]["price"] == 10.0;
+        assert mine["Twin mattress"]["price"] is None;
+        assert mine["Floor lamp"]["category"] == "essentials"
+            and mine["Floor lamp"]["item"] == "lamp";
+        assert all(
+            [
+                p["area"] == "Kerrytown" and p["description"] == text
+                for p in mine.values()
+            ]
+        );
+        reply = [
+            m
+            for m in call(client, "group_view", {"group_id": cohort})["messages"]
+            if m["ai"]
+        ];
+        assert len(reply) == 1
+            and reply[0]["text"].startswith(
+                "I filed 3 items: Bike → \"Bikes near campus\""
+            );
+        assert [l["name"] for l in reply[0]["links"]]
+            == ["Bikes near campus", "Lamps near campus", "Mattresses near campus"];
+        student(client, "mina@umich.edu");
+        other = [
+            m
+            for m in call(client, "group_view", {"group_id": cohort})["messages"]
+            if m["ai"]
+        ][0];
+        assert other["links"] == [];
+    } finally {
+        client.close();
+    }
+}
+
+test "a buyer is invited only to the group of the item they want" {
+    client = served();
+    try {
+        cohort = student(client, "mina@umich.edu");
+        call(
+            client,
+            "publish_post",
+            {
+                "fields": {
+                    "kind": "request",
+                    "category": "essentials",
+                    "title": "Lamp",
+                    "price": 20
+                }
+            }
+        );
+        student(client, "kai@umich.edu");
+        ai_says(
+            [
+                moving_sale(
+                    [
+                        ExtraItem(
+                            title="Floor lamp",
+                            category=Category.ESSENTIALS,
+                            item="lamp",
+                            price=10.0
+                        )
+                    ]
+                )
+            ]
+        );
+        sent = call(
+            client,
+            "post_in_group",
+            {"group_id": cohort, "text": "Selling bike $50 and floor lamp $10"}
+        );
+        assert sent["invited"] == 1;
+        reply = [
+            m
+            for m in call(client, "group_view", {"group_id": cohort})["messages"]
+            if m["ai"]
+        ][0];
+        assert "Floor lamp → \"Lamps near campus\" (invited 1)" in reply["text"];
+        act_as(client, "mina@umich.edu");
+        invites = call(client, "my_group_invites", {});
+        assert [i["group_name"] for i in invites] == ["Lamps near campus"];
+    } finally {
+        client.close();
+    }
+}
+
+test "only five items file from one message, and the sender is told about the rest" {
+    client = served();
+    try {
+        cohort = student(client, "kai@umich.edu");
+        extras = [
+            ExtraItem(title=t, category=Category.FURNITURE)
+            for t in ["Desk", "Chair", "Sofa", "Dresser", "Bookshelf", "Bed"]
+        ];
+        ai_says([moving_sale(extras)]);
+        sent = call(
+            client,
+            "post_in_group",
+            {
+                "group_id": cohort,
+                "text": "Moving sale: bike, desk, chair, sofa, dresser, bookshelf, bed"
+            }
+        );
+        assert sent["filed_count"] == 5 and "post the other 2" in sent["notice"];
+        assert len(call(client, "list_my_posts", {})) == 5;
+    } finally {
+        client.close();
+    }
+}
+
+test "one item that can't be filed doesn't stop the others, and only the sender hears why" {
+    client = served();
+    try {
+        cohort = student(client, "kai@umich.edu");
+        ai_says(
+            [
+                moving_sale(
+                    [
+                        ExtraItem(
+                            title="Floor lamp", category=Category.ESSENTIALS, price=-5.0
+                        ),
+                        ExtraItem(title="Bike", category=Category.VEHICLE),
+                        ExtraItem(title="  "),
+                        ExtraItem(
+                            title="Car", category=Category.VEHICLE, price=900000.0
+                        )
+                    ]
+                )
+            ]
+        );
+        sent = call(
+            client, "post_in_group", {"group_id": cohort, "text": "bike $50, lamp, car"}
+        );
+        assert sent["filed_count"] == 2 and "\"Car\"" in sent["notice"];
+        reply = [
+            m
+            for m in call(client, "group_view", {"group_id": cohort})["messages"]
+            if m["ai"]
+        ][0];
+        assert "Car" not in reply["text"];
+        titles = sorted([p["title"] for p in call(client, "list_my_posts", {})]);
+        assert titles == ["Bike", "Floor lamp"];
+        lamp = [
+            p
+            for p in call(client, "list_my_posts", {})
+            if p["title"] == "Floor lamp"
+        ][0];
+        assert lamp["price"] is None;
     } finally {
         client.close();
     }

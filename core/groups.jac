@@ -73,7 +73,8 @@ node GroupMessage {
         text: str,
         created_at: str,
         ai: bool = False,
-        post_id: str = "";
+        post_id: str = "",
+        post_ids: list[str] = [];
 }
 
 def cohort_key(p: Profile) -> str {
@@ -194,10 +195,16 @@ def sync_cohort(p: Profile) -> ChatGroup {
     return g;
 }
 
-"""Post a message in `g` as the caller, shared with the group's members."""
+"""Post a message in `g` as the caller, shared with the group's members. `post_ids` links several
+posts (the first is also kept as `post_id`)."""
 def add_message(
-    g: ChatGroup, text: str, ai: bool = False, post_id: str = ""
+    g: ChatGroup,
+    text: str,
+    ai: bool = False,
+    post_id: str = "",
+    post_ids: list[str] = []
 ) -> GroupMessage {
+    ids = list(post_ids) if post_ids else ([post_id] if post_id else []);
     name = "UArrived assistant" if ai else (my_profile().display_name or "Student");
     msg = root.shared ++> GroupMessage(
         group_id=jid(g),
@@ -206,7 +213,8 @@ def add_message(
         text=text,
         created_at=now_precise(),
         ai=ai,
-        post_id=post_id
+        post_id=ids[0] if ids else "",
+        post_ids=ids
     );
     Jac.allow_group(msg, UUID(jid(g)), AccessLevel.READ);  # jac:ignore[E1053]
     return msg;
