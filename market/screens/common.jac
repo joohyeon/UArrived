@@ -141,3 +141,94 @@ def:pub PostSummary(p: PostView) -> JsxElement {
             else None}
     </div>
 }
+
+"""A small "Report" control: opens a reason box and calls `onSubmit(reason)`. Used on posts
+and in chats (R17)."""
+def:pub ReportBox(
+    onSubmit: Callable[[str], None], label: str = "Report"
+) -> JsxElement {
+    has open: bool = False,
+        reason: str = "",
+        sent: bool = False;
+
+    def submit(e: MouseEvent) {
+        if reason.strip() {
+            onSubmit(reason);
+            sent = True;
+            open = False;
+        }
+    }
+
+    <div style={{"display": "flex", "flexDirection": "column", "gap": space("1")}}>
+        {<span style={{"color": color("sub")}}>
+            Thanks. A moderator will look at it.
+        </span>
+            if sent
+            else None}{(
+            <button
+                type="button"
+                onClick={lambda (e: MouseEvent) { open = True; }}
+                style={{
+                    "background": "none",
+                    "border": "0",
+                    "color": color("sub"),
+                    "textDecoration": "underline",
+                    "minHeight": "44px",
+                    "textAlign": "left",
+                    "cursor": "pointer"
+                }}
+            >
+                {label}
+            </button>
+        )
+            if not open and not sent
+            else None}{(
+            <div
+                style={{
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "gap": space("1")
+                }}
+            >
+                <label
+                    style={{
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "gap": space("1"),
+                        "fontSize": "14px"
+                    }}
+                >
+                    What's wrong?
+                    <textarea
+                        rows={3}
+                        value={reason}
+                        onChange={lambda (e: ChangeEvent) { reason = e.target.value; }}
+                        style={{
+                            "fontSize": "16px",
+                            "padding": space("2"),
+                            "borderRadius": "8px",
+                            "border": "1px solid " + color("border-strong")
+                        }}
+                    />
+                </label>
+                <button
+                    type="button"
+                    onClick={submit}
+                    disabled={not reason.strip()}
+                    style={{
+                        "minHeight": "44px",
+                        "borderRadius": "12px",
+                        "border": "1px solid " + color("border-strong"),
+                        "background": color("card"),
+                        "color": color("danger"),
+                        "fontWeight": "600"
+                    }}
+                >
+                    Send report
+                </button>
+            </div>
+        )
+            if open
+            else None}
+    </div>
+}

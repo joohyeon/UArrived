@@ -91,6 +91,42 @@ def my_profile -> Profile {
     return root ++> Profile();
 }
 
+"""A public record that this root belongs to a moderator, so new posts and reports can be shared
+with every moderator (U11). Readable by everyone; holds only a root id."""
+node ModeratorSeat {
+    has moderator_root: str;
+
+    def __jac_access__ -> AccessLevel | None {
+        return AccessLevel.READ;
+    }
+}
+
+"""Every moderator's root id, as seen from the commons."""
+def moderator_roots(commons: any = None) -> list[str] {
+    shared = commons if commons is not None else root.shared;
+    return list(
+        dict.fromkeys([m.moderator_root for m in [shared-->][?:ModeratorSeat]])
+    );
+}
+
+"""Make sure the caller has a seat if (and only if) they are a moderator now."""
+def sync_moderator_seat(profile: Profile) {
+    me = jid(root);
+    seats = [
+        m
+        for m in [root.shared-->][?:ModeratorSeat]
+        if m.moderator_root == me
+    ];
+    if is_moderator(profile) and not seats {
+        root.shared ++> ModeratorSeat(moderator_root=me);
+    }
+    if not is_moderator(profile) {
+        for s in seats {
+            del s;
+        }
+    }
+}
+
 """Moderators are verified students whose email is listed in UARRIVED_MODERATORS (comma-separated)."""
 def is_moderator(profile: Profile) -> bool {
     listed = [

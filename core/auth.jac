@@ -11,7 +11,7 @@ instead of requiring email, for demos and tests. Never enable it in the pilot.
 import os;
 import from jaclang.server.identity.app_tokens { token_create, token_consume }
 import from interop.email_sender { send }
-import from core.profile { Profile, my_profile, sync_mailbox }
+import from core.profile { Profile, my_profile, sync_mailbox, sync_moderator_seat }
 
 """Outcome of a verification step, returned to the client."""
 obj VerifyResult {
@@ -96,6 +96,7 @@ def:protect confirm_verification(token: str) -> VerifyResult {
     }
     profile.verified = True;
     sync_mailbox(profile);
+    sync_moderator_seat(profile);
     return VerifyResult(ok=True, email=profile.umich_email);
 }
 

@@ -10,7 +10,7 @@ import from ui.components.base { AppShell, Button, Card, Badge, Field }
 import from core.constants { ANN_ARBOR_AREAS }
 import from market.screens.common { MarketTabs, query_param, go }
 import from market.drafting { draft_from_message, ride_prefill, DraftResult, DraftCard }
-import from market.constants { ARRANGEMENTS }
+import from market.constants { ARRANGEMENTS, SAFETY_TIPS }
 import from market.lifecycle { publish_post, PostResult }
 
 def num_text(x: float | None) -> str {
@@ -274,7 +274,10 @@ def:pub Compose -> JsxElement {
                     onChange={lambda (v: str) { setField("description", v); }}
                 />
                 <p style={{"margin": "0", "color": color("sub"), "fontSize": "14px"}}>
-                    Meet in public for pickups. UArrived never takes payments or signs leases.
+                    {SAFETY_TIPS.get(
+                        fields.get("category", ""), SAFETY_TIPS["furniture"]
+                    )
+                        + " UArrived never takes payments or signs leases."}
                 </p>
                 <Button label="Publish" full={True} disabled={busy} onClick={publish}/>
             </Card>

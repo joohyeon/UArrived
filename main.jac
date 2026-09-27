@@ -11,6 +11,15 @@ import from market.suggestions { list_my_suggestions, stop_suggestions }
 import from market.feed { for_you_feed, heartbeat }
 import from journey.prompts { my_journey_prompts }
 import from market.decide { help_me_decide }
+import from market.moderation {
+    report_post,
+    report_chat,
+    block_in_suggestion,
+    block_in_chat,
+    moderation_queue,
+    hide_post,
+    resolve_report
+}
 import from market.drafting { ride_prefill }
 import from market.notify { unread_suggestions, mark_suggestions_seen, email_sweep }
 import from market.connect { connect, decline, list_my_chats, read_chat, send_message }
@@ -32,6 +41,7 @@ import from market.screens.compose { Compose }
 import from market.screens.chats { ChatList, ChatScreen }
 import from market.screens.mine { MyPosts, ForYou }
 import from market.screens.decide { Compare }
+import from market.screens.moderate { Moderate }
 import from market.screens.common { current_path }
 import from journey.screens.today { Today }
 
@@ -67,6 +77,9 @@ def:pub app -> JsxElement {
     }
     if path == "/market/compare" {
         return <Compare/>;
+    }
+    if path == "/market/moderate" {
+        return <Moderate/>;
     }
     return <Welcome/>;
 }

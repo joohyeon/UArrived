@@ -4,7 +4,8 @@ message. Closed chats are read-only."""
 
 import from ui.tokens { color, space }
 import from ui.components.base { AppShell, Button, Card, Badge, Field }
-import from market.screens.common { MarketTabs, query_param, go }
+import from market.screens.common { MarketTabs, query_param, go, ReportBox }
+import from market.moderation { report_chat, block_in_chat }
 import from market.connect {
     list_my_chats,
     read_chat,
@@ -84,6 +85,7 @@ def:pub ChatScreen -> JsxElement {
 
     async def load -> None;
     async def sendIt(e: MouseEvent) -> None;
+    async def blockThem -> None;
 
     can with entry {
         chat_id = query_param("id");
@@ -153,6 +155,21 @@ def:pub ChatScreen -> JsxElement {
         )
             if thread and thread.ok and thread.chat and not thread.chat.open
             else None}
+        {(
+            <Card>
+                <ReportBox
+                    onSubmit={lambda (r: str) { report_chat(chat_id, r); }}
+                    label="Report this conversation"
+                />
+                <Button
+                    label="Block this student"
+                    variant="text"
+                    onClick={lambda (e: MouseEvent) { blockThem(); }}
+                />
+            </Card>
+        )
+            if thread and thread.ok
+            else None}
     </AppShell>
 }
 
@@ -173,4 +190,9 @@ impl ChatScreen.sendIt(e: MouseEvent) -> None {
     draft = "";
     error = "";
     await load();
+}
+
+impl ChatScreen.blockThem -> None {
+    await block_in_chat(chat_id);
+    go("/market/chats");
 }

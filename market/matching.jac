@@ -12,7 +12,15 @@ survives an edit.
 import from uuid { UUID }
 import from jaclang { JacRuntime as Jac }
 import from jaclang.server.identity.app_tokens { token_create }
-import from market.graph { Post, Suggestion, post_status, all_posts, all_suggestions }
+import from market.graph {
+    Post,
+    Suggestion,
+    post_status,
+    all_posts,
+    all_suggestions,
+    blocked_keys,
+    pair_key
+}
 
 glob MAX_SUGGESTIONS_PER_POST: int = 10,
      CHAT_OPEN_PURPOSE: str = "chat-open",
@@ -199,10 +207,14 @@ def run_matching(post: Post, today: str) -> list[Suggestion] {
             taken.add(s.post_b if s.post_a == post_id else s.post_a);
         }
     }
+    blocked = blocked_keys();
     found: list[tuple[int, str, Post, Match]] = [];
     for other in all_posts() {
         oid = jid(other);
-        if oid == post_id or oid in taken or other.suggestions_stopped {
+        if oid == post_id
+            or oid in taken
+            or other.suggestions_stopped
+            or pair_key(post.owner_root, other.owner_root) in blocked {
             continue;
         }
         m = match_pair(post, other, today);
